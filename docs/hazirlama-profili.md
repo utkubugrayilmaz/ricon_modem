@@ -90,3 +90,21 @@ node ricon.js uygula --profil saha --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.
 Sonuç: **Faz 3 çekirdeği kanıtlandı** — elle yapılan hazırlama süreci tek
 komuta indi. Kalan: "tak-çalıştır" sarmalayıcı (link algıla → otomatik başlat),
 retry/fallback cilası, PC-subnet adımını pipeline içine alma.
+
+## Dress rehearsal — tam otomatik pipeline (2026-08-26)
+
+Cihaz araçla fabrikaya döndürüldü (5.5.5.1→192.168.1.1, doğrulama TAMAM), sonra
+**tek komut** ile sıfırdan tam otomatik provizyon:
+
+```
+node ricon.js hazirla
+```
+
+- Algıla (192.168.1.1) → 11 ayar + LAN IP yaz → reboot → 5.5.5.1'de doğrula →
+  **durum: hazir (deneme 1)**. Elle müdahale yok.
+- Tekrar `hazirla` → **zaten_hazir** (idempotent).
+- Motor iki yönde de çalışıyor (saha ↔ fabrika), LAN IP + reboot + yeni-adres
+  doğrulama dahil.
+
+Çoklu modem: aynı ağda **tek modem** olmalı (hepsi 192.168.1.1'de gelir →
+çakışma). `hazirla --dongu` sıralı akış için: tak → otomatik → çıkar → sıradaki.
