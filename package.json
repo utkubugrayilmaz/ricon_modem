@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Ricon S9922M44 endustriyel hucresel router: kesif, tam veri cekme ve hazirlama otomasyonu",
   "type": "module",
+  "main": "./src/index.js",
+  "exports": { ".": "./src/index.js" },
   "bin": { "ricon": "./ricon.js" },
   "engines": { "node": ">=24" },
   "scripts": {

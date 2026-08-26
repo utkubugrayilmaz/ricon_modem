@@ -53,6 +53,15 @@ export function ozetMetni(rapor) {
   if (rapor.nvram_anahtar_sayisi != null) {
     s.push(`\n  nvram: ${rapor.nvram_anahtar_sayisi} anahtar cekildi`);
   }
+  if (rapor.komut === "fark") {
+    s.push(`\n  nvram farki: ${rapor.ozet?.degisen || 0} degisen, `
+      + `${rapor.ozet?.eklenen || 0} eklenen, ${rapor.ozet?.silinen || 0} silinen`);
+    for (const [k, v] of Object.entries(rapor.degisen || {})) {
+      s.push(`    ~ ${k}: ${g(v.eski)}  ->  ${g(v.yeni)}`);
+    }
+    for (const [k, v] of Object.entries(rapor.eklenen || {})) s.push(`    + ${k} = ${g(v)}`);
+    for (const [k, v] of Object.entries(rapor.silinen || {})) s.push(`    - ${k} (idi: ${g(v)})`);
+  }
   if (rapor.problems?.length) {
     s.push("\n  Sorunlar:");
     for (const p of rapor.problems) {

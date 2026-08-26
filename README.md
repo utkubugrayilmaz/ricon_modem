@@ -54,6 +54,20 @@ stdout **her zaman saf JSON**; ilerleme/özet stderr'a gider; çıkış kodu
 node --test        # cihaz gerektirmez; gerçek yakalanmış gövdelerle
 ```
 
+## Kullanım biçimleri (modülerlik düsturu)
+
+redbox-device kalıbı: **çekirdek iş `src/index.js`'te** importlanabilir saf
+fonksiyonlarda (`modemOku`, `modemDogrula`, `modemKesif`, `modemIzle`,
+`modemKonsol`, `nvramFarkHesapla`) — hepsi `opts` alır, `process.env`/argv
+OKUMAZ, throw etmez (sonuç + `problems[]`). Aynı çekirdek üç şekilde tüketilir:
+
+1. **Terminal:** `node ricon.js <komut>` (ince CLI, .env okur).
+2. **npm paketi:** `import { modemOku } from "ricon-modem"` → `await modemOku({ host, kaynakIp, kimlik })`.
+3. **HTTP endpoint:** çekirdeği saran ince bir sunucu (ileride) — aynı fonksiyonları çağırır.
+
+Yeni yetenek eklerken önce `src/`te opts-alan çekirdek yazılır; tüketiciler
+onu çağırır (kopya mantık yok).
+
 ## Mimari (kısa)
 
 | Modül | İş |
