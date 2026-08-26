@@ -24,25 +24,39 @@ export const SAHA_PROFILI = {
     wl0_net_mode: "disabled",
     wl_net_mode: "disabled",
 
-    // APN (diff ile doğrulandı) — aktif hat m1, SIM1
-    m1s1wanapn: "internet",
+    // Modem/WAN Main Link (2026-08-26 diff ile doğrulandı)
+    w1_wan_proto: "m13g",     // Connection Type M1-PPP (default m13gdhcp=M1-DHCP)
+    m1simswtch: "0",          // SIM Backup Disable (default 1=Enable)
+    mullinkfail: "0",         // Link Fail to Restart 0 dk (default 30)
+    m1s1wanapn: "internet",   // APN SIM1 (diff ile doğrulandı)
+    m1s1pppuser: "",          // SIM1 User Name temizle (default "card")
+    m1s1ppppwd: "",           // SIM1 Password temizle
+    m1s2pppuser: "",          // SIM2 User Name temizle
+    m1s2ppppwd: "",           // SIM2 Password temizle
+
+    // Modem/WAN Others (diff ile doğrulandı)
+    w1_connfailsw: "0",       // Connect Fail 0 (default 10)
+    w1_kponm: "1",            // Keep Alive None (default 7=ICMP+; None yapinca 1)
+
+    // Authentication 4'lü. NOT: bu ünitede nvram'da zaten hepsi "1"; diff'le
+    // DEĞİL, isim+değer+foto ile teyitli. Gelecekteki ünitelerde de garanti
+    // olsun diye profile konuldu (idempotent — zaten 1 ise dokunmaz).
+    m1_pap_allowed: "1",
+    m1_chap_allowed: "1",
+    m1_chapms_allowed: "1",
+    m1_chapms_v2_allowed: "1",
+
+    // Modem/WAN Backup Link (diff ile doğrulandı)
+    w2_wan_proto: "disabled", // Backup Link Disabled (default dhcp)
 
     // LAN (Faz1 canlı + ekran kıyası + nvram ile doğrulandı)
     lan_ipaddr: "5.5.5.1",
     lan_ipaddr_ex1: "0.0.0.0", // fabrika ikincil IP'sini sil (nvram: 192.168.8.1)
-    // NOT: lan_cclass ("192.168.1.") LAN IP degisince "5.5.5." olmali mi?
-    // LAN sayfasi diff'inde teyit edilecek (UI otomatik yaziyor olabilir).
-
-    // --- AŞAĞISI Modem/WAN toplu diff'i sonrası DOLDURULACAK ---
-    // Connection Type M1-PPP, SIM Backup Disable, Link Fail 0,
-    // Authentication 4'lü, Connect Fail 0, Keep Alive None,
-    // Backup Link Disabled, SIM1/2 user+pass temizle.
   },
 
-  // Profildeki hangi anahtarların henüz eksik olduğunu takip için (bilgi).
-  eksik_haritalanacak: [
-    "Connection Type (M1-PPP)", "SIM Backup Disable", "Link Fail to Restart 0",
-    "Authentication (4'lü)", "Connect Fail 0", "Keep Alive None",
-    "Backup Link Disabled", "SIM1/2 user+pass temizle",
+  // Henüz profile EKLENMEMİŞ, apply anında doğrulanacak:
+  bekleyen: [
+    "lan_cclass (LAN IP ile birlikte) — LAN IP degistiginde UI bunu da '5.5.5.' "
+    + "yaziyor olabilir; gercek apply aninda (reboot sonrasi) dogrulanacak.",
   ],
 };
