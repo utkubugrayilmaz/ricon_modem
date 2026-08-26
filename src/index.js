@@ -27,6 +27,7 @@ import { problem, isOk } from "./problems.js";
 export { applyProvisioning, planProvisioning, splitPlan } from "./provisioning.js";
 export { FIELD_PROFILE, FACTORY_PROFILE, PROFILES } from "./profile.js";
 export { provisionModem, provisionLoop, pcPreflight, nextAction } from "./pipeline.js";
+export { readSim, telefonNormalize } from "./sim.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (host) => host.split(".").slice(0, 3).join(".") + ".";

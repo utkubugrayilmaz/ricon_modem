@@ -62,6 +62,15 @@ export function summaryText(rapor) {
     for (const [k, v] of Object.entries(rapor.eklenen || {})) s.push(`    + ${k} = ${g(v)}`);
     for (const [k, v] of Object.entries(rapor.silinen || {})) s.push(`    - ${k} (idi: ${g(v)})`);
   }
+  if (rapor.komut === "sim") {
+    const s1 = rapor.sim1 || {};
+    s.push("\n  SIM1:");
+    for (const k of ["iccid_temiz", "imsi", "imei", "operator", "sim_durumu", "sebeke_tipi", "band", "sinyal_dbm", "hucre_id"]) {
+      if (s1[k]) s.push(`    ${k.padEnd(14)}: ${s1[k]}`);
+    }
+    s.push(`    ${"msisdn".padEnd(14)}: ${g(rapor.msisdn)}${rapor.msisdn_kaynak ? " (" + rapor.msisdn_kaynak + ")" : ""}`);
+    if (rapor.msisdn_not) s.push(`    -> ${rapor.msisdn_not}`);
+  }
   if (rapor.komut === "hazirla" || rapor.komut === "hazirla-dongu") {
     s.push(`
   Hazirla — durum: ${g(rapor.durum)}${rapor.deneme ? " (deneme " + rapor.deneme + ")" : ""}`);

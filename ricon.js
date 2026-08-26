@@ -23,7 +23,7 @@ import { DEFAULT_HOST } from "./src/constants.js";
 import { findSourceIp } from "./src/network.js";
 import {
   checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
-  applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight,
+  applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report.js";
 
@@ -61,6 +61,7 @@ async function komutuCalistir() {
     case "oku": return readDevice(opts);
     case "izle": return watchDevice({ ...opts, sureSn: Number(bayrak("--sure")) || 30 });
     case "konsol": return readConsole({ ...opts, nvram: argv.includes("--nvram") });
+    case "sim": return readSim({ ...opts, telefon: bayrak("--telefon") });
     case "fark": {
       const [, once, sonra] = argv;
       if (!once || !sonra) {
@@ -116,7 +117,7 @@ async function komutuCalistir() {
   }
 }
 
-const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "fark", "uygula", "hazirla"]);
+const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim", "fark", "uygula", "hazirla"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {

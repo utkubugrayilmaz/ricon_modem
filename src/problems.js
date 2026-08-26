@@ -70,6 +70,12 @@ const KATALOG = {
       + " with valid credentials.",
   }),
 
+  MSISDN_GECERSIZ: (v) => ({
+    message: `The supplied phone number "${v}" is not a valid TR mobile number.`,
+    check: "Provide it as 05xxxxxxxxx / +905xxxxxxxxx. MSISDN cannot be read from"
+      + " the device; it is operator/UI input.",
+  }),
+
   // --- Yazma (Faz 3) ---
   WRITE_BLOCKED_READONLY: (yol) => ({
     message: `A write to ${yol} was blocked: this command is read-only.`,
