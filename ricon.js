@@ -9,6 +9,8 @@
 //   node ricon.js izle           Fark tabanli ornekleme (--sure sn)
 //   node ricon.js konsol         Telnet root shell kesfi (--nvram = tam nvram)
 //   node ricon.js fark A.json B.json   Iki nvram anlik goruntusunu karsilastir
+//   node ricon.js uygula --uygula      Provizyon uygula (--kuru varsayilan)
+//   node ricon.js hazirla [--dongu]    Tak-calistir: algila->provizyon->dogrula
 //
 // Ortak: --json <dosya> (ciktiyi yaz) · --kaynak <dosya> (kayittan goster)
 // Ortam: MODEM_HOST, MODEM_KULLANICI, MODEM_SIFRE, MODEM_KAYNAK_IP,
@@ -21,7 +23,7 @@ import { VARSAYILAN_HOST } from "./src/sabitler.js";
 import { kaynakIpBul } from "./src/ag.js";
 import {
   modemDogrula, modemKesif, modemOku, modemIzle, modemKonsol, nvramFarkHesapla,
-  provizyonUygula, PROFILLER,
+  provizyonUygula, PROFILLER, hazirlaModem, hazirlaDongu, pcOnKontrol,
 } from "./src/index.js";
 import { jsonYaz, ozetMetni } from "./src/rapor.js";
 
@@ -85,11 +87,36 @@ async function komutuCalistir() {
         yeniKaynakIp: bayrak("--yeni-kaynak"),
       }, profil);
     }
+    case "hazirla": {
+      const profilAd = bayrak("--profil") || "saha";
+      const profil = PROFILLER[profilAd];
+      if (!profil) {
+        return { zaman: new Date().toISOString(), komut: "hazirla", ok: false,
+          problems: [{ kod: "ARGS", severity: "error",
+            message: `Bilinmeyen profil: ${profilAd}`, check: `Gecerli: ${Object.keys(PROFILLER).join(", ")}` }] };
+      }
+      const sahaHost = bayrak("--saha-host") || profil.nvram.lan_ipaddr || "5.5.5.1";
+      const on = pcOnKontrol("192.168.1.", sahaHost.split(".").slice(0, 3).join(".") + ".");
+      if (!on.hazir) {
+        return { zaman: new Date().toISOString(), komut: "hazirla", ok: false,
+          durum: "pc_hazir_degil", problems: on.problems };
+      }
+      const hOpts = {
+        fabrikaHost: opts.host, fabrikaKaynak: on.fabrikaKaynak,
+        sahaHost, sahaKaynak: on.sahaKaynak,
+        kimlik: opts.kimlik, profil,
+        denemeler: Number(bayrak("--deneme")) || 3,
+        ilerle,
+      };
+      return argv.includes("--dongu")
+        ? hazirlaDongu({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity })
+        : hazirlaModem(hOpts);
+    }
     default: return null;
   }
 }
 
-const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "fark", "uygula"]);
+const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "fark", "uygula", "hazirla"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {

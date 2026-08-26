@@ -26,6 +26,7 @@ import { sorun, sonucOk } from "./sorunlar.js";
 // Provizyon (Faz 3) — çekirdek dışa aktarımı (paket/CLI/endpoint aynı API).
 export { provizyonUygula, provizyonPlanla, planiAyir } from "./provizyon.js";
 export { SAHA_PROFILI, FABRIKA_PROFILI, PROFILLER } from "./profil.js";
+export { hazirlaModem, hazirlaDongu, pcOnKontrol, sonrakiEylem } from "./pipeline.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (host) => host.split(".").slice(0, 3).join(".") + ".";

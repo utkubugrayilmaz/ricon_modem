@@ -62,6 +62,12 @@ export function ozetMetni(rapor) {
     for (const [k, v] of Object.entries(rapor.eklenen || {})) s.push(`    + ${k} = ${g(v)}`);
     for (const [k, v] of Object.entries(rapor.silinen || {})) s.push(`    - ${k} (idi: ${g(v)})`);
   }
+  if (rapor.komut === "hazirla" || rapor.komut === "hazirla-dongu") {
+    s.push(`
+  Hazirla — durum: ${g(rapor.durum)}${rapor.deneme ? " (deneme " + rapor.deneme + ")" : ""}`);
+    if (rapor.son_eylem) s.push(`  Eylem: ${rapor.son_eylem}`);
+    if (rapor.hazirlanan) s.push(`  Hazirlanan modem: ${rapor.hazirlanan.length}`);
+  }
   if (rapor.komut === "uygula") {
     s.push(`\n  Provizyon (${rapor.profil}) — ${rapor.uygula ? "GERCEK YAZMA" : "KURU (dry-run)"}`);
     s.push(`  Durum: ${g(rapor.durum)}`);
