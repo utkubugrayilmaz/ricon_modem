@@ -85,7 +85,7 @@ node ricon.js uygula --profil saha --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.
 - **Idempotency:** 5.5.5.1'de tekrar `uygula` → "zaten istenen durumda",
   0 değişiklik.
 - **Erişim/kimlik:** provizyon + reboot sonrası 5.5.5.1'de erişim ve
-  `riconadmin/<parola .env>` çalışmaya devam ediyor.
+  `riconadmin` / `<parola .env>` çalışmaya devam ediyor.
 
 Sonuç: **Faz 3 çekirdeği kanıtlandı** — elle yapılan hazırlama süreci tek
 komuta indi. Kalan: "tak-çalıştır" sarmalayıcı (link algıla → otomatik başlat),
