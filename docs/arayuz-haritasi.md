@@ -30,12 +30,35 @@ Yan etki (UI açınca dolan radyo parametreleri, toggle değil):
 `wl_radio` DEĞİL — `wl0_net_mode`. (Faz 1 notlarındaki "aday" belirsizliği
 böylece kapandı.)
 
-**Faz 3 için:** "WLAN kapalı" hedefi → `nvram set wl0_net_mode=disabled`.
-(Açarken UI'ın doldurduğu yan parametreler kapatırken gerekmez; `disabled`
-radyoyu kapatır. Faz 3'te set sonrası geri-okuma ile doğrulanacak.)
+**Ters yön de doğrulandı (enabled → disabled diff'i):**
+```
+wl0_net_mode: mixed -> disabled
+wl_net_mode:  mixed -> disabled        <-- UI ikisini birden yaziyor
+wl0_gmode/wl_gmode: 1 -> -1  (yan)
+```
+
+**Faz 3 için:** "WLAN kapalı" hedefi → **`wl0_net_mode=disabled` VE
+`wl_net_mode=disabled`** (UI ikisini birden set ediyor; birebir uyum için
+ikisi de yazılmalı). Set sonrası geri-okuma ile doğrulanacak.
 
 **Apply davranışı:** Save+Apply yapıldı; nvram değişikliği kalıcı görüldü.
-Reboot gözlenmedi (telnet/nvram erişimi kesintisiz).
+Reboot gözlenmedi (telnet/nvram erişimi kesintisiz). İki yön de test edildi.
+
+---
+
+## 🟢 APN (SIM1)  (2026-08-26 diff ile doğrulandı)
+
+**Operatif anahtar:** `m1s1wanapn`
+- Kanıt: `m1s1wanapn: internet -> test`.
+- **`m1s1wanapn_cst` DEĞİŞMEDİ** (hâlâ "internet") → operatif olan bu DEĞİL.
+- Yan etki (Modem/WAN sayfası Save'inde yazılan diğer alanlar, APN değil):
+  `m1_wan_netmask`, `m1s1simpin`, `m1s1simpinpro`, `m1s2simpin`,
+  `w1_recon_h/m`, `w2_recon_h/m`, `w1_lnkpip`, `w2_lnkpip`,
+  `browser_method=USE_LAN`.
+
+**Faz 3 için:** APN hedefi → `nvram set m1s1wanapn=internet` (aktif hat
+modül m1, SIM1). nvram'dan doğrudan set edince web formunun yan-alan
+yazımları oluşmaz — daha temiz.
 
 ---
 
@@ -43,7 +66,6 @@ Reboot gözlenmedi (telnet/nvram erişimi kesintisiz).
 
 | Ayar (UI) | Durum | Aday anahtar (Faz 1 nvram'dan, DOĞRULANMADI) |
 |---|---|---|
-| APN (SIM1) | ⏳ | `m1s1wanapn` / `m1s1wanapn_cst` = internet |
 | Device Name | ⏳ | `router_name` |
 | DHCP havuzu | ⏳ | `dhcp_start` / `dhcp_num` / `dhcp_lease` |
 | Ana SIM / Connection Type / SIM Backup / Backup Link | ⏳ | belirsiz |
