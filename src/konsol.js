@@ -1,0 +1,198 @@
+// Telnet konsol katmani — modemin 5123 portundaki root shell'i.
+//
+// Cihazin altinda OpenWrt/Linux var (Release 21.05.4-ricon, kernel 2.6.36
+// mips). Port 5123'te telnet ile root shell'e giriliyor; `nvram get/set/
+// commit` calisiyor. Bu, HTML form taklidinden cok daha kesin bir otomasyon
+// kanali: tek anahtara dokunur, digerlerini ezmez.
+//
+// GUVENLIK: varsayilan SALT OKUNUR. `nvram set/unset/commit`, `reboot`, `rm`,
+// `>` gibi yazan komutlar yazmaIzni acikca verilmeden reddedilir. Yazma Faz
+// 3'te acilir. Telnet DUZ METIN'dir — parola sifresiz gider; sadece yerel
+// hazirlama agi icin uygundur, sahaya/WAN'a acilmamali.
+//
+// Tasarim: komut CALISTIRMA (soket) ile CIKTI AYRISTIRMA (saf fonksiyonlar)
+// ayri; ayristirma cihaz olmadan test edilebilir. Katman throw etmez.
+
+import net from "node:net";
+import { MAX_ZAMANLAYICI_MS } from "./sabitler.js";
+import { sorun } from "./sorunlar.js";
+
+const KONSOL_PORT = 5123;
+const BASLA = "__RCN_BASLA__";
+const BIT = "__RCN_BIT__";
+
+// Yazan/tehlikeli komut deseni — salt-okunur modda reddedilir.
+// Not: dosyaya yonlendirme (`> dosya`, `>> dosya`) yazmadir; ama `2>/dev/null`
+// ve `2>&1` masum yonlendirmelerdir, onlar SERBEST — yoksa okuma komutlarimiz
+// (nvram show 2>/dev/null) yanlislikla reddedilir.
+const YAZAN_DESEN = /\bnvram\s+(set|unset|commit|restore)\b|\b(reboot|halt|poweroff|mtd|fw_setenv|mkfs|dd|tee|sysupgrade)\b|\brm\s|\bmv\s|\bkill\b|>\s*(?!\/dev\/null\b)[^\s&]/;
+
+// --- Saf yardimcilar (test edilebilir) ---
+
+// Gelen IAC (telnet) pazarligina cevap uretir: DO->WONT, WILL->DONT.
+// Doner: gonderilecek bayt dizisi (Buffer) ya da bos.
+export function iacYanit(buf) {
+  const out = [];
+  for (let i = 0; i < buf.length; i += 1) {
+    if (buf[i] === 255) { // IAC
+      const komut = buf[i + 1];
+      const opsiyon = buf[i + 2];
+      if (komut === 253) out.push(255, 252, opsiyon);      // DO  -> WONT
+      else if (komut === 251) out.push(255, 254, opsiyon); // WILL-> DONT
+      i += 2;
+    }
+  }
+  return Buffer.from(out);
+}
+
+// Komut ciktisini iki marker ARASINDAN ayiklar. Marker'lar KENDI SATIRINDA
+// aranir; boylece komutun terminal ekosu (ayni satirda "echo BASLA; ...")
+// yanlislikla yakalanmaz.
+export function komutCiktisiAyikla(ham, basla = BASLA, bit = BIT) {
+  const t = (ham || "").replace(/\r/g, "");
+  const b = t.match(new RegExp(`^${basla}\\s*$`, "m"));
+  const e = t.match(new RegExp(`^${bit}\\s*$`, "m"));
+  if (!b || !e || e.index < b.index) return null;
+  return t.slice(b.index + b[0].length, e.index).replace(/^\n+|\n+$/g, "");
+}
+
+// `nvram show` ciktisini {anahtar: deger} nesnesine cevirir. Ilk '=' ile
+// bolunur (deger '=' icerebilir). Prototip guvenligi icin null-prototip.
+export function nvramShowCoz(metin) {
+  const cikti = Object.create(null);
+  for (const satir of (metin || "").split("\n")) {
+    const s = satir.replace(/\r$/, "");
+    if (!s) continue;
+    const i = s.indexOf("=");
+    if (i === -1) continue;
+    cikti[s.slice(0, i)] = s.slice(i + 1);
+  }
+  return cikti;
+}
+
+// --- Soket surucusu ---
+
+// Bir telnet oturumu acar, giris yapar, verilen komutlari SIRAYLA calistirir.
+// komutlar: string[] (salt-okunur; yazan komutlar yazmaIzni ister).
+// Doner: { ok, ciktilar: {komut: cikti}, problems }  (throw etmez)
+export function konsolCalistir(opts, komutlar) {
+  const {
+    host, kaynakIp, port = KONSOL_PORT,
+    kullanici, sifre, yazmaIzni = false,
+    zamanAsimiMs = 20000,
+  } = opts;
+
+  // Yazma korumasi — I/O'dan once.
+  if (!yazmaIzni) {
+    const yazan = komutlar.find((k) => YAZAN_DESEN.test(k));
+    if (yazan) {
+      return Promise.resolve({
+        ok: false, ciktilar: {},
+        problems: [sorun("WRITE_BLOCKED_READONLY", `konsol: "${yazan}"`)],
+      });
+    }
+  }
+  const ust = Math.min(zamanAsimiMs, MAX_ZAMANLAYICI_MS);
+
+  return new Promise((resolve) => {
+    const s = new net.Socket();
+    let buf = "";
+    const tumu = [];
+    let asama = 0; // 0=login bekle 1=parola bekle 2=prompt bekle 3=komut gonderildi 4=bitti
+    let cozuldu = false;
+
+    const bitir = (sonuc) => {
+      if (cozuldu) return;
+      cozuldu = true;
+      try { s.destroy(); } catch { /* zaten kapali */ }
+      resolve(sonuc);
+    };
+
+    // Tek satirda calistirilacak toplu komut: her komut markerlar arasinda.
+    const toplu = komutlar
+      .map((k) => `echo ${BASLA}; ${k}; echo ${BIT}`)
+      .join("; ") + "\r\n";
+    const beklenenBit = komutlar.length;
+
+    const zaman = setTimeout(() => bitir({
+      ok: false, ciktilar: {},
+      problems: [sorun("REQUEST_FAILED", `konsol ${host}:${port}`, `login/komut zaman asimi (asama ${asama})`)],
+    }), ust);
+
+    s.setTimeout(ust);
+    const baglanti = { host, port };
+    if (kaynakIp) baglanti.localAddress = kaynakIp;
+
+    s.connect(baglanti);
+    s.on("data", (d) => {
+      const yanit = iacYanit(d);
+      if (yanit.length) s.write(yanit);
+      const metin = d.toString("latin1");
+      buf += metin;
+      tumu.push(metin);
+
+      if (asama === 0 && /login:/i.test(buf)) {
+        asama = 1; buf = ""; s.write(`${kullanici}\r\n`);
+      } else if (asama === 1 && /password:/i.test(buf)) {
+        asama = 2; buf = ""; s.write(`${sifre}\r\n`);
+      } else if (asama === 2 && /[#$]\s*$|@.*:.*[#$]/.test(buf)) {
+        asama = 3; buf = ""; s.write(toplu);
+      } else if (asama === 3) {
+        // Tamamlanma sinyali eko'dan BAGIMSIZ: BIT marker'i KENDI SATIRINDA
+        // (gercek `echo BIT` ciktisi) kac kez gorundu? Eko satirinda marker
+        // satir-ortasindadir, ^BIT$ ile eslesmez. Hepsi gelince biter.
+        const t = tumu.join("").replace(/\r/g, "");
+        const tamam = (t.match(new RegExp(`^${BIT}\\s*$`, "mg")) || []).length;
+        if (tamam >= beklenenBit) { asama = 4; clearTimeout(zaman); s.write("exit\r\n"); bitir(sonucCoz()); }
+      }
+    });
+    s.on("timeout", () => bitir({
+      ok: false, ciktilar: {},
+      problems: [sorun("REQUEST_FAILED", `konsol ${host}:${port}`, "soket zaman asimi")],
+    }));
+    s.on("error", (e) => { clearTimeout(zaman); bitir({
+      ok: false, ciktilar: {},
+      problems: [sorun("REQUEST_FAILED", `konsol ${host}:${port}`, `${e.code || e.name}: ${e.message}`)],
+    }); });
+    s.on("close", () => {
+      if (asama >= 3) bitir(sonucCoz());
+      else bitir({ ok: false, ciktilar: {}, problems: [sorun("REQUEST_FAILED", `konsol ${host}:${port}`, `baglanti kapandi (asama ${asama})`)] });
+    });
+
+    // Toplu ciktidan her komutun ciktisini sirayla ayiklar.
+    function sonucCoz() {
+      const tam = tumu.join("");
+      const parcalar = tam.split(BIT);
+      const ciktilar = Object.create(null);
+      // Her komut icin: ilgili BASLA...BIT blogunu bul. Basit ve saglam yol:
+      // gercek ciktilar eko'dan SONRA gelir; komut sirasina gore son
+      // 'komutlar.length' adet BASLA...BIT blogunu al.
+      const bloklar = [];
+      const re = new RegExp(`^${BASLA}\\s*$([\\s\\S]*?)^${BIT}\\s*$`, "mg");
+      let m;
+      const t = tam.replace(/\r/g, "");
+      while ((m = re.exec(t)) !== null) bloklar.push(m[1].replace(/^\n+|\n+$/g, ""));
+      // Son N blok gercek ciktilar (ilk N eko olabilir; eko'da komut metni var
+      // ama BASLA/BIT kendi satirinda degil, o yuzden re zaten sadece gercekleri
+      // yakalar). Yine de guvenli olsun diye son N'i aliyoruz.
+      const gercek = bloklar.slice(-komutlar.length);
+      komutlar.forEach((k, i) => { ciktilar[k] = gercek[i] ?? null; });
+      return { ok: true, ciktilar, problems: [] };
+    }
+  });
+}
+
+// Kolaylik: tam nvram'i CLI'den cekip {anahtar:deger} olarak dondurur.
+export async function konsolNvram(opts) {
+  const r = await konsolCalistir(opts, ["nvram show 2>/dev/null"]);
+  if (!r.ok) return { degerler: {}, sayi: 0, problems: r.problems };
+  const degerler = nvramShowCoz(r.ciktilar["nvram show 2>/dev/null"]);
+  return { degerler, sayi: Object.keys(degerler).length, problems: [] };
+}
+
+// Kolaylik: kimlik/sistem kesfi (salt okunur).
+export async function konsolKesif(opts) {
+  const komutlar = ["uname -a", "id", "cat /proc/uptime", "nvram show 2>/dev/null | wc -l"];
+  const r = await konsolCalistir(opts, komutlar);
+  return { ...r, komutlar };
+}

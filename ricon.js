@@ -30,6 +30,7 @@ import {
 } from "./src/ag.js";
 import { portTara, erisilebilirMi } from "./src/tarayici.js";
 import { snmpKimlik } from "./src/snmp.js";
+import { konsolKesif, konsolNvram } from "./src/konsol.js";
 import { sorun, sonucOk } from "./src/sorunlar.js";
 import { jsonYaz, ozetMetni } from "./src/rapor.js";
 
@@ -200,13 +201,39 @@ async function izle() {
   };
 }
 
+// --- konsol: telnet root shell (salt okunur) ---
+async function konsol() {
+  const { host, kaynakIp, kimlik } = ortam();
+  if (!kimlik) {
+    return { zaman: now(), komut: "konsol", modem_ip: host, ok: false,
+      problems: [sorun("AUTH_REQUIRED", "telnet 5123")] };
+  }
+  const opts = { host, kaynakIp, kullanici: kimlik.kullanici, sifre: kimlik.sifre };
+  const rapor = { zaman: now(), komut: "konsol", modem_ip: host, problems: [] };
+
+  if (argv.includes("--nvram")) {
+    process.stderr.write("[konsol] nvram tam dokumu (CLI)...\n");
+    const { degerler, sayi, problems } = await konsolNvram(opts);
+    rapor.nvram = degerler;
+    rapor.nvram_anahtar_sayisi = sayi;
+    rapor.problems.push(...problems);
+  } else {
+    process.stderr.write("[konsol] sistem kesfi (uname/id/nvram sayisi)...\n");
+    const { ciktilar, komutlar, problems } = await konsolKesif(opts);
+    rapor.komutlar = ciktilar;
+    rapor.problems.push(...problems);
+  }
+  rapor.ok = sonucOk(rapor.problems);
+  return rapor;
+}
+
 // --- ana akis ---
-const KOMUTLAR = { dogrula, kesif, oku, izle };
+const KOMUTLAR = { dogrula, kesif, oku, izle, konsol };
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR[komut]) {
     process.stderr.write(
-      "Kullanim: node ricon.js <dogrula|kesif|oku|izle> [--json d] [--kaynak d] [--sure sn]\n",
+      "Kullanim: node ricon.js <dogrula|kesif|oku|izle|konsol> [--json d] [--kaynak d] [--sure sn] [--nvram]\n",
     );
     return komut && !KOMUTLAR[komut] ? 1 : 0;
   }
