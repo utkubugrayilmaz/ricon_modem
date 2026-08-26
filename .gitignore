@@ -13,3 +13,6 @@ node_modules/
 
 # Ham terminal dokumu — parola hash+kimlik icerir
 docs/manuel_test.md
+docs/konsol_keşfi_manuel.md
+docs/*manuel*
+docs/*_manuel*

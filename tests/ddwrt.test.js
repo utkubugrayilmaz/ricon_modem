@@ -36,8 +36,8 @@ test("ciftleriAyikla: __proto__ alani prototipi kirletmez", () => {
 });
 
 test("iccidTemizle: sondaki F dolgusu atilir", () => {
-  assert.equal(iccidTemizle("8990011234567890123F"), "8990011234567890123");
-  assert.equal(iccidTemizle("8990011234567890123"), "8990011234567890123");
+  assert.equal(iccidTemizle("8990010000000009999F"), "8990010000000009999");
+  assert.equal(iccidTemizle("8990010000000009999"), "8990010000000009999");
   assert.equal(iccidTemizle(""), null);
 });
 
