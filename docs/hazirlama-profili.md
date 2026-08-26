@@ -65,3 +65,28 @@ uygular (zaten kapalıysa dokunmaz). Anahtar: `wl0_net_mode`+`wl_net_mode`
 Tüm bu eşlemeler `src/profil.js` içindeki `SAHA_PROFILI`'ne işlendi. Motor
 (`node ricon.js uygula`) bunları uygular; `lan_cclass` gerçek apply anında
 (LAN IP değişince) doğrulanacak.
+
+## Uçtan uca test sonucu (2026-08-26)
+
+Sıfır (fabrikaya döndürülmüş) cihazda tek komutla tam provizyon **başarıyla
+çalıştı ve doğrulandı**:
+
+```
+node ricon.js uygula --profil saha --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.5.5.100
+```
+
+- Motor 12 anahtarı yazdı → reboot → cihaz **5.5.5.1**'de geldi → geri-oku
+  doğrulama **TAMAM** (~30 sn).
+- **Tam before/after diff: 13 değişen, 0 eklenen, 0 silinen.** 12'si profildeki
+  anahtarlar; +1 `lan_cclass` (192.168.1.→5.5.5.) **cihazın kendi türettiği**
+  (biz yazmadık). Başka hiçbir şeye dokunulmadı — **yan etki yok**.
+- **`lan_cclass` bulgusu:** LAN IP değişince cihaz `lan_cclass`'ı reboot'ta
+  otomatik günceller. Profile EKLENMESİNE GEREK YOK (gözlemle kesinleşti).
+- **Idempotency:** 5.5.5.1'de tekrar `uygula` → "zaten istenen durumda",
+  0 değişiklik.
+- **Erişim/kimlik:** provizyon + reboot sonrası 5.5.5.1'de erişim ve
+  `riconadmin/<parola .env>` çalışmaya devam ediyor.
+
+Sonuç: **Faz 3 çekirdeği kanıtlandı** — elle yapılan hazırlama süreci tek
+komuta indi. Kalan: "tak-çalıştır" sarmalayıcı (link algıla → otomatik başlat),
+retry/fallback cilası, PC-subnet adımını pipeline içine alma.
