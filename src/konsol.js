@@ -196,3 +196,23 @@ export async function konsolKesif(opts) {
   const r = await konsolCalistir(opts, komutlar);
   return { ...r, komutlar };
 }
+
+// nvram degeri icin guvenli tirnak (tek tirnak icinde, tek tirnaklari kacir).
+export function shKacis(deger) {
+  return `'${String(deger).replace(/'/g, "'\\''")}'`;
+}
+
+// YAZMA: verilen {anahtar: deger} ciftlerini nvram'a yazar + commit eder.
+// SADECE yazmaIzni:true ile calisir (cagiran acikca yazma niyetini belirtir).
+// Reboot BURADA YAPILMAZ (reboot baglantiyi koparir, marker tamamlanmaz);
+// reboot ayri bir fire-and-forget adimdir (provizyon motoru yonetir).
+// Doner: { ok, problems, yazilan:[anahtarlar] }
+export async function konsolYaz(opts, ciftler) {
+  const anahtarlar = Object.keys(ciftler);
+  if (anahtarlar.length === 0) return { ok: true, problems: [], yazilan: [] };
+  const komutlar = anahtarlar.map((k) => `nvram set ${k}=${shKacis(ciftler[k])}`);
+  komutlar.push("nvram commit && echo NVRAM_COMMIT_OK");
+  const r = await konsolCalistir({ ...opts, yazmaIzni: true }, komutlar);
+  const commitOk = Object.values(r.ciktilar || {}).some((v) => (v || "").includes("NVRAM_COMMIT_OK"));
+  return { ok: r.ok && commitOk, problems: r.problems, yazilan: anahtarlar };
+}

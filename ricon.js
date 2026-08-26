@@ -21,6 +21,7 @@ import { VARSAYILAN_HOST } from "./src/sabitler.js";
 import { kaynakIpBul } from "./src/ag.js";
 import {
   modemDogrula, modemKesif, modemOku, modemIzle, modemKonsol, nvramFarkHesapla,
+  provizyonUygula, SAHA_PROFILI,
 } from "./src/index.js";
 import { jsonYaz, ozetMetni } from "./src/rapor.js";
 
@@ -67,11 +68,18 @@ async function komutuCalistir() {
       }
       return nvramFarkHesapla(farkNvramAl(once), farkNvramAl(sonra));
     }
+    case "uygula": return provizyonUygula({
+      ...opts,
+      uygula: argv.includes("--uygula"),   // yoksa DRY-RUN (kuru)
+      reboot: !argv.includes("--reboot-yok"),
+      yeniHost: bayrak("--yeni-host"),
+      yeniKaynakIp: bayrak("--yeni-kaynak"),
+    }, SAHA_PROFILI);
     default: return null;
   }
 }
 
-const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "fark"]);
+const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "fark", "uygula"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {

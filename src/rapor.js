@@ -62,6 +62,21 @@ export function ozetMetni(rapor) {
     for (const [k, v] of Object.entries(rapor.eklenen || {})) s.push(`    + ${k} = ${g(v)}`);
     for (const [k, v] of Object.entries(rapor.silinen || {})) s.push(`    - ${k} (idi: ${g(v)})`);
   }
+  if (rapor.komut === "uygula") {
+    s.push(`\n  Provizyon (${rapor.profil}) — ${rapor.uygula ? "GERCEK YAZMA" : "KURU (dry-run)"}`);
+    s.push(`  Durum: ${g(rapor.durum)}`);
+    if (rapor.plan) {
+      s.push(`  Degisecek: ${rapor.plan.degisecek_sayisi}, ayni: ${rapor.plan.ayni_sayisi}`);
+      for (const [k, v] of Object.entries(rapor.plan.degisecek || {})) {
+        s.push(`    ~ ${k}: ${g(v.mevcut)}  ->  ${g(v.hedef)}`);
+      }
+      if (rapor.plan.eksik_anahtarlar?.length) {
+        s.push(`    ⚠ cihazda olmayan (yeni yazilacak): ${rapor.plan.eksik_anahtarlar.join(", ")}`);
+      }
+    }
+    if (rapor.dogrulama) s.push(`  Dogrulama: ${rapor.dogrulama.tamam ? "TAMAM" : "kalan: " + (rapor.dogrulama.kalan_degisecek || []).join(", ")}`);
+    if (rapor.not) s.push(`  Not: ${rapor.not}`);
+  }
   if (rapor.problems?.length) {
     s.push("\n  Sorunlar:");
     for (const p of rapor.problems) {
