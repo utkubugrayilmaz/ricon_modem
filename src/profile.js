@@ -61,12 +61,16 @@ export const FIELD_PROFILE = {
   ],
 };
 
-// FABRIKA profili — cihazi default duruma dondurur. Degerler saha diff'lerinden
-// olculdu (her degisen anahtarin DEFAULT hali). Temiz uctan-uca testte once
-// bununla default'a donulur, sonra FIELD_PROFILE ileri uygulanir.
+// FABRIKA profili — DIKKAT: bu GERCEK bir factory reset DEGILDIR. Yalnizca
+// FIELD_PROFILE'in dokundugu anahtarlari DEFAULT degerlerine geri alir (saha
+// diff'lerinden olculdu). Kapsam DISI degistirilen bir ayari geri getirmez.
+// Amaci: uctan-uca testte cihazi "bizim yonettigimiz" ayarlar acisindan sifir
+// haline dondurmek. GERCEK/tam factory reset icin: fiziksel reset dugmesi, ya
+// da bir kez pristine /nvrambak.bin yedegi alip `nvram restore` etmek
+// (golden-backup yaklasimi — ileride, pristine yedek gerektirir).
 export const FACTORY_PROFILE = {
   ad: "fabrika",
-  aciklama: "Ricon S9922M44 fabrika/default degerleri (saha diff'lerinden olculdu)",
+  aciklama: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
   nvram: {
     // Modem/WAN Main Link defaults
     w1_wan_proto: "m13gdhcp",  // Connection Type M1-DHCP
