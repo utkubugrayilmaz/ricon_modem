@@ -72,26 +72,38 @@ export function nvramShowCoz(metin) {
 
 // --- Soket surucusu ---
 
-// Bir telnet oturumu acar, giris yapar, verilen komutlari SIRAYLA calistirir.
-// komutlar: string[] (salt-okunur; yazan komutlar yazmaIzni ister).
-// Doner: { ok, ciktilar: {komut: cikti}, problems }  (throw etmez)
-export function konsolCalistir(opts, komutlar) {
-  const {
-    host, kaynakIp, port = KONSOL_PORT,
-    kullanici, sifre, yazmaIzni = false,
-    zamanAsimiMs = 20000,
-  } = opts;
+const KONSOL_DENEME = 3;       // tek-baglantili modemde gecici timeout olur
+const KONSOL_DENEME_ARASI = 2000;
+const beklet = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // Yazma korumasi — I/O'dan once.
-  if (!yazmaIzni) {
+// Telnet oturumu: giris yapar, komutlari SIRAYLA calistirir. GECICI hatada
+// (timeout/baglanti) yeniden giris yapip TEKRAR dener (tek-baglantili modem
+// ara sira dusuyor). Yazma korumasi retry'dan once, bir kez.
+// Doner: { ok, ciktilar, problems }  (throw etmez)
+export async function konsolCalistir(opts, komutlar) {
+  if (!opts.yazmaIzni) {
     const yazan = komutlar.find((k) => YAZAN_DESEN.test(k));
     if (yazan) {
-      return Promise.resolve({
-        ok: false, ciktilar: {},
-        problems: [sorun("WRITE_BLOCKED_READONLY", `konsol: "${yazan}"`)],
-      });
+      return { ok: false, ciktilar: {},
+        problems: [sorun("WRITE_BLOCKED_READONLY", `konsol: "${yazan}"`)] };
     }
   }
+  let son;
+  for (let deneme = 0; deneme < KONSOL_DENEME; deneme += 1) {
+    son = await _oturumDene(opts, komutlar);   // her deneme = taze soket + login
+    if (son.ok) return son;
+    if (deneme < KONSOL_DENEME - 1) await beklet(KONSOL_DENEME_ARASI);
+  }
+  return son;   // tum denemeler basarisiz — son sonuc (problems ile)
+}
+
+// Tek telnet oturumu denemesi (bir soket, bir login, komutlar).
+function _oturumDene(opts, komutlar) {
+  const {
+    host, kaynakIp, port = KONSOL_PORT,
+    kullanici, sifre,
+    zamanAsimiMs = 20000,
+  } = opts;
   const ust = Math.min(zamanAsimiMs, MAX_ZAMANLAYICI_MS);
 
   return new Promise((resolve) => {
