@@ -21,7 +21,7 @@ import { VARSAYILAN_HOST } from "./src/sabitler.js";
 import { kaynakIpBul } from "./src/ag.js";
 import {
   modemDogrula, modemKesif, modemOku, modemIzle, modemKonsol, nvramFarkHesapla,
-  provizyonUygula, SAHA_PROFILI,
+  provizyonUygula, PROFILLER,
 } from "./src/index.js";
 import { jsonYaz, ozetMetni } from "./src/rapor.js";
 
@@ -68,13 +68,23 @@ async function komutuCalistir() {
       }
       return nvramFarkHesapla(farkNvramAl(once), farkNvramAl(sonra));
     }
-    case "uygula": return provizyonUygula({
-      ...opts,
-      uygula: argv.includes("--uygula"),   // yoksa DRY-RUN (kuru)
-      reboot: !argv.includes("--reboot-yok"),
-      yeniHost: bayrak("--yeni-host"),
-      yeniKaynakIp: bayrak("--yeni-kaynak"),
-    }, SAHA_PROFILI);
+    case "uygula": {
+      const profilAd = bayrak("--profil") || "saha";
+      const profil = PROFILLER[profilAd];
+      if (!profil) {
+        return { zaman: new Date().toISOString(), komut: "uygula", ok: false,
+          problems: [{ kod: "ARGS", severity: "error",
+            message: `Bilinmeyen profil: ${profilAd}`,
+            check: `Gecerli: ${Object.keys(PROFILLER).join(", ")}` }] };
+      }
+      return provizyonUygula({
+        ...opts,
+        uygula: argv.includes("--uygula"),   // yoksa DRY-RUN (kuru)
+        reboot: !argv.includes("--reboot-yok"),
+        yeniHost: bayrak("--yeni-host"),
+        yeniKaynakIp: bayrak("--yeni-kaynak"),
+      }, profil);
+    }
     default: return null;
   }
 }

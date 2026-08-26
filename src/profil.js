@@ -60,3 +60,33 @@ export const SAHA_PROFILI = {
     + "yaziyor olabilir; gercek apply aninda (reboot sonrasi) dogrulanacak.",
   ],
 };
+
+// FABRIKA profili — cihazi default duruma dondurur. Degerler saha diff'lerinden
+// olculdu (her degisen anahtarin DEFAULT hali). Temiz uctan-uca testte once
+// bununla default'a donulur, sonra SAHA_PROFILI ileri uygulanir.
+export const FABRIKA_PROFILI = {
+  ad: "fabrika",
+  aciklama: "Ricon S9922M44 fabrika/default degerleri (saha diff'lerinden olculdu)",
+  nvram: {
+    // Modem/WAN Main Link defaults
+    w1_wan_proto: "m13gdhcp",  // Connection Type M1-DHCP
+    m1simswtch: "1",           // SIM Backup Enable
+    mullinkfail: "30",         // Link Fail to Restart 30
+    m1s1pppuser: "card", m1s1ppppwd: "card",  // SIM1 default user/pass
+    m1s2pppuser: "card", m1s2ppppwd: "card",  // SIM2 default user/pass
+    m1s1wanapn: "internet",    // APN (default zaten internet)
+    // Others defaults
+    w1_connfailsw: "10",       // Connect Fail 10
+    w1_kponm: "7",             // Keep Alive ICMP+
+    // Backup Link default
+    w2_wan_proto: "dhcp",      // Automatic Configuration - DHCP
+    // LAN defaults
+    lan_ipaddr: "192.168.1.1",
+    lan_ipaddr_ex1: "192.168.8.1",
+    // WLAN default (zaten kapali)
+    wl0_net_mode: "disabled", wl_net_mode: "disabled",
+  },
+};
+
+// Ad -> profil. CLI `--profil <ad>` ile secilir.
+export const PROFILLER = { saha: SAHA_PROFILI, fabrika: FABRIKA_PROFILI };
