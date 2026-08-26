@@ -62,7 +62,7 @@ uygular (zaten kapalıysa dokunmaz). Anahtar: `wl0_net_mode`+`wl_net_mode`
 | LAN ikincil IP sil | `lan_ipaddr_ex1` = `0.0.0.0` | 🟢 nvram (default 192.168.8.1) |
 | LAN class (belki) | `lan_cclass` = `5.5.5.` (?) | ⏳ apply anında doğrulanacak |
 
-Tüm bu eşlemeler `src/profil.js` içindeki `SAHA_PROFILI`'ne işlendi. Motor
+Tüm bu eşlemeler `src/profile.js` içindeki `FIELD_PROFILE`'ne işlendi. Motor
 (`node ricon.js uygula`) bunları uygular; `lan_cclass` gerçek apply anında
 (LAN IP değişince) doğrulanacak.
 

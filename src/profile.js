@@ -12,9 +12,9 @@
 // LAN IP'yi etkileyen anahtarlar — bunlar yazılınca yönetim bağlantısı yeni
 // adrese taşınır; motor bunları EN SONA alır ve reboot/yeni-adres akışıyla
 // ele alır.
-export const LAN_IP_ANAHTARLARI = ["lan_ipaddr", "lan_ipaddr1"];
+export const LAN_IP_KEYS = ["lan_ipaddr", "lan_ipaddr1"];
 
-export const SAHA_PROFILI = {
+export const FIELD_PROFILE = {
   ad: "saha",
   aciklama: "ACO RVM saha profili — Ricon S9922M44",
 
@@ -63,8 +63,8 @@ export const SAHA_PROFILI = {
 
 // FABRIKA profili — cihazi default duruma dondurur. Degerler saha diff'lerinden
 // olculdu (her degisen anahtarin DEFAULT hali). Temiz uctan-uca testte once
-// bununla default'a donulur, sonra SAHA_PROFILI ileri uygulanir.
-export const FABRIKA_PROFILI = {
+// bununla default'a donulur, sonra FIELD_PROFILE ileri uygulanir.
+export const FACTORY_PROFILE = {
   ad: "fabrika",
   aciklama: "Ricon S9922M44 fabrika/default degerleri (saha diff'lerinden olculdu)",
   nvram: {
@@ -89,4 +89,4 @@ export const FABRIKA_PROFILI = {
 };
 
 // Ad -> profil. CLI `--profil <ad>` ile secilir.
-export const PROFILLER = { saha: SAHA_PROFILI, fabrika: FABRIKA_PROFILI };
+export const PROFILES = { saha: FIELD_PROFILE, fabrika: FACTORY_PROFILE };

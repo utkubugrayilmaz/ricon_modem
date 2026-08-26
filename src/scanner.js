@@ -2,17 +2,17 @@
 //
 // Modemin web sunucusu tek-baglantili olsa da PORT TARAMASI farkli portlara
 // oldugu icin paralel yapilabilir (her port ayri hedef). Iş basina dogru arac:
-// modem HTTP'si sirali (istemci.js), tarama paralel (burada). Paralellik yine
+// modem HTTP'si sirali (client.js), tarama paralel (burada). Paralellik yine
 // de sinirli tutulur ki cihazi bogmayalim.
 //
 // ICMP kapali oldugu icin (ping timeout) canlilik TCP ile olculur.
 
 import net from "node:net";
-import { TCP_KAPILARI, TCP_YOKLAMA_MS } from "./sabitler.js";
+import { TCP_PORTS, TCP_PROBE_MS } from "./constants.js";
 
 // Tek portun acik olup olmadigina bakar; acilsa banner'i (ilk baytlar) alir.
 // Throw etmez. Doner: { kapi, acik, banner|null }
-export function kapiYokla(host, kapi, kaynakIp, zamanAsimi = TCP_YOKLAMA_MS) {
+export function probePort(host, kapi, kaynakIp, zamanAsimi = TCP_PROBE_MS) {
   return new Promise((resolve) => {
     const soket = new net.Socket();
     let banner = "";
@@ -40,13 +40,13 @@ export function kapiYokla(host, kapi, kaynakIp, zamanAsimi = TCP_YOKLAMA_MS) {
 }
 
 // Bir hedefte kapi listesini tarar (sinirli es zamanlilik). Doner: [{kapi,acik,banner}]
-export async function portTara(host, kaynakIp, kapilar = TCP_KAPILARI, esZaman = 6) {
+export async function scanPorts(host, kaynakIp, kapilar = TCP_PORTS, esZaman = 6) {
   const liste = kapilar.map((k) => (typeof k === "number" ? k : k.kapi));
   const sonuc = [];
   for (let i = 0; i < liste.length; i += esZaman) {
     const dilim = liste.slice(i, i + esZaman);
     const parca = await Promise.all(
-      dilim.map((kapi) => kapiYokla(host, kapi, kaynakIp)),
+      dilim.map((kapi) => probePort(host, kapi, kaynakIp)),
     );
     sonuc.push(...parca);
   }
@@ -54,8 +54,8 @@ export async function portTara(host, kaynakIp, kapilar = TCP_KAPILARI, esZaman =
 }
 
 // Cihaz ayakta mi? Yaygin kapilara TCP connect (ICMP yerine).
-export async function erisilebilirMi(host, kaynakIp) {
+export async function isReachable(host, kaynakIp) {
   const oncelikli = [80, 443, 22, 8080, 23];
-  const r = await portTara(host, kaynakIp, oncelikli, 5);
+  const r = await scanPorts(host, kaynakIp, oncelikli, 5);
   return r.some((x) => x.acik);
 }

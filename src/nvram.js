@@ -10,19 +10,19 @@
 // ddns_*, ipsec_*, openvpn*, snmpd_*, et0macaddr, ... Faz 2/3'te "bir ayar
 // hangi anahtari degistirir" sorusunun kesin cevabi iki yedegin farkidir.
 
-import { sorun } from "./sorunlar.js";
+import { problem } from "./problems.js";
 
 const IMZA = "ROUTER";
 
 // Ikili yedegi {anahtar: deger} nesnesine cevirir.
 // Doner: { degerler, sayi, problems }  (throw etmez)
-export function nvramAyikla(buf) {
+export function parseNvram(buf) {
   const problems = [];
   const degerler = Object.create(null);
 
   if (!buf || buf.length < IMZA.length ||
       buf.subarray(0, IMZA.length).toString("latin1") !== IMZA) {
-    problems.push(sorun("NVRAM_BAD_HEADER"));
+    problems.push(problem("NVRAM_BAD_HEADER"));
     return { degerler, sayi: 0, problems };
   }
 
@@ -30,7 +30,7 @@ export function nvramAyikla(buf) {
   // dosya sonuna KADAR temiz ayrisan ilk offset'i bul (6..16 araligi).
   const start = baslangicBul(buf);
   if (start === -1) {
-    problems.push(sorun("NVRAM_BAD_HEADER"));
+    problems.push(problem("NVRAM_BAD_HEADER"));
     return { degerler, sayi: 0, problems };
   }
 
@@ -75,7 +75,7 @@ function temizAyrisiyorMu(buf, start) {
 
 // Iki nvram dokumunun farki — Faz 2/3 icin. Doner:
 //   { eklenen:{k:v}, silinen:{k:v}, degisen:{k:{eski,yeni}} }
-export function nvramFark(eski, yeni) {
+export function diffNvram(eski, yeni) {
   const eklenen = Object.create(null);
   const silinen = Object.create(null);
   const degisen = Object.create(null);

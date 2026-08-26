@@ -1,127 +1,125 @@
 # ricon_modem
 
-Ricon **S9922M44-DOA** endüstriyel hücresel router için keşif, tam veri
-çekme ve (ilerleyen fazlarda) hazırlama otomasyonu aracı. Node.js, **sıfır
-bağımlılık**.
+Ricon **S9922M44-DOA** endüstriyel hücresel router için **keşif + tam veri
+çekme + otomatik hazırlama (provizyon)** aracı. Node.js, **sıfır bağımlılık**.
 
 RVM makinelerindeki bu modem sahada elle hazırlanıyor (web arayüzünden APN,
-WLAN, LAN IP, Backup Link ayarları). Amaç: (1) cihazdan alınabilecek her
-şeyi çekmek, (2) bu hazırlama adımlarını otomatikleştirmek.
+WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
+şeyi çekmek, (2) bu hazırlama sürecini **tek komuta** indirmek.
 
 ## Durum
 
-- **Faz 1 — Her şeyi çek: TAMAM.** dogrula/kesif/oku/izle komutları çalışıyor,
-  canlı cihazda doğrulandı. 21 test geçiyor.
-- Faz 2 (arayüz protokolünü çöz) ve Faz 3 (otomasyon motoru): planlandı,
-  henüz başlanmadı. Bkz. `docs/`.
+- **Faz 1 — Her şeyi çek:** ✅ Canlı doğrulandı (sistem + SIM/hücresel + tam nvram).
+- **Faz 2 — Arayüz→nvram haritası:** ✅ Tüm ayarlar nvram diff'i ile eşlendi
+  (bkz. `docs/arayuz-haritasi.md`, `docs/hazirlama-profili.md`).
+- **Faz 3 — Otomatik provizyon:** ✅ Motor + tak-çalıştır pipeline; sıfır
+  cihazda tek komutla uçtan uca doğrulandı, idempotent.
+- **48 test** (`node --test`), sıfır bağımlılık.
 
 ## Kurulum
 
-Gereksinim: **Node.js >= 24** (yalnızca yerleşik modüller kullanılır).
+Gereksinim: **Node.js >= 24** (yalnızca yerleşik modüller).
 
 ```bash
-cp .env.example .env      # doldur (host, kullanıcı, şifre, kaynak IP)
+cp .env.example .env   # doldur: MODEM_HOST/KULLANICI/SIFRE/KAYNAK_IP
 ```
 
-Modem 192.168.1.1'de; PC'de aynı alt ağda bir ikincil IP gerekir:
+PC'de modemle aynı alt ağda ikincil IP gerekir. Provizyon için hem fabrika
+(192.168.1.x) hem saha (5.5.5.x) adresini **kalıcı** tut — ağ değiştirmeye
+gerek kalmaz:
 
 ```powershell
-# yönetici PowerShell (tek sefer, geri alınabilir)
+# yönetici PowerShell (tek sefer)
 New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.1.50 -PrefixLength 24
+New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 5.5.5.100   -PrefixLength 24
 ```
 
-`.env` içinde `MODEM_KAYNAK_IP=192.168.1.50` verildiğinde araç giden
-istekleri o adresten çıkarır (Windows `-SkipAsSource` durumunda bile çalışır).
-
-## Kullanım
+## Kullanım (CLI komutları Türkçe, kod İngilizce)
 
 ```bash
 node --env-file=.env ricon.js dogrula     # ortam/erişim teşhisi
 node --env-file=.env ricon.js kesif       # port + parmak izi + SNMP (salt okunur)
 node --env-file=.env ricon.js oku         # HER ŞEYİ çek (sistem+SIM+ayar+nvram)
+node --env-file=.env ricon.js konsol --nvram   # telnet root: tam nvram
 node --env-file=.env ricon.js izle --sure 60   # fark tabanlı canlı alan tespiti
+node --env-file=.env ricon.js fark A.json B.json   # iki nvram anlık görüntüsü diff
 
-# ortak: --json <dosya> çıktıyı yaz · --kaynak <dosya> kayıttan tekrar oynat
-node ricon.js oku --kaynak data/oku-....json   # cihazsız
+# Provizyon (yazma) — varsayılan KURU (dry-run); gerçek yazma --uygula ister
+node --env-file=.env ricon.js uygula                # ne değişecek (yazmaz)
+node --env-file=.env ricon.js uygula --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.5.5.100
+
+# Tak-çalıştır: algıla → provizyon → doğrula → başarıya kadar
+node --env-file=.env ricon.js hazirla               # bir modem
+node --env-file=.env ricon.js hazirla --dongu       # çok modem (tak/çıkar döngüsü)
+
+# ortak: --json <dosya> · --kaynak <dosya> (kayıttan, cihazsız)
 ```
 
-stdout **her zaman saf JSON**; ilerleme/özet stderr'a gider; çıkış kodu
-0 (ok) / 1 (hata).
+stdout **her zaman saf JSON**; ilerleme/özet stderr'a; çıkış kodu 0 (ok)/1.
 
-## Test
+## Modülerlik düsturu
 
-```bash
-node --test        # cihaz gerektirmez; gerçek yakalanmış gövdelerle
-```
+redbox-device kalıbı: çekirdek `src/index.js`'te importlanabilir fonksiyonlar
+(`readDevice`, `checkDevice`, `discoverDevice`, `applyProvisioning`,
+`provisionModem`...) — hepsi `opts` alır, `process.env`/argv OKUMAZ, throw
+etmez (sonuç + `problems[]`). Aynı çekirdek: **terminal** (ince CLI, .env
+okur), **npm paketi** (`import { readDevice } from "ricon-modem"`), ya da
+ileride **HTTP endpoint** ile tüketilir.
 
-## Kullanım biçimleri (modülerlik düsturu)
-
-redbox-device kalıbı: **çekirdek iş `src/index.js`'te** importlanabilir saf
-fonksiyonlarda (`modemOku`, `modemDogrula`, `modemKesif`, `modemIzle`,
-`modemKonsol`, `nvramFarkHesapla`) — hepsi `opts` alır, `process.env`/argv
-OKUMAZ, throw etmez (sonuç + `problems[]`). Aynı çekirdek üç şekilde tüketilir:
-
-1. **Terminal:** `node ricon.js <komut>` (ince CLI, .env okur).
-2. **npm paketi:** `import { modemOku } from "ricon-modem"` → `await modemOku({ host, kaynakIp, kimlik })`.
-3. **HTTP endpoint:** çekirdeği saran ince bir sunucu (ileride) — aynı fonksiyonları çağırır.
-
-Yeni yetenek eklerken önce `src/`te opts-alan çekirdek yazılır; tüketiciler
-onu çağırır (kopya mantık yok).
-
-## Mimari (kısa)
+## Mimari
 
 | Modül | İş |
 |---|---|
-| `ricon.js` | Tek giriş noktası, alt komutlar |
-| `src/istemci.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu için. Kaynak IP bağlar, tekrar dener, yarım-gövde toleransı |
+| `ricon.js` | İnce CLI — argv + .env + `index` çağrısı |
+| `src/index.js` | Public API (tüm çekirdek fonksiyonlar) |
+| `src/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |
+| `src/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |
 | `src/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
-| `src/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + fark |
-| `src/ag.js` | Arayüz/kaynak IP, ARP + IPv6 komşu ayrıştırma |
-| `src/tarayici.js` | Paralel TCP port taraması |
+| `src/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + diff |
+| `src/network.js` | Arayüz/kaynak IP, ARP + IPv6 komşu |
+| `src/scanner.js` | Paralel TCP port taraması |
 | `src/snmp.js` | Saf Node SNMPv2c GET |
-| `src/sorunlar.js` | Sorun kataloğu `{code, severity, message, check}` |
-| `src/rapor.js` | JSON + insan-okunur çıktı, sır temizleme |
-| `src/sabitler.js` | Tüm sabitler (port/uç/alan haritaları) |
+| `src/provisioning.js` | Provizyon motoru (oku→planla→yaz→doğrula, idempotent) |
+| `src/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü) |
+| `src/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
+| `src/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
+| `src/report.js` | JSON + insan-okunur çıktı, sır temizleme |
+| `src/constants.js` | Tüm sabitler (port/uç/alan haritaları) |
 
 ## Değişmeyen kurallar
 
-- **Faz 1 salt okunur.** oku/kesif/dogrula/izle yalnızca GET yapar; istemci
-  bu modda POST'u reddeder. Yanlış bir ayar makineyi internetten koparır.
-- Kütüphane **throw etmez** — her sonuç `problems[]` taşır; kısmi okuma
-  gerçek sonuçtur.
+- **Okuma komutları salt okunur** (oku/kesif/dogrula/izle/konsol): yalnızca
+  GET / nvram okuma; yazma reddedilir. Yazma **yalnızca** `uygula`/`hazirla`
+  içinde ve gerçek yazma için açık `--uygula` şart.
+- Kütüphane **throw etmez** — her sonuç `problems[]` taşır; kısmi sonuç geçerli.
 - Çıktı **ham/geçirgen** — cihazın alan adları korunur; eşlenmiş görünüm ek.
 - **Sır çıktıya yazılmaz** — parola/kimlik rapordan temizlenir.
-- Yorumlar Türkçe, çalışma zamanı metinleri İngilizce; kod adları ASCII.
+- **Kod adları İngilizce, yorumlar Türkçe**; CLI komutları ve `.env`
+  değişkenleri Türkçe (kullanıcı yüzeyi); JSON çıktı anahtarları Türkçe (veri
+  sözlüğü). Bkz. `docs/`.
 
 ## Kapsam dışı
-
-Ham paket yakalama · UI/DB/Slack/Monday · zaman serisi saklama · (Faz 3'e
-kadar) yazma/provizyon.
-
-## Cihaz notları
-
-Tüm ölçülmüş protokol bilgisi: `docs/BULGULAR.md`. Yetenek özeti:
-`docs/YETENEKLER.md`. Alan sözlüğü: `docs/veri-sozlugu.md`.
+Ham paket yakalama · UI/DB/entegrasyon · zaman serisi saklama.
 
 ---
 
 # ricon_modem (English)
 
-Zero-dependency Node.js tool for discovering, fully reading, and (in later
-phases) automating the provisioning of the Ricon **S9922M44-DOA** industrial
-cellular router.
+Zero-dependency Node.js tool to **discover, fully read, and automatically
+provision** the Ricon **S9922M44-DOA** industrial cellular router.
 
-**Phase 1 (read everything) is done and verified against the live device**
-(dogrula/kesif/oku/izle commands, 21 passing tests). Phases 2 (reverse the
-web UI protocol) and 3 (idempotent provisioning engine) are planned; see
-`docs/`.
+All three phases are done and verified on the live device: read-everything
+(system + SIM/cellular + full nvram), UI→nvram mapping (every setting matched
+via nvram diff), and one-command provisioning (fresh device → fully
+provisioned → verified at 5.5.5.1, idempotent). 48 tests, zero deps.
 
-Requires Node >= 24. Configure `.env` from `.env.example`, add a secondary IP
-in the modem subnet, then `node --env-file=.env ricon.js oku`. stdout is
-always pure JSON; progress goes to stderr; exit code is 0/1 from `ok`.
-
-Rules that do not change: Phase 1 is read-only (GET only; the client refuses
-POST in this mode — a wrong setting would cut the machine off the internet);
-the library never throws (every result carries `problems[]`); output is
-raw/pass-through (device field names preserved); secrets are scrubbed from
-output. Comments are Turkish, runtime strings English, identifiers ASCII.
+Core logic lives in importable `opts`-taking functions in `src/index.js`
+(`readDevice`, `applyProvisioning`, `provisionModem`...) consumed as a CLI, an
+npm package, or (later) an HTTP endpoint. The library never throws (results
+carry `problems[]`). Read commands are read-only; writing happens only in
+`uygula`/`hazirla` and requires an explicit `--uygula` flag. Identifiers are
+English; comments, CLI command names, `.env` vars and JSON output keys are
+Turkish (the team's surface/domain vocabulary).
+```
+node --env-file=.env ricon.js hazirla   # detect → provision → verify
+```

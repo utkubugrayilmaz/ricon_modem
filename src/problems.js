@@ -82,10 +82,10 @@ const KATALOG = {
 // beklentisi) yalnizca "warning" — sonucu ok:false yapmaz.
 const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY"]);
 
-export const PROBLEM_KODLARI = Object.freeze(Object.keys(KATALOG));
+export const PROBLEM_CODES = Object.freeze(Object.keys(KATALOG));
 
-// Bir sorun nesnesi uretir. Bilinmeyen kod patlamaz — kendini tarif eder.
-export function sorun(kod, ...args) {
+// Bir problem nesnesi uretir. Bilinmeyen kod patlamaz — kendini tarif eder.
+export function problem(kod, ...args) {
   const severity = UYARI_KODLARI.has(kod) ? "warning" : "error";
   try {
     return { kod, severity, ...KATALOG[kod](...args) };
@@ -94,13 +94,13 @@ export function sorun(kod, ...args) {
       kod,
       severity: "error",
       message: `Internal error: the problem catalog could not describe "${kod}".`,
-      check: "This is a bug in sorunlar.js — the code is missing or its"
+      check: "This is a bug in problems.js — the code is missing or its"
         + " arguments did not match.",
     };
   }
 }
 
 // Sonuc "ok" mu? Hicbir error yoksa evet (warning'ler ok'u bozmaz).
-export function sonucOk(problems) {
+export function isOk(problems) {
   return problems.every((p) => p.severity !== "error");
 }

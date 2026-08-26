@@ -8,13 +8,13 @@
 const SIR_ALANLARI = new Set(["sifre", "password", "kimlik", "auth", "authorization"]);
 const SIR_DESENI = /Basic\s+[A-Za-z0-9+/=]+/g;
 
-export function sirlariTemizle(deger) {
-  if (Array.isArray(deger)) return deger.map(sirlariTemizle);
+export function stripSecrets(deger) {
+  if (Array.isArray(deger)) return deger.map(stripSecrets);
   if (deger && typeof deger === "object") {
     const cikti = {};
     for (const [k, v] of Object.entries(deger)) {
       if (SIR_ALANLARI.has(k.toLowerCase())) continue;
-      cikti[k] = sirlariTemizle(v);
+      cikti[k] = stripSecrets(v);
     }
     return cikti;
   }
@@ -22,15 +22,15 @@ export function sirlariTemizle(deger) {
   return deger;
 }
 
-export function jsonYaz(nesne) {
-  return JSON.stringify(sirlariTemizle(nesne), null, 2);
+export function writeJson(nesne) {
+  return JSON.stringify(stripSecrets(nesne), null, 2);
 }
 
 // Bilinmeyen deger 0 degil "—" gosterilir.
 const g = (v) => (v == null || v === "" ? "—" : v);
 
 // Insan-okunur ozet (stderr'a; stdout saf JSON kalir).
-export function ozetMetni(rapor) {
+export function summaryText(rapor) {
   const s = [];
   s.push(`Ricon modem — ${rapor.modem_ip || "?"}  (${rapor.zaman || ""})`);
   if (rapor.sistem) {

@@ -9,12 +9,12 @@
 // Bazi alanlar (sinyal cubugu) HTML blogu tasir; etiketler temizlenir ki
 // ham deger kullanilabilir olsun.
 
-import { SIM_ALAN_HARITASI, SIM2_ALAN_HARITASI, OPERATORLER } from "./sabitler.js";
+import { SIM_FIELD_MAP, SIM2_FIELD_MAP, OPERATORS } from "./constants.js";
 
 // Ham metinden {anahtar::deger} ciftlerini cikarir.
 // Prototip kirlenmesine karsi Object.create(null): cihazdan __proto__ adli
 // bir alan gelirse prototipi bozup ciktidan kaybolmasin.
-export function ciftleriAyikla(metin) {
+export function parsePairs(metin) {
   const ciftler = Object.create(null);
   const desen = /\{(\w+)::([^}]*)\}/g;
   let m;
@@ -34,22 +34,22 @@ function temizle(deger) {
 }
 
 // ICCID sonundaki dolgu 'F' gercek hane degildir, atilir.
-export function iccidTemizle(ham) {
+export function cleanIccid(ham) {
   if (!ham) return null;
   const t = ham.trim().toUpperCase().replace(/F+$/, "");
   return t || null;
 }
 
 // IMSI onekinden (MCC+MNC, ilk 5 hane) operator adi.
-export function operatorTahmin(imsi) {
+export function guessOperator(imsi) {
   if (!imsi || imsi.length < 5) return null;
-  return OPERATORLER[imsi.slice(0, 5)] ?? null;
+  return OPERATORS[imsi.slice(0, 5)] ?? null;
 }
 
 // Ham ciftlerden okunabilir SIM/hucresel gorunum uretir. HAM alanlar
 // silinmez — bu yalnizca EK bir gorunum. Bos degerler atlanir (bilinmeyen
 // deger 0 degil, yok demektir).
-export function simGorunumu(ham) {
+export function simView(ham) {
   const cikar = (harita) => {
     const cikti = Object.create(null);
     for (const [modemAlani, bizimAd] of Object.entries(harita)) {
@@ -59,12 +59,12 @@ export function simGorunumu(ham) {
     return cikti;
   };
 
-  const sim1 = cikar(SIM_ALAN_HARITASI);
-  const sim2 = cikar(SIM2_ALAN_HARITASI);
+  const sim1 = cikar(SIM_FIELD_MAP);
+  const sim2 = cikar(SIM2_FIELD_MAP);
 
   for (const sim of [sim1, sim2]) {
-    if (sim.iccid) sim.iccid_temiz = iccidTemizle(sim.iccid);
-    if (sim.imsi) sim.operator = operatorTahmin(sim.imsi);
+    if (sim.iccid) sim.iccid_temiz = cleanIccid(sim.iccid);
+    if (sim.imsi) sim.operator = guessOperator(sim.imsi);
   }
 
   return { sim1, sim2 };

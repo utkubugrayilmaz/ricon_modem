@@ -50,7 +50,7 @@ Standart SSH/telnet/SNMP kapalı. Alttaki OS OpenWrt/Linux. Otomasyon (Faz
 
 ## Sıradaki (Faz 2/3 — henüz yapılmadı)
 
-- **Faz 2:** telnet+nvram kanalını sağlam bir modüle (`konsol.js`) oturtmak;
+- **Faz 2:** telnet+nvram kanalını sağlam bir modüle (`console.js`) oturtmak;
   sonra web arayüzünde bir ayar (WLAN, APN, LAN IP, ...) değiştirilirken
   **nvram öncesi/sonrası farkını** alıp "bu ayar hangi nvram anahtarını
   değiştiriyor + ne apply gerekiyor" haritasını çıkarmak.

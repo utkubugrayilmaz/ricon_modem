@@ -19,13 +19,13 @@
 // Sozlesme: stdout HER ZAMAN saf JSON; ilerleme/ozet stderr'a; cikis kodu ok'tan.
 
 import { writeFileSync, readFileSync } from "node:fs";
-import { VARSAYILAN_HOST } from "./src/sabitler.js";
-import { kaynakIpBul } from "./src/ag.js";
+import { DEFAULT_HOST } from "./src/constants.js";
+import { findSourceIp } from "./src/network.js";
 import {
-  modemDogrula, modemKesif, modemOku, modemIzle, modemKonsol, nvramFarkHesapla,
-  provizyonUygula, PROFILLER, hazirlaModem, hazirlaDongu, pcOnKontrol,
+  checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
+  applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight,
 } from "./src/index.js";
-import { jsonYaz, ozetMetni } from "./src/rapor.js";
+import { writeJson, summaryText } from "./src/report.js";
 
 const argv = process.argv.slice(2);
 const komut = argv[0];
@@ -37,9 +37,9 @@ const ilerle = (m) => process.stderr.write(`[${komut}] ${m}\n`);
 
 // .env -> opts. Cekirdek (src/) process.env OKUMAZ; okuma burada.
 function ortamOpts() {
-  const host = (process.env.MODEM_HOST || "").trim() || VARSAYILAN_HOST;
+  const host = (process.env.MODEM_HOST || "").trim() || DEFAULT_HOST;
   const onek = host.split(".").slice(0, 3).join(".") + ".";
-  const kaynakIp = (process.env.MODEM_KAYNAK_IP || "").trim() || kaynakIpBul(onek) || undefined;
+  const kaynakIp = (process.env.MODEM_KAYNAK_IP || "").trim() || findSourceIp(onek) || undefined;
   const kullanici = (process.env.MODEM_KULLANICI || "").trim();
   const sifre = process.env.MODEM_SIFRE || "";
   const kimlik = kullanici ? { kullanici, sifre } : null;
@@ -56,11 +56,11 @@ function farkNvramAl(dosya) {
 async function komutuCalistir() {
   const opts = ortamOpts();
   switch (komut) {
-    case "dogrula": return modemDogrula(opts);
-    case "kesif": return modemKesif(opts);
-    case "oku": return modemOku(opts);
-    case "izle": return modemIzle({ ...opts, sureSn: Number(bayrak("--sure")) || 30 });
-    case "konsol": return modemKonsol({ ...opts, nvram: argv.includes("--nvram") });
+    case "dogrula": return checkDevice(opts);
+    case "kesif": return discoverDevice(opts);
+    case "oku": return readDevice(opts);
+    case "izle": return watchDevice({ ...opts, sureSn: Number(bayrak("--sure")) || 30 });
+    case "konsol": return readConsole({ ...opts, nvram: argv.includes("--nvram") });
     case "fark": {
       const [, once, sonra] = argv;
       if (!once || !sonra) {
@@ -68,18 +68,18 @@ async function komutuCalistir() {
           problems: [{ kod: "ARGS", severity: "error",
             message: "fark <once.json> <sonra.json> gerekli", check: "Iki nvram JSON dosyasi ver." }] };
       }
-      return nvramFarkHesapla(farkNvramAl(once), farkNvramAl(sonra));
+      return computeNvramDiff(farkNvramAl(once), farkNvramAl(sonra));
     }
     case "uygula": {
       const profilAd = bayrak("--profil") || "saha";
-      const profil = PROFILLER[profilAd];
+      const profil = PROFILES[profilAd];
       if (!profil) {
         return { zaman: new Date().toISOString(), komut: "uygula", ok: false,
           problems: [{ kod: "ARGS", severity: "error",
             message: `Bilinmeyen profil: ${profilAd}`,
-            check: `Gecerli: ${Object.keys(PROFILLER).join(", ")}` }] };
+            check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
       }
-      return provizyonUygula({
+      return applyProvisioning({
         ...opts,
         uygula: argv.includes("--uygula"),   // yoksa DRY-RUN (kuru)
         reboot: !argv.includes("--reboot-yok"),
@@ -89,14 +89,14 @@ async function komutuCalistir() {
     }
     case "hazirla": {
       const profilAd = bayrak("--profil") || "saha";
-      const profil = PROFILLER[profilAd];
+      const profil = PROFILES[profilAd];
       if (!profil) {
         return { zaman: new Date().toISOString(), komut: "hazirla", ok: false,
           problems: [{ kod: "ARGS", severity: "error",
-            message: `Bilinmeyen profil: ${profilAd}`, check: `Gecerli: ${Object.keys(PROFILLER).join(", ")}` }] };
+            message: `Bilinmeyen profil: ${profilAd}`, check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
       }
       const sahaHost = bayrak("--saha-host") || profil.nvram.lan_ipaddr || "5.5.5.1";
-      const on = pcOnKontrol("192.168.1.", sahaHost.split(".").slice(0, 3).join(".") + ".");
+      const on = pcPreflight("192.168.1.", sahaHost.split(".").slice(0, 3).join(".") + ".");
       if (!on.hazir) {
         return { zaman: new Date().toISOString(), komut: "hazirla", ok: false,
           durum: "pc_hazir_degil", problems: on.problems };
@@ -109,8 +109,8 @@ async function komutuCalistir() {
         ilerle,
       };
       return argv.includes("--dongu")
-        ? hazirlaDongu({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity })
-        : hazirlaModem(hOpts);
+        ? provisionLoop({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity })
+        : provisionModem(hOpts);
     }
     default: return null;
   }
@@ -132,9 +132,9 @@ async function main() {
     ? JSON.parse(readFileSync(kaynak, "utf8"))
     : await komutuCalistir();
 
-  const json = jsonYaz(rapor);
+  const json = writeJson(rapor);
   process.stdout.write(json + "\n");
-  process.stderr.write("\n" + ozetMetni(rapor) + "\n");
+  process.stderr.write("\n" + summaryText(rapor) + "\n");
 
   const cikti = bayrak("--json");
   if (cikti) {

@@ -8,11 +8,11 @@
 // oldu; bu yuzden uc listesi sabit degil, ucbulucu.js sayfadan da cikarir.
 
 // Modemin fabrika IP'si.
-export const VARSAYILAN_HOST = "192.168.1.1";
+export const DEFAULT_HOST = "192.168.1.1";
 
 // Kesifte bakilan TCP kapilari. Hepsi salt-okunur yoklama (connect denemesi).
 // Endustriyel router'da RMS/DTU/VPN olabilir; liste Python'daki 6 kapidan genis.
-export const TCP_KAPILARI = Object.freeze([
+export const TCP_PORTS = Object.freeze([
   { kapi: 22, ad: "SSH" },
   { kapi: 23, ad: "telnet" },
   { kapi: 53, ad: "DNS" },
@@ -27,7 +27,7 @@ export const TCP_KAPILARI = Object.freeze([
 ]);
 
 // UDP kapilari — ayri (dgram) kontrol edilir.
-export const UDP_KAPILARI = Object.freeze([
+export const UDP_PORTS = Object.freeze([
   { kapi: 161, ad: "SNMP" },
   { kapi: 162, ad: "SNMP trap" },
   { kapi: 500, ad: "IPSec IKE" },
@@ -37,7 +37,7 @@ export const UDP_KAPILARI = Object.freeze([
 // HTTP uclari. tur: "sistem" = kimliksiz erisilebilir (2026-08-26 dogrulandi),
 // "kimlik" = HTTP Basic gerekli, "config" = tam yapilandirma yedegi.
 // Not: bu firmware'de canli veri .live.htm (sistem) ve .live.asp (kimlikli).
-export const UCLAR = Object.freeze([
+export const ENDPOINTS = Object.freeze([
   { ad: "info", yol: "/asp/status/Info.htm", tur: "sistem", bicim: "html" },
   { ad: "info_live", yol: "/asp/status/Info.live.htm", tur: "sistem", bicim: "ddwrt" },
   { ad: "internet_live", yol: "/asp/status/Status_Internet.live.asp", tur: "kimlik", bicim: "ddwrt" },
@@ -49,7 +49,7 @@ export const UCLAR = Object.freeze([
 // DD-WRT canli sayfa alan adi -> bizim okunabilir adimiz. m1 = birincil modul,
 // m2 = ikincil. w1_/w2_ = WAN baglantisi. Ham alanlar HER ZAMAN korunur;
 // bu esleme yalnizca EK bir okunabilir gorunum uretir.
-export const SIM_ALAN_HARITASI = Object.freeze({
+export const SIM_FIELD_MAP = Object.freeze({
   m1simiccid: "iccid",
   m1simimsi: "imsi",
   m1imei: "imei",
@@ -69,9 +69,9 @@ export const SIM_ALAN_HARITASI = Object.freeze({
 });
 
 // SIM2 haritasi birincilden turetilir (m1->m2, w1_->w2_).
-export const SIM2_ALAN_HARITASI = Object.freeze(
+export const SIM2_FIELD_MAP = Object.freeze(
   Object.fromEntries(
-    Object.entries(SIM_ALAN_HARITASI).map(([k, v]) => [
+    Object.entries(SIM_FIELD_MAP).map(([k, v]) => [
       k.replace(/^m1/, "m2").replace(/^w1_/, "w2_"),
       v,
     ]),
@@ -80,7 +80,7 @@ export const SIM2_ALAN_HARITASI = Object.freeze(
 
 // IMSI onekinden operator (MCC 286 = Turkiye). Turk Telekom eski Avea
 // bloklarini da isletir.
-export const OPERATORLER = Object.freeze({
+export const OPERATORS = Object.freeze({
   28601: "Turkcell",
   28602: "Vodafone",
   28603: "Turk Telekom (Avea)",
@@ -89,7 +89,7 @@ export const OPERATORLER = Object.freeze({
 
 // MAC uretici onekleri (OUI). Cihazi adresini bilmeden komsu tablosunda
 // tanimak icin. 00:0C:43 = bu unitede olculen chipset (Ralink/MediaTek).
-export const OUI_URETICI = Object.freeze({
+export const OUI_VENDORS = Object.freeze({
   "00:0c:43": "Ralink/MediaTek",
   "00:88:6a": "Ricon",
 });
@@ -98,12 +98,12 @@ export const OUI_URETICI = Object.freeze({
 // Connection: close). Hizli ardisik istek zaman asimina dusuruyor —
 // istekler sirali, aralikli ve tekrar denemeli olmali. Bu degerler
 // Python calismasindaki sahada dogrulanmis degerlerle uyumlu.
-export const ISTEK_ARASI_MS = 1500; // ardisik istekler arasi bekleme
-export const ISTEK_ZAMAN_ASIMI_MS = 25000; // tek istegin ust siniri
-export const ISTEK_DENEME = 3; // basarisiz istekte tekrar sayisi
-export const DENEME_ARASI_MS = 3000; // tekrar denemeden once bekleme
-export const TCP_YOKLAMA_MS = 1500; // port connect denemesi zaman asimi
+export const REQUEST_GAP_MS = 1500; // ardisik istekler arasi bekleme
+export const REQUEST_TIMEOUT_MS = 25000; // tek istegin ust siniri
+export const REQUEST_RETRIES = 3; // basarisiz istekte tekrar sayisi
+export const RETRY_GAP_MS = 3000; // tekrar denemeden once bekleme
+export const TCP_PROBE_MS = 1500; // port connect denemesi zaman asimi
 
 // setTimeout gecikmeyi 32 bitte tutar; cok buyuk deger sessizce 1 ms'ye
 // coker. Zaman asimi degerleri I/O'dan ONCE bununla dogrulanir.
-export const MAX_ZAMANLAYICI_MS = 2 ** 31 - 1;
+export const MAX_TIMER_MS = 2 ** 31 - 1;

@@ -16,13 +16,13 @@
 
 import http from "node:http";
 import {
-  ISTEK_ARASI_MS,
-  ISTEK_ZAMAN_ASIMI_MS,
-  ISTEK_DENEME,
-  DENEME_ARASI_MS,
-  MAX_ZAMANLAYICI_MS,
-} from "./sabitler.js";
-import { sorun } from "./sorunlar.js";
+  REQUEST_GAP_MS,
+  REQUEST_TIMEOUT_MS,
+  REQUEST_RETRIES,
+  RETRY_GAP_MS,
+  MAX_TIMER_MS,
+} from "./constants.js";
+import { problem } from "./problems.js";
 
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -30,7 +30,7 @@ const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 // sunucuda hayati — anahtar yalniz host (port degil).
 const mesgulHostlar = new Set();
 
-export class Istemci {
+export class Client {
   // opts: { host, kaynakIp, kimlik:{kullanici,sifre}|null, saltOkunur:true,
   //         istekArasiMs, zamanAsimiMs }
   constructor(opts = {}) {
@@ -39,8 +39,8 @@ export class Istemci {
     this.kaynakIp = opts.kaynakIp || undefined;
     this.kimlik = opts.kimlik || null;
     this.saltOkunur = opts.saltOkunur !== false; // varsayilan true
-    this.istekArasiMs = dogrulaMs(opts.istekArasiMs, ISTEK_ARASI_MS);
-    this.zamanAsimiMs = dogrulaMs(opts.zamanAsimiMs, ISTEK_ZAMAN_ASIMI_MS);
+    this.istekArasiMs = dogrulaMs(opts.istekArasiMs, REQUEST_GAP_MS);
+    this.zamanAsimiMs = dogrulaMs(opts.zamanAsimiMs, REQUEST_TIMEOUT_MS);
     this._kuyruk = Promise.resolve(); // sirali zincir
     this._sonIstekBitti = 0;
   }
@@ -55,7 +55,7 @@ export class Istemci {
     if (this.saltOkunur) {
       return Promise.resolve({
         ok: false, kod: null, govde: null, yol,
-        problems: [sorun("WRITE_BLOCKED_READONLY", yol)],
+        problems: [problem("WRITE_BLOCKED_READONLY", yol)],
       });
     }
     return this._kuyruğaEkle("POST", yol, { govde, contentType });
@@ -82,18 +82,18 @@ export class Istemci {
 
   async _denemeliIstek(metot, yol, ekstra) {
     let sonHata = null;
-    for (let deneme = 0; deneme < ISTEK_DENEME; deneme += 1) {
+    for (let deneme = 0; deneme < REQUEST_RETRIES; deneme += 1) {
       const r = await this._istek(metot, yol, ekstra);
       if (r.aktarimHatasi) {
         sonHata = r.aktarimHatasi;
-        if (deneme < ISTEK_DENEME - 1) await bekle(DENEME_ARASI_MS);
+        if (deneme < REQUEST_RETRIES - 1) await bekle(RETRY_GAP_MS);
         continue;
       }
       return this._sonuca(yol, r);
     }
     return {
       ok: false, kod: null, govde: null, yol,
-      problems: [sorun("REQUEST_FAILED", yol, sonHata)],
+      problems: [problem("REQUEST_FAILED", yol, sonHata)],
     };
   }
 
@@ -150,11 +150,11 @@ export class Istemci {
     const govde = r.govde ? r.govde.toString("latin1") : "";
     const problems = [];
     if (r.kod === 401) {
-      problems.push(sorun(this.kimlik ? "AUTH_REJECTED" : "AUTH_REQUIRED", yol));
+      problems.push(problem(this.kimlik ? "AUTH_REJECTED" : "AUTH_REQUIRED", yol));
     } else if (r.kod >= 400) {
-      problems.push(sorun("HTTP_ERROR", yol, r.kod));
+      problems.push(problem("HTTP_ERROR", yol, r.kod));
     } else if (r.kod >= 200 && r.kod < 300 && govde.length === 0) {
-      problems.push(sorun("EMPTY_BODY", yol));
+      problems.push(problem("EMPTY_BODY", yol));
     }
     return {
       ok: problems.every((p) => p.severity !== "error"),
@@ -168,19 +168,19 @@ export class Istemci {
 }
 
 // Host bazli kilit yardimcilari (index/oku kullanir).
-export function hostMesgulMu(host) {
+export function isHostBusy(host) {
   return mesgulHostlar.has(host);
 }
-export function hostuKilitle(host) {
+export function lockHost(host) {
   mesgulHostlar.add(host);
 }
-export function hostuSerbestBirak(host) {
+export function unlockHost(host) {
   mesgulHostlar.delete(host);
 }
 
 function dogrulaMs(deger, varsayilan) {
   if (deger == null) return varsayilan;
-  if (!Number.isFinite(deger) || deger <= 0 || deger > MAX_ZAMANLAYICI_MS) {
+  if (!Number.isFinite(deger) || deger <= 0 || deger > MAX_TIMER_MS) {
     return varsayilan;
   }
   return deger;
