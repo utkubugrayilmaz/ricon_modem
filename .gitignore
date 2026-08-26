@@ -1,0 +1,15 @@
+# Kesif ciktilari — MAC, ICCID, IMSI, IMEI, nvram tam yedegi icerir. ASLA commit edilmez.
+data/
+*.nvrambak.bin
+
+# Ortam / sirlar
+.env
+env
+*.env
+!.env.example
+
+node_modules/
+*.tgz
+
+# Ham terminal dokumu — parola hash+kimlik icerir
+docs/manuel_test.md

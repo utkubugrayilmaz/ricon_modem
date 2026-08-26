@@ -1,0 +1,90 @@
+// nvram tam yedegi ayristiricisi — cihazin "her seyi".
+//
+// /nvrambak.bin ikili bir dosya (2026-08-26 canli cihazdan, 28419 bayt,
+// 1546 anahtar). Format:
+//   "ROUTER" sihirli imza (6 bayt) + 6 bayt basluk (toplam 12)
+//   ardindan tekrar eden kayit: [1b anahtar_uzunlugu][anahtar]
+//                               [2b deger_uzunlugu LE][deger]
+//
+// Bu cihazin TUM yapilandirmasi burada: wl_* (WiFi), dtu_* (IP Modem),
+// ddns_*, ipsec_*, openvpn*, snmpd_*, et0macaddr, ... Faz 2/3'te "bir ayar
+// hangi anahtari degistirir" sorusunun kesin cevabi iki yedegin farkidir.
+
+import { sorun } from "./sorunlar.js";
+
+const IMZA = "ROUTER";
+
+// Ikili yedegi {anahtar: deger} nesnesine cevirir.
+// Doner: { degerler, sayi, problems }  (throw etmez)
+export function nvramAyikla(buf) {
+  const problems = [];
+  const degerler = Object.create(null);
+
+  if (!buf || buf.length < IMZA.length ||
+      buf.subarray(0, IMZA.length).toString("latin1") !== IMZA) {
+    problems.push(sorun("NVRAM_BAD_HEADER"));
+    return { degerler, sayi: 0, problems };
+  }
+
+  // Basluk boyutu firmware'e gore degisebilir; imza sonrasindan itibaren
+  // dosya sonuna KADAR temiz ayrisan ilk offset'i bul (6..16 araligi).
+  const start = baslangicBul(buf);
+  if (start === -1) {
+    problems.push(sorun("NVRAM_BAD_HEADER"));
+    return { degerler, sayi: 0, problems };
+  }
+
+  let off = start;
+  let sayi = 0;
+  while (off < buf.length) {
+    const kl = buf.readUInt8(off); off += 1;
+    const key = buf.subarray(off, off + kl).toString("latin1"); off += kl;
+    const vl = buf.readUInt16LE(off); off += 2;
+    const val = buf.subarray(off, off + vl).toString("latin1"); off += vl;
+    degerler[key] = val;
+    sayi += 1;
+  }
+  return { degerler, sayi, problems };
+}
+
+// Imzadan sonra, dosya sonuna tam oturan ve anahtarlari ASCII olan offset.
+function baslangicBul(buf) {
+  for (let start = IMZA.length; start <= IMZA.length + 10; start += 1) {
+    if (temizAyrisiyorMu(buf, start)) return start;
+  }
+  return -1;
+}
+
+function temizAyrisiyorMu(buf, start) {
+  let off = start;
+  let n = 0;
+  while (off < buf.length) {
+    if (off + 1 > buf.length) return false;
+    const kl = buf.readUInt8(off); off += 1;
+    if (off + kl > buf.length) return false;
+    const key = buf.subarray(off, off + kl).toString("latin1"); off += kl;
+    if (kl > 0 && !/^[\x20-\x7e]+$/.test(key)) return false;
+    if (off + 2 > buf.length) return false;
+    const vl = buf.readUInt16LE(off); off += 2;
+    if (off + vl > buf.length) return false;
+    off += vl;
+    n += 1;
+  }
+  return off === buf.length && n > 0;
+}
+
+// Iki nvram dokumunun farki — Faz 2/3 icin. Doner:
+//   { eklenen:{k:v}, silinen:{k:v}, degisen:{k:{eski,yeni}} }
+export function nvramFark(eski, yeni) {
+  const eklenen = Object.create(null);
+  const silinen = Object.create(null);
+  const degisen = Object.create(null);
+  for (const k of Object.keys(yeni)) {
+    if (!(k in eski)) eklenen[k] = yeni[k];
+    else if (eski[k] !== yeni[k]) degisen[k] = { eski: eski[k], yeni: yeni[k] };
+  }
+  for (const k of Object.keys(eski)) {
+    if (!(k in yeni)) silinen[k] = eski[k];
+  }
+  return { eklenen, silinen, degisen };
+}

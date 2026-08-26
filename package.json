@@ -1,0 +1,15 @@
+{
+  "name": "ricon-modem",
+  "version": "0.1.0",
+  "description": "Ricon S9922M44 endustriyel hucresel router: kesif, tam veri cekme ve hazirlama otomasyonu",
+  "type": "module",
+  "bin": { "ricon": "./ricon.js" },
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test",
+    "dogrula": "node ricon.js dogrula",
+    "oku": "node ricon.js oku"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

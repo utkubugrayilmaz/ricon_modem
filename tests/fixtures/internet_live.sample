@@ -1,0 +1,18 @@
+{m1simiccid::8991000000000000000F}
+{m1simimsi::286010000000000}
+{m1imei::860000000000000}
+{m1sim::SIM1}
+{m1simst::OK}
+{m1network::FDD LTE}
+{m1bandinfo::LTE-FDD B7}
+{m13gname::Q200AF}
+{m1dbm::71}
+{m1cellid::70D02C}
+{m1noiseratio::12}
+{m1signal::<table class="tablesignal"><tr><td style="background-color:#00FF00;"></td></tr></table>}
+{w1_wan_ip::10.0.0.2}
+{w1_wan_gw::10.0.0.1}
+{w1_wan_dns::8.8.8.8 8.8.4.4}
+{w1_wanup::0:08:05}
+{w1_wan_shortproto::m13gdhcp}
+{m2simst::Invalid}
