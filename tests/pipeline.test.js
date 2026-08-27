@@ -90,7 +90,7 @@ test("provisionRecord: PURE — sabit sema, telefon normalize edilmis gelir", ()
   assert.deepEqual(Object.keys(k), [
     "zaman", "durum", "ok", "deneme", "profil", "modem_ip", "telefon",
     "lan_mac", "iccid", "imsi", "imei", "operator", "sim_durumu", "wan_ip",
-    "internet_sure_sn", "pin_denendi",
+    "internet_sure_sn", "pin_denendi", "sahaya_hazir",
   ]);
   assert.equal(k.telefon, "5321234567");
   assert.equal(k.imsi, null, "verilmeyen alan null (0 ya da bos degil)");
@@ -191,4 +191,19 @@ test("stripSecrets: PIN alanlari ciktidan silinir", () => {
   assert.equal(temiz.m1s1simpin, undefined);
   assert.equal(temiz.pin, undefined);
   assert.equal(temiz.telefon, "5350641858", "telefon sir DEGIL, kalir");
+});
+
+test("provisionRecord: sahaya_hazir uc degerli — 'ok' tek basina YANILTICI", () => {
+  // Ayarlar dogru + internet var -> gercekten hazir
+  const hazir = provisionRecord({ sonuc: { ok: true },
+    internet: { var: true, wan_ip: "1.2.3.4", sure_sn: 40 } });
+  assert.equal(hazir.sahaya_hazir, true);
+  // Ayarlar dogru ama SIM calismiyor -> sahada is yapmaz
+  const yarim = provisionRecord({ sonuc: { ok: true },
+    internet: { var: false, sure_sn: 150 } });
+  assert.equal(yarim.ok, true, "ayarlar dogru oldugu icin ok:true KALIR");
+  assert.equal(yarim.sahaya_hazir, false, "ama sahaya hazir DEGIL");
+  // Internet dogrulamasi kapatilmis -> bilinmiyor, false demek yanlis olur
+  const bilinmiyor = provisionRecord({ sonuc: { ok: true }, internet: null });
+  assert.equal(bilinmiyor.sahaya_hazir, null);
 });

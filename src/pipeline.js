@@ -149,6 +149,12 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
     // PIN DENENDİ Mİ — yalnızca boolean. PIN'in KENDİSİ hiçbir zaman deftere,
     // log'a, olaya ya da rapora yazılmaz.
     pin_denendi: Boolean(sonuc.pin_denemesi?.denendi),
+    // SAHAYA HAZIR MI — tek soruyla cevap. `ok` tek başına YANILTICI: ayarlar
+    // doğru olsa da SIM çalışmıyorsa o modem sahada iş yapmaz. Üç değer:
+    //   true  = ayarlar doğrulandı VE internet geldi
+    //   false = ayarlar doğrulandı ama SIM çalışmıyor (PIN/kapsama/paket)
+    //   null  = internet doğrulaması yapılmadı (kapatılmış) → BİLİNMİYOR
+    sahaya_hazir: internet === null ? null : Boolean(sonuc.ok) && Boolean(internet.var),
   };
 }
 
@@ -171,14 +177,23 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
 // PIN göndermiş demektir (modem her boot'ta saklı PIN'i gönderiyor — ölçüldü).
 // Kanıt yoksa dokunmuyoruz.
 // Doner: { hedef: string|undefined, problems: [] }
-export function simPinHedefi(simKilit, pin) {
+export function simPinHedefi(simKilit, pin, { elleOnay = false } = {}) {
   const problems = [];
   if (!simKilit?.kilit) return { hedef: undefined, problems };          // 1, 2
   if (simKilit.kilit === "pin" && pin) {
+    const { pin_kalan: kalan, pin_toplam: toplam } = simKilit;
+    // OTOMATIK YOLDA TEK DENEME: bir hak yakılmışsa araç BİR DAHA DENEMEZ.
+    // Sebep: ilk deneme yanlışsa ikinci denemeyi otomatik yapmak SIM'i PUK'a
+    // bir adım daha yaklaştırır. İnsan gözüyle onaylanmış bir deneme (sonuç
+    // ekranındaki "PIN'i dene") ayrı iştir — orada kalan hak gösterilerek
+    // bilinçli karar veriliyor.
+    const hakYakilmis = kalan !== null && toplam !== null && kalan < toplam;
     if (!/^\d{4,8}$/.test(String(pin))) {
       problems.push(problem("PIN_INVALID"));                            // 4
-    } else if (simKilit.pin_kalan !== null && simKilit.pin_kalan <= 1) {
-      problems.push(problem("PIN_LAST_ATTEMPT", simKilit.pin_kalan));   // 5
+    } else if (kalan !== null && kalan <= 1) {
+      problems.push(problem("PIN_LAST_ATTEMPT", kalan));                // 5
+    } else if (hakYakilmis && !elleOnay) {
+      problems.push(problem("PIN_ALREADY_TRIED", kalan, toplam));       // 5c
     } else {
       return { hedef: String(pin), problems };                          // 3
     }

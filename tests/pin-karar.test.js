@@ -72,3 +72,37 @@ test("sayac bilgisi YOKSA (eski firmware) kanit da yok -> DOKUNMA", () => {
   const r = simPinHedefi({ kilit: "pin", pin_kalan: null, pin_toplam: null }, null);
   assert.equal(r.hedef, undefined, "sayac okunamiyorsa korlemesine silmeyiz");
 });
+
+// --- "BIR KEZ DENEDIYSEN BIR DAHA DENEME" (kullanici istegi) ---
+
+test("5c) hak YAKILMIS + otomatik yol -> IKINCI DENEME YOK", () => {
+  const r = simPinHedefi(kilit({ pin_kalan: 2 }), "0270");
+  assert.notEqual(r.hedef, "0270", "otomatik ikinci deneme yapilmaz");
+  assert.ok(kodlar(r).includes("PIN_ALREADY_TRIED"));
+  // Ayrica sakli yanlis PIN temizlenir: kanama devam etmesin.
+  assert.equal(r.hedef, "");
+});
+
+test("5c) hak yakilmamis (3/3) + otomatik yol -> TEK deneme YAPILIR", () => {
+  const r = simPinHedefi(kilit({ pin_kalan: 3 }), "0270");
+  assert.equal(r.hedef, "0270");
+  assert.deepEqual(kodlar(r), []);
+});
+
+test("5c) ELLE ONAY: insan bilincli onaylarsa 2. deneme yapilabilir", () => {
+  const r = simPinHedefi(kilit({ pin_kalan: 2 }), "0270", { elleOnay: true });
+  assert.equal(r.hedef, "0270", "insan karari otomasyondan farkli");
+  assert.deepEqual(kodlar(r), []);
+});
+
+test("5c) ELLE ONAY bile SON HAKKI yakamaz", () => {
+  const r = simPinHedefi(kilit({ pin_kalan: 1 }), "0270", { elleOnay: true });
+  assert.notEqual(r.hedef, "0270", "son hak elle onayla da yakilmaz");
+  assert.ok(kodlar(r).includes("PIN_LAST_ATTEMPT"));
+});
+
+test("sayac okunamiyorsa (baska firmware) otomatik deneme ENGELLENMEZ", () => {
+  // Kanit yok; katı davranmak ozelligi tumden olduruyordu. Belgelenmis tercih.
+  const r = simPinHedefi({ kilit: "pin", pin_kalan: null, pin_toplam: null }, "0270");
+  assert.equal(r.hedef, "0270");
+});

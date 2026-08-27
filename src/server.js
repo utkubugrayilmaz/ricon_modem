@@ -24,6 +24,7 @@ import { extname, join } from "node:path";
 import {
   provisionModem, applyProvisioning, applyPin, provisionRecord, pcPreflight,
   readIdentity, waitForInternet, normalizePhone, settingLabel, SETTING_LABELS,
+  simPinHedefi,
 } from "./index.js";
 import { isReachable } from "./scanner.js";
 
@@ -256,9 +257,20 @@ export function createServer(opts = {}) {
           cozum: "Kablonun takili oldugundan emin ol." });
         return;
       }
+      // KARAR TEK YERDE: elle denemede de simPinHedefi'ne soruyoruz. Fark
+      // yalnizca elleOnay:true — insan kalan hakki gorup bilincli onayladi.
+      // Son hakki elle onay bile yakamaz (bkz. simPinHedefi).
+      gonder("ilerleme", { mesaj: "SIM durumu okunuyor (kalan hak)" });
+      const kimlikBilgi = await readIdentity({ ...konum, kimlik });
+      const { hedef, problems } = simPinHedefi(kimlikBilgi.sim, pin, { elleOnay: true });
+      if (typeof hedef !== "string" || hedef === "") {
+        gonder("pin_sonuc", { denendi: false,
+          atlandi: problems[0]?.kod ?? "karar_yok", problems });
+        return;
+      }
       const p = await applyPin({ ...konum, kimlik,
         ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
-        olay: (o) => gonder(o.tur, o) }, pin);
+        olay: (o) => gonder(o.tur, o) }, hedef);
 
       if (!p.denendi) {
         gonder("pin_sonuc", { denendi: false, atlandi: p.atlandi,

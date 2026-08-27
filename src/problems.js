@@ -97,6 +97,14 @@ const KATALOG = {
       + " purpose: read the PIN off the card holder and verify it, or simply turn"
       + " the PIN off from a phone.",
   }),
+  PIN_ALREADY_TRIED: (kalan, toplam) => ({
+    message: `A PIN attempt has already been used on this SIM (${kalan}/${toplam}`
+      + " left), so no further attempt was made automatically.",
+    check: "By design the tool tries a PIN AT MOST ONCE. If the first attempt"
+      + " failed, a second automatic try would only push the SIM closer to a PUK"
+      + " lock. Verify the PIN on the card holder and confirm it by hand on the"
+      + " result screen, or turn the PIN off from a phone.",
+  }),
   PIN_STALE_CLEARED: (kalan) => ({
     message: "A stored SIM PIN was found while the SIM was still locked"
       + ` (attempts left: ${kalan ?? "?"}), so it was CLEARED.`,
@@ -163,7 +171,7 @@ const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
   // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
   // bilinmemesi bizim hatamiz degil ve tekrar denemek cozmez. Error yapmak
   // durum ("hazir") ile problems'i celiskiye dusuruyordu.
-  "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED"]);
+  "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED", "PIN_ALREADY_TRIED"]);
 
 export const PROBLEM_CODES = Object.freeze(Object.keys(KATALOG));
 
