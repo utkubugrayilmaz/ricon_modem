@@ -28,7 +28,7 @@ export { applyProvisioning, planProvisioning, groupPlan } from "./provisioning.j
 export { FIELD_PROFILE, FACTORY_PROFILE, PROFILES } from "./profile.js";
 export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
-  readIdentity,
+  readIdentity, simTakiliMi,
 } from "./pipeline.js";
 export { readSim, normalizePhone } from "./sim.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).

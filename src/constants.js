@@ -126,6 +126,11 @@ export const SETTING_LABELS = Object.freeze({
   wl_net_mode: { ad: "WLAN radyo (genel)", sayfa: "Wireless",
     degerler: { disabled: "kapali" } },
 
+  // DHCP sunucusu. Bonus: bu anahtar KIMLIKSIZ sayfada da (Info.live.htm)
+  // goruldugu icin parolasiz dogrulanabiliyor.
+  lan_proto: { ad: "DHCP Server", sayfa: "DHCP Server",
+    degerler: { dhcp: "Enabled", static: "Disabled" } },
+
   lan_ipaddr: { ad: "Local IP", sayfa: "LAN" },
   lan_ipaddr_ex1: { ad: "Local IP Address1", sayfa: "LAN",
     degerler: { "0.0.0.0": "yok (silinmis)" } },

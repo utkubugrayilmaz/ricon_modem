@@ -34,7 +34,8 @@ const olayla = (opts, olay) => {
 // arandı; BULGULAR'daki S/N fiziksel etiketten okundu). Bu yüzden kalıcı
 // kimlik: LAN MAC (cihaza ait, kimliksiz okunur) + IMEI (modül) + ICCID (SIM).
 export async function readIdentity({ host, kaynakIp, kimlik }) {
-  const sonuc = { lan_mac: null, iccid: null, imsi: null, imei: null, operator: null };
+  const sonuc = { lan_mac: null, iccid: null, imsi: null, imei: null,
+    operator: null, sim_durumu: null };
   const c = new Client({ host, kaynakIp, kimlik });
   const bilgi = await c.get("/asp/status/Info.live.htm");
   sonuc.lan_mac = parsePairs(bilgi.govde || "").lan_mac || null;
@@ -44,7 +45,22 @@ export async function readIdentity({ host, kaynakIp, kimlik }) {
   sonuc.imsi = s1.imsi || null;
   sonuc.imei = s1.imei || null;
   sonuc.operator = s1.operator || null;
+  sonuc.sim_durumu = s1.sim_durumu || null;
   return sonuc;
+}
+
+// SIM gerçekten takılı mı? ICCID yalnızca SIM varken okunabiliyor, o yüzden
+// tek güvenilir ölçüt o. `sim_durumu` ("Not Insert" / "Invalid") teşhis metni
+// olarak taşınır — operatöre ne olduğunu söylemek için.
+//
+// NEDEN ÖNEMLİ (2026-08-27 canlı gözlem): SIM'siz bir modemde provizyon
+// SORUNSUZ tamamlanıyor — 14 ayar yazılıyor, doğrulama TAMAM diyor. Ama cihaz
+// şebekeye kaydolamıyor, ~110 sn'de bir deneyip düşüyor ve deftere ICCID'siz
+// bir satır düşüyor. Yani "hazır" denen modem sahada çalışmaz. Bu yüzden SIM
+// kontrolü EN BASA alındı: 45 saniye harcayıp sonunda anlamak yerine
+// ilk saniyede söylüyoruz.
+export function simTakiliMi(kimlikBilgi = {}) {
+  return Boolean(kimlikBilgi.iccid);
 }
 
 // PURE: bir hazırlamanın kalıcı kayıt satırı (JSONL). Cihaza gitmez.
@@ -85,15 +101,18 @@ export async function provisionModem(opts) {
     fabrikaHost = "192.168.1.1", fabrikaKaynak,
     sahaHost = "5.5.5.1", sahaKaynak,
     kimlik, profil, denemeler = 3, telefon,
+    // Tuketici kimligi ZATEN okuduysa (or. UI sol paneli icin) tekrar okumayiz
+    // — tek baglantili cihazda gereksiz ~4 sn demek.
+    kimlikBilgi: hazirKimlikBilgi = null,
   } = opts;
   const rapor = { zaman: now(), komut: "hazirla", problems: [] };
 
   // Her cikista: cihaz kimligini oku (mumkunse), kalici kayit satirini uret,
   // varsa opts.kayit(satir) ile disariya bildir. Cekirdek DOSYAYA YAZMAZ —
   // nereye yazilacagi tuketicinin (CLI/endpoint) karari.
-  const bitir = async (konum) => {
-    let kimlikBilgi = {};
-    if (konum && kimlik) {
+  const bitir = async (konum, hazirKimlik = null) => {
+    let kimlikBilgi = hazirKimlik || {};
+    if (!hazirKimlik && konum && kimlik) {
       try {
         bildir(opts, "cihaz kimligi okunuyor (kayit icin)");
         kimlikBilgi = await readIdentity({ ...konum, kimlik });
@@ -124,10 +143,41 @@ export async function provisionModem(opts) {
     rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
   }
 
+  // Kimlik bir kez okunur: hem SIM kontrolu hem defter kaydi ayni okumayi
+  // kullanir (cihaza iki kez gitmeyiz).
+  let kimlikBilgiOnce = hazirKimlikBilgi;
+
+  // Tuketici kimligi zaten okuduysa ve SIM yoksa: cihaza HIC GITMEDEN reddet.
+  // (Ayni kontrol asagida, kimligi kendimiz okudugumuz yolda da var.)
+  if (hazirKimlikBilgi && !simTakiliMi(hazirKimlikBilgi)) {
+    rapor.problems.push(problem("SIM_MISSING", hazirKimlikBilgi.sim_durumu));
+    rapor.durum = "sim_yok"; rapor.ok = false;
+    return bitir(null, hazirKimlikBilgi);
+  }
+
   for (let deneme = 1; deneme <= denemeler; deneme += 1) {
     bildir(opts, `deneme ${deneme}/${denemeler}: modem algilaniyor`);
     const fabrikaVar = await isReachable(fabrikaHost, fabrikaKaynak);
     const sahaVar = fabrikaVar ? false : await isReachable(sahaHost, sahaKaynak);
+    const konum = fabrikaVar
+      ? { host: fabrikaHost, kaynakIp: fabrikaKaynak }
+      : sahaVar ? { host: sahaHost, kaynakIp: sahaKaynak } : null;
+
+    // SIM KONTROLU — nvram'a bakmadan, HICBIR SEY yazmadan, EN BASTA.
+    // Sebep: SIM'siz modemde provizyon "basarili" gorunur ama cihaz sebekeye
+    // kaydolamaz; defterde ICCID'siz satir kalir. 45 sn harcayip sonunda
+    // anlamak yerine ilk saniyede soyluyoruz (2026-08-27 canli gozlem).
+    if (konum && !kimlikBilgiOnce) {
+      bildir(opts, `kimlik/SIM kontrolu (${konum.host})`);
+      try {
+        kimlikBilgiOnce = await readIdentity({ ...konum, kimlik });
+      } catch { kimlikBilgiOnce = null; }
+    }
+    if (konum && kimlikBilgiOnce && !simTakiliMi(kimlikBilgiOnce)) {
+      rapor.problems.push(problem("SIM_MISSING", kimlikBilgiOnce.sim_durumu));
+      rapor.durum = "sim_yok"; rapor.deneme = deneme; rapor.ok = false;
+      return bitir(konum, kimlikBilgiOnce);
+    }
 
     // Saha adresinde mi? Zaten hazir mi diye dry-run.
     let sahaDry = null;
@@ -146,7 +196,7 @@ export async function provisionModem(opts) {
 
     if (eylem === "zaten_hazir") {
       rapor.durum = "zaten_hazir"; rapor.deneme = deneme; rapor.ok = true;
-      return bitir({ host: sahaHost, kaynakIp: sahaKaynak });
+      return bitir({ host: sahaHost, kaynakIp: sahaKaynak }, kimlikBilgiOnce);
     }
     if (eylem === "modem_yok") {
       rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
@@ -169,7 +219,7 @@ export async function provisionModem(opts) {
 
     if (r.ok && (r.durum === "basarili" || r.durum === "zaten_istenen_durumda")) {
       rapor.durum = "hazir"; rapor.ok = true;
-      return bitir({ host: sahaHost, kaynakIp: sahaKaynak });
+      return bitir({ host: sahaHost, kaynakIp: sahaKaynak }, kimlikBilgiOnce);
     }
     rapor.problems.push(...r.problems);
     bildir(opts, `deneme ${deneme} basarisiz (${r.durum}); tekrar denenecek`);

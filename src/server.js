@@ -248,15 +248,20 @@ export function createServer(opts = {}) {
           cozum: on.problems[0]?.check });
         return;
       }
+      // Kimligi BURADA okuyoruz (sol panel + SIM durumu). Ayni okumayi
+      // cekirdege GECIYORUZ ki cihaza iki kez gidilmesin — tek baglantili
+      // cihazda bu ~4 sn demek.
+      let kimlikBilgi = null;
       if (konum && kimlik) {
-        gonder("ilerleme", { mesaj: `modem ${konum.host} — kimlik okunuyor` });
-        gonder("kimlik_once", await readIdentity({ ...konum, kimlik }));
+        gonder("ilerleme", { mesaj: `modem ${konum.host} — kimlik/SIM okunuyor` });
+        kimlikBilgi = await readIdentity({ ...konum, kimlik });
+        gonder("kimlik_once", kimlikBilgi);
       }
 
       const r = await provisionModem({
         fabrikaHost, fabrikaKaynak: on.fabrikaKaynak,
         sahaHost, sahaKaynak: on.sahaKaynak,
-        kimlik, profil, telefon: n, kayit,
+        kimlik, profil, telefon: n, kayit, kimlikBilgi,
         ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
         olay: (o) => {
           if (o.tur === "plan") gonder("plan", { satirlar: planRows(o.plan) });

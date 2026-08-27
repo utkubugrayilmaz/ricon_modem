@@ -64,9 +64,10 @@ test("planRows: satirlar ARAYUZ sirasinda gelir (profil sirasi degil)", () => {
   const plan = planProvisioning({}, FIELD_PROFILE);
   const satirlar = planRows(plan);
   const sayfalar = [...new Set(satirlar.map((s) => s.sayfa))];
+  // Teknisyenin arayuzde izledigi sira: Modem/WAN -> DHCP -> LAN.
   assert.deepEqual(sayfalar, [
     "Modem/WAN → Main Link", "Modem/WAN → Others",
-    "Modem/WAN → Backup Link", "Wireless", "LAN",
+    "Modem/WAN → Backup Link", "Wireless", "DHCP Server", "LAN",
   ]);
 });
 

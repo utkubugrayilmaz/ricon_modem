@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  nextAction, pcPreflight, provisionModem, provisionRecord,
+  nextAction, pcPreflight, provisionModem, provisionRecord, simTakiliMi,
 } from "../src/pipeline.js";
 
 test("nextAction: saha adresinde + istenen durumda -> zaten_hazir", () => {
@@ -91,3 +91,30 @@ test("provisionRecord: PURE — sabit sema, telefon normalize edilmis gelir", ()
   assert.equal(k.telefon, "5321234567");
   assert.equal(k.imsi, null, "verilmeyen alan null (0 ya da bos degil)");
 });
+
+test("simTakiliMi: ICCID varsa takili, yoksa degil", () => {
+  assert.equal(simTakiliMi({ iccid: "8990011626160064930" }), true);
+  assert.equal(simTakiliMi({ iccid: null, sim_durumu: "Not Insert" }), false);
+  assert.equal(simTakiliMi({}), false);
+  assert.equal(simTakiliMi(), false);
+});
+
+test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
+  const yazilan = [];
+  const r = await provisionModem({
+    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
+    telefon: "05350641858",
+    kimlikBilgi: { iccid: null, sim_durumu: "Not Insert", imei: "867", lan_mac: "aa" },
+    kayit: (satir) => yazilan.push(satir),
+  });
+  assert.equal(r.ok, false);
+  assert.equal(r.durum, "sim_yok");
+  assert.equal(r.problems[0].kod, "SIM_MISSING");
+  assert.match(r.problems[0].message, /Not Insert/, "teshis metni operatore gider");
+  // Kayit yine tutulur: "bu modem SIM'siz geldi" sahada gercek bir bilgi.
+  assert.equal(yazilan.length, 1);
+  assert.equal(yazilan[0].durum, "sim_yok");
+  assert.equal(yazilan[0].iccid, null);
+  assert.equal(yazilan[0].telefon, "5350641858");
+});
+

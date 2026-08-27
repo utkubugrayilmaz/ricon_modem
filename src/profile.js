@@ -38,8 +38,8 @@ export const WRITE_GROUPS = [
   },
   {
     ad: "DHCP",
-    // Anahtar diff ile TEYIT EDILINCE buraya eklenecek (tahmin konmaz).
-    anahtarlar: [],
+    // lan_proto: dhcp = DHCP sunucusu acik, static = kapali (diff ile teyitli).
+    anahtarlar: ["lan_proto"],
   },
   {
     ad: "LAN",
@@ -87,6 +87,11 @@ export const FIELD_PROFILE = {
     // Modem/WAN Backup Link (diff ile doğrulandı)
     w2_wan_proto: "disabled", // Backup Link Disabled (default dhcp)
 
+    // DHCP sunucusu KAPALI (2026-08-27 diff ile doğrulandı: arayüzde
+    // "DHCP Server: Disabled" + Save -> lan_proto dhcp'den static'e döndü;
+    // başka HİÇBİR anahtar değişmedi).
+    lan_proto: "static",
+
     // LAN (Faz1 canlı + ekran kıyası + nvram ile doğrulandı)
     lan_ipaddr: "5.5.5.1",
     // İkincil LAN adreslerinin TAMAMI sıfırlanır (2026-08-27 teknisyen isteği).
@@ -131,6 +136,8 @@ export const FACTORY_PROFILE = {
     w1_kponm: "7",             // Keep Alive ICMP+
     // Backup Link default
     w2_wan_proto: "dhcp",      // Automatic Configuration - DHCP
+    // DHCP sunucusu default: acik
+    lan_proto: "dhcp",
     // LAN defaults
     lan_ipaddr: "192.168.1.1",
     lan_ipaddr_ex1: "192.168.8.1",

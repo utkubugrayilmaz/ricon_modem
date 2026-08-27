@@ -70,6 +70,13 @@ const KATALOG = {
       + " with valid credentials.",
   }),
 
+  SIM_MISSING: (durum) => ({
+    message: `No SIM is readable in the modem (status: ${durum || "unknown"}), so`
+      + " provisioning was refused before touching the device.",
+    check: "Insert the SIM, wait a few seconds and retry. Provisioning a modem"
+      + " without a SIM succeeds on paper but the device cannot register on the"
+      + " network, and the record would carry no ICCID.",
+  }),
   MSISDN_REQUIRED: () => ({
     message: "Provisioning needs the SIM's phone number (MSISDN) and none was"
       + " supplied, so the device would go to the field with no record of its line.",
