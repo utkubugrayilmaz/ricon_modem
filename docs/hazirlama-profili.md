@@ -60,11 +60,12 @@ uygular (zaten kapalıysa dokunmaz). Anahtar: `wl0_net_mode`+`wl_net_mode`
 | WLAN kapalı | `wl0_net_mode`/`wl_net_mode` = `disabled` | 🟢 diff |
 | LAN IP | `lan_ipaddr` = `5.5.5.1` | 🟢 Faz1 canlı + ekran + nvram |
 | LAN ikincil IP sil | `lan_ipaddr_ex1` = `0.0.0.0` | 🟢 nvram (default 192.168.8.1) |
-| LAN class (belki) | `lan_cclass` = `5.5.5.` (?) | ⏳ apply anında doğrulanacak |
+| LAN class | `lan_cclass` = `5.5.5.` | 🟢 ÇÖZÜLDÜ — **cihaz kendi türetiyor**, profile konmadı |
 
-Tüm bu eşlemeler `src/profile.js` içindeki `FIELD_PROFILE`'ne işlendi. Motor
-(`node ricon.js uygula`) bunları uygular; `lan_cclass` gerçek apply anında
-(LAN IP değişince) doğrulanacak.
+Tüm bu eşlemeler `src/profile.js` içindeki `FIELD_PROFILE`'a işlendi ve motor
+(`node ricon.js uygula`) bunları uyguluyor. `lan_cclass` bilerek DIŞARIDA:
+LAN IP değişince cihaz onu reboot'ta kendisi güncelliyor (aşağıdaki uçtan uca
+testte gözlemle kesinleşti) — yazmak gereksiz risk.
 
 ## Uçtan uca test sonucu (2026-08-26)
 
