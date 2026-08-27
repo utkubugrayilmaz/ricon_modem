@@ -362,6 +362,39 @@ body { display: flex; flex-direction: column; }
   }
 }
 
+/* Süre ölçümü — TEST amaçlı ek bölüm, ürünün parçası değil. Bilerek
+   "test" etiketli ve nötr gri: teknisyenin okuyacağı asıl bilgi yukarıda. */
+.olcum {
+  flex: 0 0 auto;
+  padding: 12px 24px 14px;
+  background: #f2f5f3;
+  border-top: 1px solid var(--cizgi);
+  max-height: 34vh;
+  overflow-y: auto;
+}
+.olcum-etiket {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gri);
+}
+.olcum-tablo {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 3px 20px;
+  font-family: var(--veri);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.olcum-tablo span:nth-child(3n + 2),
+.olcum-tablo span:nth-child(3n) { text-align: right; }
+.olcum-tablo .olcum-baslik { color: var(--gri); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+.olcum-tablo .olcum-toplam { font-weight: 700; border-top: 1px solid var(--cizgi); padding-top: 4px; margin-top: 4px; }
+/* En uzun adım işaretli: darboğaz tek bakışta görünsün. */
+.olcum-tablo .olcum-uzun { color: var(--kirmizi); font-weight: 700; }
+
 .alt {
   flex: 0 0 auto;
   display: flex;
@@ -372,6 +405,13 @@ body { display: flex; flex-direction: column; }
   color: var(--beyaz);
 }
 .alt-durum { font-family: var(--veri); font-size: 14px; }
+.alt-sure {
+  font-family: var(--veri);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 5.5ch;
+}
 .alt[data-hal="hazir"] { background: var(--yesil-koyu); }
 .alt[data-hal="hata"] { background: var(--kirmizi); }
 .onay {

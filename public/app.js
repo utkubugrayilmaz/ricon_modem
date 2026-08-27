@@ -28,6 +28,9 @@ const sifirlaBtn = el("sifirlaBtn");
 const sifirlaAlan = document.querySelector(".sifirla-alan");
 const onayBalon = el("onayBalon");
 const duyuru = el("duyuru");
+const olcumBolum = el("olcumBolum");
+const olcumTablo = el("olcumTablo");
+const altSure = el("altSure");
 
 // ---------------- EKRAN 1: telefon numarası ----------------
 
@@ -220,6 +223,83 @@ function kimlikBas(hedef, k) {
 let akim = null;
 let akisTuru = null;   // "kurulum" | "sifirlama" — bitişte ne yapılacağını belirler
 
+// --- Süre ölçümü (TEST) ---
+// "Başlat"a bastığımdan bitişe kadar kaç saniye? Ölçüm noktası olayın EKRANA
+// GELDİĞİ an — yani teknisyenin gerçekten beklediği süre. Tamamen tarayıcıda:
+// sunucuya ve çekirdeğe hiç dokunmuyor.
+const OLCUM_ETIKET = {
+  algilandi: "modem algılandı",
+  plan: "ayarlar okundu (plan hazır)",
+  yaziliyor: "yazma başladı",
+  yazildi: "yazma bitti",
+  reboot: "reboot gönderildi",
+  dogrulandi: "cihaz geri geldi, doğrulandı",
+  kimlik: "kimlik okundu (ICCID/IMEI)",
+};
+let baslangicMs = 0;
+let sayacZamani = null;
+const olcumler = [];
+
+const gecenSn = () => (performance.now() - baslangicMs) / 1000;
+const sn = (x) => x.toFixed(1);
+
+function olcumBasla() {
+  baslangicMs = performance.now();
+  olcumler.length = 0;
+  olcumBolum.hidden = true;
+  olcumTablo.textContent = "";
+  altSure.textContent = "0.0 sn";
+  clearInterval(sayacZamani);
+  sayacZamani = setInterval(() => { altSure.textContent = `${sn(gecenSn())} sn`; }, 250);
+}
+
+// Olay geldiğinde damgala. `ek` varsa etikete eklenir (örn. kaç ayar yazıldı).
+function olcumKaydet(tur, ek = "") {
+  const etiket = OLCUM_ETIKET[tur];
+  if (!etiket) return;
+  olcumler.push({ etiket: ek ? `${etiket} — ${ek}` : etiket, anSn: gecenSn() });
+}
+
+// Ölçüm tablosunu basar: her adımın kendi süresi + kümülatif + toplam.
+// En uzun adım kırmızı — darboğaz tek bakışta görünsün.
+function olcumBitir() {
+  clearInterval(sayacZamani);
+  sayacZamani = null;
+  const toplam = gecenSn();
+  altSure.textContent = `${sn(toplam)} sn`;
+
+  const satirDizi = olcumler.map((o, i) => ({
+    etiket: o.etiket,
+    sure: o.anSn - (i === 0 ? 0 : olcumler[i - 1].anSn),
+    an: o.anSn,
+  }));
+  const enUzun = Math.max(0, ...satirDizi.map((s) => s.sure));
+
+  olcumTablo.textContent = "";
+  const hucre = (metin, sinif) => {
+    const s = document.createElement("span");
+    s.textContent = metin;
+    if (sinif) s.className = sinif;
+    return s;
+  };
+  olcumTablo.append(
+    hucre("adım", "olcum-baslik"), hucre("süre", "olcum-baslik"), hucre("an", "olcum-baslik"),
+  );
+  for (const s of satirDizi) {
+    const uzunMu = s.sure === enUzun && satirDizi.length > 1 ? "olcum-uzun" : "";
+    olcumTablo.append(
+      hucre(s.etiket, uzunMu), hucre(`${sn(s.sure)} sn`, uzunMu), hucre(`${sn(s.an)} sn`),
+    );
+  }
+  olcumTablo.append(
+    hucre("TOPLAM (başlat → bitiş)", "olcum-toplam"),
+    hucre(`${sn(toplam)} sn`, "olcum-toplam"),
+    hucre("", "olcum-toplam"),
+  );
+  olcumBolum.hidden = false;
+  return toplam;
+}
+
 // Karşılaştırma ekranını KOMPLE boşaltır. Tek yerde toplandı: temizliği alan
 // alan yapmak, bir alanı unutup önceki modemin bilgisini gösterme hatasının
 // kaynağıydı. Yeni alan eklenirse SADECE buraya eklenir.
@@ -234,6 +314,11 @@ function panelleriTemizle() {
   onayBtn.hidden = true;
   altBar.removeAttribute("data-hal");
   altDurum.textContent = "";
+  olcumBolum.hidden = true;
+  olcumTablo.textContent = "";
+  altSure.textContent = "0.0 sn";
+  clearInterval(sayacZamani);
+  sayacZamani = null;
 }
 
 // Ana ekrana dön ve OTURUMU SIFIRLA: akış kapanır, paneller boşalır, numara
@@ -271,7 +356,17 @@ function akisiBaslat({ yol, tur, telefon = null, onceEtiket, sonraEtiket, calisi
   altDurum.textContent = calisirkenMetin;
   akisaYaz("başlatıldı");
 
+  olcumBasla();
   akim = new EventSource(yol);
+
+  // Ölçüm: her damgalanan olay için ayrı dinleyici — mevcut işleyicilere
+  // dokunmaz, biri eklenip çıkarılınca ölçüm bozulmaz.
+  for (const tur of Object.keys(OLCUM_ETIKET)) {
+    akim.addEventListener(tur, (e) => {
+      const o = JSON.parse(e.data);
+      olcumKaydet(tur, o.anahtarlar ? `${o.anahtarlar.length} ayar` : "");
+    });
+  }
 
   akim.addEventListener("ilerleme", (e) => akisaYaz(JSON.parse(e.data).mesaj));
 
@@ -396,13 +491,14 @@ document.addEventListener("click", (e) => {
 
 function bitir(ok, o) {
   if (akim) { akim.close(); akim = null; }
+  const toplam = olcumBitir();
 
   // Sıfırlama BAŞARILIYSA oturum burada biter: modem sıfırlandı, ekran da
   // sıfırdan başlamalı. Sonuç ekranında bekletip fazladan tıklama istemek
   // yanlıştı — sonuç ana ekranda duyuru olarak görünür.
   if (ok && akisTuru === "sifirlama") {
     anaEkrana(`Modem fabrikaya döndürüldü · ${o.kayit?.modem_ip || "192.168.1.1"}`
-      + " — sıradaki kurulum için hazır.");
+      + ` · ${sn(toplam)} sn — sıradaki kurulum için hazır.`);
     return;
   }
 
@@ -413,7 +509,8 @@ function bitir(ok, o) {
   }
   altBar.dataset.hal = ok ? "hazir" : "hata";
   altDurum.textContent = ok
-    ? `HAZIR — ${o.durum}${o.deneme ? ` (deneme ${o.deneme})` : ""} · deftere yazıldı`
+    ? `HAZIR — ${o.durum}${o.deneme ? ` (deneme ${o.deneme})` : ""} · ${sn(toplam)} sn`
+      + " · deftere yazıldı"
     : `BAŞARISIZ — ${o.durum || "bilinmeyen"}${o.cozum ? ` · ${o.cozum}` : ""}`;
   if (!ok && o.problems?.length) {
     akisaYaz(o.problems.map((p) => `[${p.kod}] ${p.message}`).join(" "));
