@@ -69,14 +69,23 @@ export function summarizeMetrics(rows = [], opts = {}) {
   // sayi (beyan) kullanilir. Ozet hangisi oldugunu acikca tasir.
   const kayitliTaban = ozet.elle_sn.medyan != null;
   const taban = kayitliTaban ? ozet.elle_sn.medyan : opts.elleSn;
+  // Kayitli satirlarin HEPSI beyan mi? Beyan bir OLCUM DEGILDIR; rapor bunu
+  // acikca soylemeli, yoksa "3 kayitli olcum" gibi hak etmedigimiz bir guven
+  // uretir.
+  const hepsiBeyan = elleler.length > 0 && elleler.every((r) => r.beyan);
+  const kaynakMetni = () => {
+    if (!kayitliTaban) return opts.elleKaynak || "BEYAN — kayitli olcum yok";
+    const kim = elleler.map((r) => r.kim).filter(Boolean)[0];
+    const etiket = hepsiBeyan ? "BEYAN" : "olcum";
+    return `${ozet.elle_sn.n} ${etiket}${kim ? ` · ${kim}` : ""}`;
+  };
   if (taban) {
     ozet.karsilastirma = karsilastir(ozet, {
       ...opts,
       elleSn: taban,
-      elleKaynak: kayitliTaban
-        ? `${ozet.elle_sn.n} kayitli olcum (medyan)`
-        : (opts.elleKaynak || "BEYAN — kayitli olcum yok"),
-      elleN: kayitliTaban ? ozet.elle_sn.n : opts.elleN,
+      elleKaynak: kaynakMetni(),
+      // Beyan, kac satir olsa da "olculmus" sayilmaz -> uyari uretsin.
+      elleN: kayitliTaban && !hepsiBeyan ? ozet.elle_sn.n : (opts.elleN ?? 0),
     });
   }
   ozet.ok = basarili.length > 0;

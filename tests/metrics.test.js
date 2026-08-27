@@ -84,7 +84,7 @@ test("summarizeMetrics: KAYITLI elle olcum, komut satiri beyanini EZER", () => {
   assert.equal(o.elle_sn.n, 3);
   assert.equal(o.elle_sn.medyan, 840);
   assert.equal(o.karsilastirma.elle_sn, 840, "kayitli medyan kullanilir, 60 degil");
-  assert.match(o.karsilastirma.elle_kaynak, /3 kayitli olcum/);
+  assert.match(o.karsilastirma.elle_kaynak, /3 olcum/);
   assert.equal(o.karsilastirma.uyari_elle, undefined, "n=3 yeterli, uyari yok");
 });
 
@@ -96,4 +96,28 @@ test("summarizeMetrics: kayitli elle olcum yoksa beyan tabani BEYAN diye etiketl
 test("summarizeMetrics: elle olcumler kurulum sayilmaz", () => {
   const o = summarizeMetrics([satir(), { tur: "elle", ok: true, toplam_sn: 900 }]);
   assert.equal(o.kurulum.denenen, 1);
+});
+
+test("summarizeMetrics: BEYAN satiri olculmus gibi sunulmaz", () => {
+  const rows = [
+    satir(), satir(), satir(), satir(), satir(),
+    { tur: "elle", ok: true, toplam_sn: 720, kim: "operasyon beyani", beyan: true },
+  ];
+  const o = summarizeMetrics(rows);
+  assert.equal(o.karsilastirma.elle_sn, 720, "taban yine kayitli satirdan gelir");
+  assert.match(o.karsilastirma.elle_kaynak, /BEYAN/, "kaynak BEYAN diye etiketli");
+  assert.match(o.karsilastirma.elle_kaynak, /operasyon beyani/, "kim bilgisi tasinir");
+  assert.ok(o.karsilastirma.uyari_elle, "beyan -> uyari uretir (olculmus sayilmaz)");
+});
+
+test("summarizeMetrics: gercek OLCUM satirlari beyan diye etiketlenmez", () => {
+  const rows = [
+    satir(), satir(), satir(), satir(), satir(),
+    { tur: "elle", ok: true, toplam_sn: 780, kim: "teknisyen A" },
+    { tur: "elle", ok: true, toplam_sn: 900, kim: "teknisyen A" },
+    { tur: "elle", ok: true, toplam_sn: 840, kim: "teknisyen A" },
+  ];
+  const o = summarizeMetrics(rows);
+  assert.match(o.karsilastirma.elle_kaynak, /3 olcum/);
+  assert.equal(o.karsilastirma.uyari_elle, undefined);
 });

@@ -180,6 +180,9 @@ async function komutuCalistir() {
         toplam_sn: toplamSn,
         kim: bayrak("--kim") || null,
         not: bayrak("--not") || null,
+        // --beyan: bu sayi OLCULMEDI, soylendi. Rapor bunu BEYAN diye
+        // etiketler; olculmus bir medyan gibi sunulmaz.
+        beyan: argv.includes("--beyan"),
       };
       kayitYazici(bayrak("--kayit") || OLCUM_DOSYA, "olcum-elle")(satir);
       return { ...satir, komut: "olcum-elle", problems: [] };
