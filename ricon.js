@@ -237,6 +237,11 @@ async function komutuCalistir() {
         // gercek factory reset DEGIL — yalniz bizim dokundugumuz anahtarlari
         // default'a alir (bkz. profile.js).
         sifirlamaProfil: PROFILES.fabrika,
+        // Test arayuzu bir ORNEK: urun cekirdek + API. Bu yol verilmezse
+        // sunucu salt API olarak calisir.
+        staticDir: bayrak("--arayuz") === "yok" ? null
+          : (bayrak("--arayuz") || new URL("./examples/test-ui/", import.meta.url).pathname
+            .replace(/^\/([A-Za-z]:)/, "$1")),
         kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
         olcumKayit: kayitYazici(bayrak("--olcum") || OLCUM_DOSYA, "olcum"),
         ilerle,

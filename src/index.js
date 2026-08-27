@@ -34,7 +34,7 @@ export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
   readIdentity, simTakiliMi, waitForInternet,
 } from "./pipeline.js";
-export { readSim, normalizePhone } from "./sim.js";
+export { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
 export { settingLabel } from "./report.js";
 // Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.

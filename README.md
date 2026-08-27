@@ -74,10 +74,33 @@ node ricon.js olcum --modem-sayisi 400                   # özet + karşılaşt�
 
 stdout **her zaman saf JSON**; ilerleme/özet stderr'a; çıkış kodu 0 (ok)/1.
 
-## Arayüz (UI)
+## Ne ÜRÜN, ne ÖRNEK
+
+**Ürün:** `src/` altındaki çekirdek + HTTP API. Üç biçimde tüketilir, hepsi
+**aynı** fonksiyonları çağırır:
+
+| Biçim | Nasıl |
+|---|---|
+| Terminal | `node ricon.js hazirla --telefon 05...` |
+| npm paketi | `import { provisionModem } from "ricon-modem"` |
+| HTTP endpoint | `GET /api/hazirla?telefon=05...` (SSE) |
+
+**Örnek (ürün DEĞİL):** `examples/` — bizim test arayüzümüz ve kullanım
+örnekleri. Bkz. [examples/README.md](examples/README.md) ·
+[paket-kullanimi.js](examples/paket-kullanimi.js) ·
+[endpoint-kullanimi.md](examples/endpoint-kullanimi.md).
+
+İş kuralları **tüketicide değil çekirdektedir**: telefon zorunluluğu, SIM
+yoksa reddetme, PIN/PUK kilidi teşhisi ve son PIN hakkının korunması,
+idempotency, LAN IP'nin en sona yazılması, yazma sırası, defter kaydının
+üretilmesi. Yeni bir arayüz yazan kişi bunları yeniden yazmaz; yanlışlıkla
+atlaması da mümkün değil.
+
+## Test arayüzü (examples/test-ui)
 
 ```bash
-node --env-file=.env ricon.js sunucu     # http://127.0.0.1:8080
+node --env-file=.env ricon.js sunucu              # arayüzle
+node --env-file=.env ricon.js sunucu --arayuz yok # SALT API, arayüz yok
 ```
 
 İki ekran: (1) büyük telefon numarası girişi — 11 hane hücresi, eksik/fazla
@@ -85,10 +108,8 @@ giremez; (2) sol **beyaz** panel kurulum öncesi, sağ **yeşil** panel kurulum
 sonrası — satırlar geldikçe `yazılıyor → yazıldı → doğrulandı` olarak güncellenir.
 Onaylayınca ilk ekrana döner, sıradaki modem takılır.
 
-Modülerlik kuralı burada da geçerli: **UI'da iş mantığı yok.** Telefon
-zorunluluğu, idempotency, LAN IP'nin en sona yazılması, defter kaydı — hepsi
-çekirdekte. `src/server.js` yalnızca isteği `opts`a çevirir, olayları akıtır;
-tarayıcı nvram anahtarı bile bilmez (satırlar ekrana hazır gelir). Çekirdek
+Arayüz sunucuya **gömülü değil**: `staticDir` verilmezse sunucu salt API'dir.
+Tarayıcı nvram anahtarı bile bilmez — satırlar ekrana hazır gelir. Çekirdek
 sunucuyu **tanımaz**.
 
 Güvenlik: sunucu varsayılan olarak **yalnız `127.0.0.1`**'i dinler — bu servis
@@ -140,8 +161,8 @@ ileride **HTTP endpoint** ile tüketilir.
 | `src/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |
 | `src/metrics.js` | Ölçüm özetleyici (PURE) — süre istatistikleri, karşılaştırma |
 | `src/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
-| `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez |
-| `public/` | Tarayıcı arayüzü (düz HTML/CSS/JS, build yok) |
+| `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez. `staticDir` verilmezse SALT API |
+| `examples/` | **ÖRNEKLER — ürün değil:** test arayüzü, paket/endpoint kullanımı |
 
 ## Değişmeyen kurallar
 

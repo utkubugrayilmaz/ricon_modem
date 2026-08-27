@@ -4,7 +4,12 @@
 // KURAL: burada IS MANTIGI YOK. Telefon zorunlulugu, idempotency, LAN IP'nin
 // en sona yazilmasi, defter kaydi — hepsi cekirdekte (provisionModem). Bu
 // dosya yalnizca: HTTP istegini `opts`a cevir, cekirdegi cagir, olaylari
-// tarayiciya akit, statik dosyayi ver. Cekirdek burayi TANIMAZ.
+// akit. Cekirdek burayi TANIMAZ.
+//
+// ARAYUZ BURAYA GOMULU DEGIL: `staticDir` verilmezse bu sunucu SALT API'dir.
+// Bizim test arayuzu `examples/test-ui/` altinda ve oraya bir ORNEK olarak
+// bakilmali — urun cekirdek + bu API. Baska bir tuketici kendi arayuzunu
+// (ya da hic arayuz) verebilir.
 //
 // Neden SSE (Server-Sent Events): provizyon ~60-90 sn suren, tek yonlu olay
 // ureten bir is. WebSocket cift yonlu ve fazla; SSE tarayicida yerlesik
@@ -15,15 +20,13 @@
 
 import http from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { extname, join } from "node:path";
 import {
   provisionModem, applyProvisioning, applyPin, provisionRecord, pcPreflight,
   readIdentity, waitForInternet, normalizePhone, settingLabel, SETTING_LABELS,
 } from "./index.js";
 import { isReachable } from "./scanner.js";
 
-const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -70,6 +73,9 @@ export function createServer(opts = {}) {
     kimlik, profil, sifirlamaProfil, kayit, olcumKayit, ilerle,
     // Internet dogrulamasi ust siniri (sn) — 0 kapatir.
     internetBekle = 150,
+    // Arayuz dizini. VERILMEZSE sunucu SALT API olur; arayuz urunun parcasi
+    // degil (bizim test arayuzu examples/test-ui altinda bir ORNEKTIR).
+    staticDir = null,
   } = opts;
 
   return http.createServer(async (istek, yanit) => {
@@ -330,17 +336,23 @@ export function createServer(opts = {}) {
     }
   }
 
-  // --- Statik dosyalar (public/) ---
+  // --- Statik dosyalar — YALNIZCA staticDir verilmisse ---
+  // staticDir yoksa bu sunucu salt API'dir: arayuz urunun parcasi degil.
   async function statikVer(yol, yanit) {
+    if (!staticDir) {
+      return jsonVer(yanit, 404, { ok: false,
+        hata: "arayuz sunulmuyor (salt API)",
+        cozum: "createServer({ staticDir }) ver ya da /api/* uclarini kullan" });
+    }
     const ad = yol === "/" ? "index.html" : yol.replace(/^\/+/, "");
-    // Dizin kacisi yok: yalnizca public/ altindaki duz dosya adlari.
+    // Dizin kacisi yok: yalnizca verilen dizindeki duz dosya adlari.
     if (ad.includes("..") || ad.includes("/") || ad.includes("\\")) {
       return jsonVer(yanit, 400, { ok: false, hata: "gecersiz yol" });
     }
     const tur = MIME[extname(ad).toLowerCase()];
     if (!tur) return jsonVer(yanit, 404, { ok: false, hata: "bulunamadi" });
     try {
-      const govde = await readFile(PUBLIC_DIR + ad);
+      const govde = await readFile(join(staticDir, ad));
       yanit.writeHead(200, { "Content-Type": tur, "Cache-Control": "no-store" });
       yanit.end(govde);
     } catch {
