@@ -79,3 +79,10 @@ test("PIN_REQUIRED de UYARI — durum 'hazir' derken problems error tasimasin", 
   assert.equal(p.severity, "warning");
   assert.match(p.check, /turn the PIN off/, "birincil cozum PIN'i kaldirmak");
 });
+
+test("PIN_STORED_WRONG: ayni PIN zaten yaziliysa deneme YAKILMADIGINI soyler", () => {
+  const p = problem("PIN_STORED_WRONG");
+  assert.equal(p.severity, "warning");
+  assert.match(p.message, /no attempt was burned/);
+  assert.match(p.check, /stored PIN is therefore wrong/);
+});

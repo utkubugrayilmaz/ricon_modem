@@ -97,6 +97,21 @@ const KATALOG = {
       + " purpose: read the PIN off the card holder and verify it, or simply turn"
       + " the PIN off from a phone.",
   }),
+  PIN_STALE_CLEARED: (kalan) => ({
+    message: "A stored SIM PIN was found while the SIM was still locked"
+      + ` (attempts left: ${kalan ?? "?"}), so it was CLEARED.`,
+    check: "The modem sends its stored PIN to the SIM on every boot. A wrong"
+      + " stored PIN therefore burns one attempt per boot and would eventually"
+      + " PUK-lock the SIM. Clearing it stops the bleeding. Enter the correct"
+      + " PIN, or turn the PIN off from a phone.",
+  }),
+  PIN_STORED_WRONG: () => ({
+    message: "The same PIN is already stored in the modem, yet the SIM was still"
+      + " PIN-locked. Nothing was written, so no attempt was burned.",
+    check: "The stored PIN is therefore wrong. Read the PIN off the SIM card"
+      + " holder and check it, or turn the PIN off from a phone. Retyping the"
+      + " same value will not help.",
+  }),
   PIN_INVALID: () => ({
     message: "The supplied SIM PIN is not 4-8 digits, so it was refused before"
       + " reaching the device.",
@@ -148,7 +163,7 @@ const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
   // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
   // bilinmemesi bizim hatamiz degil ve tekrar denemek cozmez. Error yapmak
   // durum ("hazir") ile problems'i celiskiye dusuruyordu.
-  "PIN_REQUIRED"]);
+  "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED"]);
 
 export const PROBLEM_CODES = Object.freeze(Object.keys(KATALOG));
 

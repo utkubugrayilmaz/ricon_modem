@@ -53,6 +53,7 @@ export const WRITE_GROUPS = [
     anahtarlar: [
       "w1_wan_proto", "m1simswtch", "mullinkfail",
       "m1s1wanapn", "m1s1pppuser", "m1s1ppppwd", "m1s2pppuser", "m1s2ppppwd",
+      "m1s1simpin",
       "w1_connfailsw", "w1_kponm",
       "m1_pap_allowed", "m1_chap_allowed", "m1_chapms_allowed", "m1_chapms_v2_allowed",
       "w2_wan_proto",
@@ -161,6 +162,12 @@ export const FACTORY_PROFILE = {
     w2_wan_proto: "dhcp",      // Automatic Configuration - DHCP
     // Cihaz adi default — "fabrikaya dondur" telefon numarasini da geri alir.
     router_name: DEVICE_NAME_DEFAULT,
+    // SAKLANAN SIM PIN'INI SIL. Bu bir temizlik degil, GUVENLIK:
+    // modem sakladigi PIN'i her acilista SIM'e gonderiyor (2026-08-27 olculdu).
+    // Eski SIM'in PIN'i icerde kalirsa ve modeme BASKA bir PIN'li SIM takilirsa
+    // modem yanlis PIN gonderir ve YENI SIM'in denemelerini yakar — 3 boot
+    // sonra PUK kilidi. Fabrikaya donen modem "temiz" olmali.
+    m1s1simpin: "",
     // DHCP sunucusu default: acik
     lan_proto: "dhcp",
     // LAN defaults

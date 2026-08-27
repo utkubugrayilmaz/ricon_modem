@@ -14,7 +14,7 @@
 import { isReachable } from "./scanner.js";
 import { findSourceIp } from "./network.js";
 import { applyProvisioning, applyPin } from "./provisioning.js";
-import { DEVICE_NAME_KEY } from "./profile.js";
+import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./profile.js";
 import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
 import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
@@ -152,6 +152,46 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
   };
 }
 
+// PURE: SIM PIN alanının HEDEF değeri. Üç sonuç: PIN yaz · BOŞALT · DOKUNMA.
+// Tüm PIN durumları TEK YERDE karara bağlanır ve saf olduğu için test edilir:
+//
+//  # SIM durumu    verilen PIN   karar
+//  1 kilit yok     —             DOKUNMA (undefined)
+//  2 kilit yok     var           DOKUNMA — saklı PIN SIM'i açıyor olabilir;
+//                                silmek bir sonraki boot'ta kilitler
+//  3 PIN kilitli   geçerli       YAZ (motor idempotent: aynıysa yazmaz)
+//  4 PIN kilitli   biçim bozuk   DOKUNMA + PIN_INVALID (deneme yakılmaz)
+//  5 PIN kilitli   son hak (≤1)  DOKUNMA + PIN_LAST_ATTEMPT (karar insanda)
+//  6 PIN kilitli   yok           hak yakılmışsa BOŞALT, değilse DOKUNMA
+//  7 PUK kilitli   —             BOŞALT (PIN yazmak işe yaramaz)
+//
+// 6/7'de KÖRLEMESİNE silmiyoruz: SIM kilitli görünürken modem PIN'i henüz
+// göndermemiş olabilir ve DOĞRU bir PIN'i silmek zarar verir. KANITA
+// bağlıyoruz: cihaz kalan hakkı söylüyor, `kalan < toplam` ise biri yanlış
+// PIN göndermiş demektir (modem her boot'ta saklı PIN'i gönderiyor — ölçüldü).
+// Kanıt yoksa dokunmuyoruz.
+// Doner: { hedef: string|undefined, problems: [] }
+export function simPinHedefi(simKilit, pin) {
+  const problems = [];
+  if (!simKilit?.kilit) return { hedef: undefined, problems };          // 1, 2
+  if (simKilit.kilit === "pin" && pin) {
+    if (!/^\d{4,8}$/.test(String(pin))) {
+      problems.push(problem("PIN_INVALID"));                            // 4
+    } else if (simKilit.pin_kalan !== null && simKilit.pin_kalan <= 1) {
+      problems.push(problem("PIN_LAST_ATTEMPT", simKilit.pin_kalan));   // 5
+    } else {
+      return { hedef: String(pin), problems };                          // 3
+    }
+  }
+  const hakYakilmis = simKilit.pin_kalan !== null && simKilit.pin_toplam !== null
+    && simKilit.pin_kalan < simKilit.pin_toplam;
+  if (hakYakilmis || simKilit.kilit === "puk") {
+    problems.push(problem("PIN_STALE_CLEARED", simKilit.pin_kalan));
+    return { hedef: "", problems };                                     // 6, 7
+  }
+  return { hedef: undefined, problems };
+}
+
 // PIN denemesi kararı — TEK YER. `rapor.pin_denemesi`yi doldurur.
 //
 // EN ÖNEMLİ KURAL: SON HAK OTOMATİK YAKILMAZ. Cihaz kalan deneme sayısını
@@ -185,7 +225,7 @@ async function pinDene({ konum, kimlik, pin, rapor, opts, simDurum }) {
 // Sıra önemli: önce internet beklenir. Gelirse PIN'e HİÇ dokunulmaz — kilitli
 // olmayan SIM'e PIN yazmak 3 denemeden birini yakmak demek (bkz. applyPin).
 async function internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts,
-  simDurum = null }) {
+  simDurum = null, pinPlanlandi = false }) {
   if (!(internetBekle > 0)) return null;
 
   // HIZLI YOL — cihaz "Need verification PIN code (PIN: 3/3, PUK: 10/10)"
@@ -204,13 +244,20 @@ async function internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts,
       rapor.internet = sonuc;
       return sonuc;
     }
-    // PIN kilidi. BİRİNCİL mesaj: "PIN'i telefondan kapat" — proje kararı PIN
-    // saklamak değil, PIN'i ortadan kaldırmak.
     rapor.problems.push(problem("SIM_PIN_LOCKED", simDurum.pin_kalan));
-    // PIN verilmişse ve SON HAK değilse tek deneme (kurtarma yolu).
-    // PIN VERİLMEDİYSE burada PIN_REQUIRED EKLEMİYORUZ: SIM_PIN_LOCKED zaten
-    // durumu ve doğru çözümü ("PIN'i telefondan kapat") söylüyor. İkinci bir
-    // mesaj hem tekrar hem de ters yönü ("PIN gir") öneriyor olurdu.
+    // PIN ANA PASTA YAZILDIYSA burada tekrar yazmıyoruz — ikinci bir deneme
+    // yakmak olurdu. Kilit metni provizyon ÖNCESİNDEN kalma; reboot sonrası
+    // gerçek durumu internet kontrolü söyleyecek.
+    if (pinPlanlandi) {
+      bildir(opts, "PIN ana yazma pasinda gonderildi — internet kontrol ediliyor");
+      const yeni = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+      rapor.internet = yeni;
+      if (!yeni.var) rapor.problems.push(problem("INTERNET_YOK", internetBekle, yeni.sim_durumu));
+      return yeni;
+    }
+    // PIN verilmediyse burada PIN_REQUIRED EKLEMİYORUZ: SIM_PIN_LOCKED zaten
+    // durumu ve doğru çözümü söylüyor. İkinci bir mesaj hem tekrar hem de ters
+    // yönü ("PIN gir") öneriyor olurdu.
     if (pin) await pinDene({ konum, kimlik, pin, rapor, opts, simDurum });
     else rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi",
       pin_kalan: simDurum.pin_kalan };
@@ -302,9 +349,9 @@ export async function provisionModem(opts) {
 
   // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
   // kaydiTamamla). Cagri yerleri degismedi.
-  const internetiDogrula = (konum) =>
+  const internetiDogrula = (konum, simDurum, pinPlanlandi) =>
     internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts,
-      simDurum: kimlikBilgiOnce?.sim ?? null });
+      simDurum, pinPlanlandi });
 
 
   const bitir = (konum, hazirKimlik = null, internet = null) =>
@@ -322,15 +369,34 @@ export async function provisionModem(opts) {
     rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
   }
 
-  // ETKİN PROFİL = profil + telefon numarası cihaz adı olarak.
-  // Cihaz adı her modemde farklı olduğu için profilde sabit olamaz; çalışma
-  // anında ekleniyor. Böylece modeme bağlanan herkes hangi hattın takılı
-  // olduğunu Device Name alanında görüyor. Not: bu alan yalnızca PAROLAYLA
-  // girince görünür (kimliksiz sayfada yok) — defter hâlâ tek doğru kaynak.
+  // ETKİN PROFİL = profil + ÇALIŞMA ANINA ÖZEL anahtarlar. İkisi de profilde
+  // sabit olamaz, çünkü her modemde/SIM'de farklıdır:
+  //   · cihaz adı = telefon numarası (modeme bağlanan hangi hat olduğunu görsün;
+  //     not: bu alan yalnızca parolayla girince okunur, defter hâlâ tek kaynak)
+  //   · SIM PIN — YALNIZCA kilit varsa ve güvenlik kapıları geçilirse
   const telefonNorm = normalizePhone(telefon);
-  const etkinProfil = telefonNorm
-    ? { ...profil, nvram: { ...profil.nvram, [DEVICE_NAME_KEY]: `0${telefonNorm}` } }
-    : profil;
+  const etkinProfilYap = (pinHedef) => {
+    const ek = {};
+    if (telefonNorm) ek[DEVICE_NAME_KEY] = `0${telefonNorm}`;
+    if (pinHedef !== undefined) ek[SIM_PIN_KEY] = pinHedef;
+    return Object.keys(ek).length
+      ? { ...profil, nvram: { ...profil.nvram, ...ek } } : profil;
+  };
+
+  // PIN'İ AYNI YAZMA PASINA KOYMA KARARI — tek reboot için.
+  //
+  // PIN nvram'da bir anahtar; ayarlarla birlikte yazılıp AYNI reboot'ta
+  // yürürlüğe girebilir. Eskiden provizyon+reboot, sonra PIN+ikinci reboot
+  // gerekiyordu (~35-90 sn boşa). Ölçüm (2026-08-27) modemin PIN'i saklayıp
+  // her açılışta SIM'e gönderdiğini kanıtladı — mekanizma doğrulandı.
+  //
+  // "AYNI PIN ZATEN YAZILI" KORUMASI BEDAVA GELİYOR: motor idempotent, değer
+  // aynıysa plana hiç girmez → deneme yakılmaz. Ayrı bir kontrol yazmıyoruz.
+  const pinHedefi = (simKilit) => {
+    const { hedef, problems } = simPinHedefi(simKilit, pin);
+    rapor.problems.push(...problems);
+    return hedef;
+  };
 
   // Kimlik bir kez okunur: hem SIM kontrolu hem defter kaydi ayni okumayi
   // kullanir (cihaza iki kez gitmeyiz).
@@ -368,6 +434,13 @@ export async function provisionModem(opts) {
       return bitir(konum, kimlikBilgiOnce);
     }
 
+    // Kimlik okundu; PIN karari ve etkin profil BURADA kuruluyor (once
+    // kuramazdik: kilit bilgisi kimlik okumasindan geliyor).
+    const simKilit = kimlikBilgiOnce?.sim ?? null;
+    const pinHedef = pinHedefi(simKilit);
+    const pinPlanlandi = typeof pinHedef === "string" && pinHedef !== "";
+    const etkinProfil = etkinProfilYap(pinHedef);
+
     // Saha adresinde mi? Zaten hazir mi diye dry-run.
     let sahaDry = null;
     if (sahaVar) {
@@ -386,7 +459,7 @@ export async function provisionModem(opts) {
     if (eylem === "zaten_hazir") {
       rapor.deneme = deneme; rapor.ok = true;
       const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
-      const net = await internetiDogrula(konumSaha);
+      const net = await internetiDogrula(konumSaha, simKilit, pinPlanlandi);
       rapor.durum = !net || net.var ? "zaten_hazir"
         : (rapor.sim_kilit?.kilit ? "zaten_hazir_sim_kilitli" : "zaten_hazir_internet_yok");
       return bitir(konumSaha, kimlikBilgiOnce, net);
@@ -410,10 +483,21 @@ export async function provisionModem(opts) {
     rapor.deneme = deneme;
     rapor.detay = { durum: r.durum, plan: r.plan?.degisecek_sayisi, dogrulama: r.dogrulama };
 
+    // PIN ana pasta gercekten yazildi mi? Yazilmadiysa (plan onu "ayni" gordu)
+    // demek ki AYNI PIN nvram'da zaten duruyordu ama SIM yine kilitliydi:
+    // yani KAYITLI PIN YANLIS. Operatore bunu soylemek, ayni PIN'i tekrar
+    // tekrar yazdirmaktan iyidir.
+    if (pinPlanlandi) {
+      const yazilanlar = Object.values(r.yazilan ?? {}).flat();
+      const yazildi = yazilanlar.includes(SIM_PIN_KEY);
+      rapor.pin_denemesi = { denendi: yazildi, pin_kalan: simKilit?.pin_kalan ?? null,
+        atlandi: yazildi ? null : "ayni_pin_zaten_yazili" };
+      if (!yazildi) rapor.problems.push(problem("PIN_STORED_WRONG"));
+    }
     if (r.ok && (r.durum === "basarili" || r.durum === "zaten_istenen_durumda")) {
       rapor.ok = true;
       const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
-      const net = await internetiDogrula(konumSaha);
+      const net = await internetiDogrula(konumSaha, simKilit, pinPlanlandi);
       rapor.durum = !net || net.var ? "hazir"
         : (rapor.sim_kilit?.kilit ? "hazir_sim_kilitli" : "hazir_internet_yok");
       return bitir(konumSaha, kimlikBilgiOnce, net);

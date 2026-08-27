@@ -32,7 +32,7 @@ export {
 } from "./profile.js";
 export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
-  readIdentity, simTakiliMi, waitForInternet,
+  readIdentity, simTakiliMi, waitForInternet, simPinHedefi,
 } from "./pipeline.js";
 export { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
