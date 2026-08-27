@@ -252,7 +252,20 @@ baslatBtn.addEventListener("click", () => {
   akim.addEventListener("yaziliyor", (e) => halYaz(JSON.parse(e.data).anahtarlar, "yaziliyor", "yazılıyor"));
   akim.addEventListener("yazildi", (e) => halYaz(JSON.parse(e.data).anahtarlar, "yazildi", "yazıldı"));
 
+  akim.addEventListener("yazma_hatasi", (e) => {
+    const a = JSON.parse(e.data).anahtarlar || [];
+    halYaz(a, "hata", "yazılamadı");
+    akisaYaz(`yazılamadı: ${a.length} ayar`);
+  });
+
   akim.addEventListener("reboot", () => akisaYaz("modem yeniden başlatılıyor"));
+
+  // Provizyon adımının bitişi (nihai sonuç değil — o `sonuc`). Yalnız
+  // başarısızlıkta bilgi taşır: doğrulama neden tamamlanmadı.
+  akim.addEventListener("bitti", (e) => {
+    const o = JSON.parse(e.data);
+    if (!o.ok && o.dogrulama?.sebep) akisaYaz(o.dogrulama.sebep);
+  });
 
   akim.addEventListener("dogrulama", (e) => {
     const o = JSON.parse(e.data);
