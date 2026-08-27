@@ -47,9 +47,15 @@ const ilerle = (m) => process.stderr.write(`[${komut}] ${m}\n`);
 
 // .env -> opts. Cekirdek (src/) process.env OKUMAZ; okuma burada.
 function ortamOpts() {
-  const host = (process.env.MODEM_HOST || "").trim() || DEFAULT_HOST;
+  // --host / --kaynak-ip .env'i EZER: modem o an nerede oldugunu soyleyebilmek
+  // gerekir (fabrika 192.168.1.1 <-> saha 5.5.5.1 arasinda gidip gelirken).
+  const hostBayrak = bayrak("--host");
+  const host = (hostBayrak || process.env.MODEM_HOST || "").trim() || DEFAULT_HOST;
   const onek = host.split(".").slice(0, 3).join(".") + ".";
-  const kaynakIp = (process.env.MODEM_KAYNAK_IP || "").trim() || findSourceIp(onek) || undefined;
+  // --host verildiyse .env'deki KAYNAK_IP baska alt aga ait olabilir; yok say
+  // ve dogru kaynagi onekten bul (yanlis arayuzden cikip cihazi kaybetmeyelim).
+  const kaynakSecim = bayrak("--kaynak-ip") || (hostBayrak ? "" : process.env.MODEM_KAYNAK_IP);
+  const kaynakIp = (kaynakSecim || "").trim() || findSourceIp(onek) || undefined;
   const kullanici = (process.env.MODEM_KULLANICI || "").trim();
   const sifre = process.env.MODEM_SIFRE || "";
   const kimlik = kullanici ? { kullanici, sifre } : null;
@@ -203,7 +209,8 @@ async function main() {
       + "         [--dongu]             cok modem (her modemde telefon sorar)\n"
       + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
       + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n\n"
-      + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n",
+      + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n"
+      + "       --host <ip> · --kaynak-ip <ip>  (.env'i ezer; modem o an neredeyse)\n",
     );
     return komut && !KOMUTLAR.has(komut) ? 1 : 0;
   }
