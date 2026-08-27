@@ -436,3 +436,7 @@ body { display: flex; flex-direction: column; }
   .kurulum-baslik, .kimlik-serit, .izgara, .grup { grid-template-columns: 1fr; }
   .hucre-sonra, .ks-sonra, .kb-sonra, .grup span:last-child { background: var(--yesil); }
 }
+
+/* Ayarlar doğru ama SIM doğrulanamadı: başarı değil, başarısızlık da değil.
+   Kendi rengi olmalı — teknisyen aksiyon alacak (PIN? kapsama? paket?). */
+.alt[data-hal="uyari"] { background: #8a5a00; }

@@ -68,6 +68,8 @@ export function createServer(opts = {}) {
   const {
     fabrikaHost = "192.168.1.1", sahaHost = "5.5.5.1",
     kimlik, profil, sifirlamaProfil, kayit, olcumKayit, ilerle,
+    // Internet dogrulamasi ust siniri (sn) — 0 kapatir.
+    internetBekle = 150,
   } = opts;
 
   return http.createServer(async (istek, yanit) => {
@@ -262,6 +264,7 @@ export function createServer(opts = {}) {
         fabrikaHost, fabrikaKaynak: on.fabrikaKaynak,
         sahaHost, sahaKaynak: on.sahaKaynak,
         kimlik, profil, telefon: n, kayit, kimlikBilgi,
+        internetBekle,
         ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
         olay: (o) => {
           if (o.tur === "plan") gonder("plan", { satirlar: planRows(o.plan) });

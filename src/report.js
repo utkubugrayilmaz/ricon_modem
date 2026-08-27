@@ -143,10 +143,17 @@ export function summaryText(rapor) {
     s.push(`
   Hazirla — durum: ${g(rapor.durum)}${rapor.deneme ? " (deneme " + rapor.deneme + ")" : ""}`);
     if (rapor.son_eylem) s.push(`  Eylem: ${rapor.son_eylem}`);
+    if (rapor.internet) {
+      s.push(`  Internet: ${rapor.internet.var
+        ? `VAR ${rapor.internet.wan_ip} (${rapor.internet.sure_sn} sn) — SIM calisiyor`
+        : `YOK (${rapor.internet.sure_sn} sn bekledi) — SIM durumu `
+          + `${g(rapor.internet.sim_durumu)} · PIN kilidi olabilir`}`);
+    }
     if (rapor.kayit) {
       const k = rapor.kayit;
       s.push(`  Kayit: tel ${g(k.telefon)} · ICCID ${g(k.iccid)} · IMEI ${g(k.imei)}`
-        + ` · MAC ${g(k.lan_mac)} · ${g(k.operator)}`);
+        + ` · MAC ${g(k.lan_mac)} · ${g(k.operator)}`
+        + `${k.wan_ip ? ` · WAN ${k.wan_ip}` : ""}`);
     }
     if (rapor.hazirlanan) {
       s.push(`  Hazirlanan modem: ${rapor.hazirlanan.length}`);

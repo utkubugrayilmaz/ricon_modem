@@ -35,7 +35,7 @@ const olayla = (opts, olay) => {
 // kimlik: LAN MAC (cihaza ait, kimliksiz okunur) + IMEI (modül) + ICCID (SIM).
 export async function readIdentity({ host, kaynakIp, kimlik }) {
   const sonuc = { lan_mac: null, iccid: null, imsi: null, imei: null,
-    operator: null, sim_durumu: null };
+    operator: null, sim_durumu: null, wan_ip: null };
   const c = new Client({ host, kaynakIp, kimlik });
   const bilgi = await c.get("/asp/status/Info.live.htm");
   sonuc.lan_mac = parsePairs(bilgi.govde || "").lan_mac || null;
@@ -46,6 +46,10 @@ export async function readIdentity({ host, kaynakIp, kimlik }) {
   sonuc.imei = s1.imei || null;
   sonuc.operator = s1.operator || null;
   sonuc.sim_durumu = s1.sim_durumu || null;
+  // WAN IP zaten bu okumada geliyor — BEDAVA kanıt: "bu SIM o an çevrimiçiydi".
+  // Beklemiyoruz, yoksa yok yazıyoruz; kurulum süresine tek saniye eklemiyor.
+  const wan = (s1.wan_ip || "").trim();
+  sonuc.wan_ip = wan && wan !== "0.0.0.0" ? wan : null;
   return sonuc;
 }
 
@@ -63,11 +67,48 @@ export function simTakiliMi(kimlikBilgi = {}) {
   return Boolean(kimlikBilgi.iccid);
 }
 
+// İNTERNET DOĞRULAMASI — "bu SIM gerçekten çalışıyor mu?"
+//
+// Teknisyen elle süreçte tam bunu yapıyor: işlemden sonra internetin gelmesini
+// bekliyor. O bekleme boş bir duruş DEĞİL, bir kalite kontrolü — bu yüzden
+// kaldırmıyoruz, otomatikleştirip ÖLÇÜYORUZ. Fark: operatör beklemiyor, araç
+// bekliyor.
+//
+// Ölçüm (2026-08-27): provizyon reboot'undan sonra WAN IP ~89 sn'de geldi,
+// sonrasında kesintisiz. Bu yüzden varsayılan üst sınır 150 sn — normalin
+// rahat üstünde ama sonsuza kadar beklemiyor.
+//
+// İnternet gelmemesi provizyonun BAŞARISIZLIĞI değildir: ayarlar doğrulanmış
+// olabilir ama atölyede kapsama olmayabilir, SIM'in data paketi bitmiş olabilir.
+// Bu yüzden AYRI bir sonuç alanı olarak taşınır; operatör kararı verir.
+// Doner: { var, sure_sn, wan_ip, sim_durumu }
+export async function waitForInternet({ host, kaynakIp, kimlik }, maxSn = 150, opts = {}) {
+  const baslangic = Date.now();
+  const gecen = () => Math.round((Date.now() - baslangic) / 100) / 10;
+  for (;;) {
+    let k = null;
+    try { k = await readIdentity({ host, kaynakIp, kimlik }); } catch { /* yeniden dene */ }
+    if (k?.wan_ip) {
+      const sure = gecen();
+      olayla(opts, { tur: "internet", var: true, sure_sn: sure, wan_ip: k.wan_ip });
+      return { var: true, sure_sn: sure, wan_ip: k.wan_ip, sim_durumu: k.sim_durumu ?? null };
+    }
+    if (gecen() >= maxSn) {
+      olayla(opts, { tur: "internet", var: false, sure_sn: gecen(),
+        sim_durumu: k?.sim_durumu ?? null });
+      return { var: false, sure_sn: gecen(), wan_ip: null, sim_durumu: k?.sim_durumu ?? null };
+    }
+    bildir(opts, `internet bekleniyor (${gecen()} sn / ${maxSn} sn)`);
+    olayla(opts, { tur: "internet_bekleniyor", gecen_sn: gecen(), max_sn: maxSn });
+    await bekle(5000);
+  }
+}
+
 // PURE: bir hazırlamanın kalıcı kayıt satırı (JSONL). Cihaza gitmez.
 // Bu satır sahada "bu modem hazırlanmış mıydı, hangi hat takılıydı"
 // sorusunun tek kanıtı — şema DAR ve SABİT tutulur.
 export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
-  profilAd = null, host = null } = {}) {
+  profilAd = null, host = null, internet = null } = {}) {
   return {
     zaman: sonuc.zaman || now(),
     durum: sonuc.durum ?? null,
@@ -81,6 +122,15 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
     imsi: kimlikBilgi.imsi ?? null,
     imei: kimlikBilgi.imei ?? null,
     operator: kimlikBilgi.operator ?? null,
+    // SIM durum metni. PIN kilitli SIM'de bu alanın ne yazdığını HENÜZ
+    // bilmiyoruz (görülenler: OK / Invalid / Not Insert) — kaydediyoruz ki ilk
+    // PIN'li SIM'de tam değeri elimizde olsun ve 89 sn beklemek yerine anında
+    // yakalayalım.
+    sim_durumu: kimlikBilgi.sim_durumu ?? null,
+    // İnternet doğrulaması: "bu SIM gerçekten çalışıyor mu" sorusunun kanıtı.
+    // PIN kilitli SIM'i yakalayan şey bu (ICCID PIN'li SIM'de de okunabiliyor).
+    wan_ip: internet?.wan_ip ?? kimlikBilgi.wan_ip ?? null,
+    internet_sure_sn: internet?.sure_sn ?? null,
   };
 }
 
@@ -101,6 +151,9 @@ export async function provisionModem(opts) {
     fabrikaHost = "192.168.1.1", fabrikaKaynak,
     sahaHost = "5.5.5.1", sahaKaynak,
     kimlik, profil, denemeler = 3, telefon,
+    // Internet dogrulamasi ust siniri (sn). 0 = kapat. Varsayilan ACIK:
+    // teknisyenin elle yaptigi kaliteyi kaybetmeyelim (PIN kilitli SIM yakalar).
+    internetBekle = 150,
     // Tuketici kimligi ZATEN okuduysa (or. UI sol paneli icin) tekrar okumayiz
     // — tek baglantili cihazda gereksiz ~4 sn demek.
     kimlikBilgi: hazirKimlikBilgi = null,
@@ -110,7 +163,21 @@ export async function provisionModem(opts) {
   // Her cikista: cihaz kimligini oku (mumkunse), kalici kayit satirini uret,
   // varsa opts.kayit(satir) ile disariya bildir. Cekirdek DOSYAYA YAZMAZ —
   // nereye yazilacagi tuketicinin (CLI/endpoint) karari.
-  const bitir = async (konum, hazirKimlik = null) => {
+  // İnternet doğrulaması: ayarlar doğrulandıktan SONRA "SIM çalışıyor mu".
+  // Ayrı bir soru olduğu için ayrı raporlanır; başarısızlığı provizyonu
+  // BAŞARISIZ yapmaz (retry hiçbir şeyi düzeltmez — ayarlar zaten doğru).
+  const internetiDogrula = async (konum) => {
+    if (!(internetBekle > 0)) return null;
+    bildir(opts, "internet dogrulamasi (SIM calisiyor mu)");
+    const sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+    rapor.internet = sonuc;
+    if (!sonuc.var) {
+      rapor.problems.push(problem("INTERNET_YOK", internetBekle, sonuc.sim_durumu));
+    }
+    return sonuc;
+  };
+
+  const bitir = async (konum, hazirKimlik = null, internet = null) => {
     let kimlikBilgi = hazirKimlik || {};
     if (!hazirKimlik && konum && kimlik) {
       try {
@@ -122,7 +189,7 @@ export async function provisionModem(opts) {
     if (konum && kimlik) olayla(opts, { tur: "kimlik", kimlik_bilgi: kimlikBilgi });
     rapor.kayit = provisionRecord({
       sonuc: rapor, telefon: normalizePhone(telefon), kimlikBilgi,
-      profilAd: profil?.ad, host: konum?.host ?? null,
+      profilAd: profil?.ad, host: konum?.host ?? null, internet,
     });
     if (typeof opts.kayit === "function") {
       try { opts.kayit(rapor.kayit); } catch { /* kayit yazimi akisi bozmaz */ }
@@ -195,8 +262,11 @@ export async function provisionModem(opts) {
       konum: fabrikaVar ? fabrikaHost : sahaVar ? sahaHost : null });
 
     if (eylem === "zaten_hazir") {
-      rapor.durum = "zaten_hazir"; rapor.deneme = deneme; rapor.ok = true;
-      return bitir({ host: sahaHost, kaynakIp: sahaKaynak }, kimlikBilgiOnce);
+      rapor.deneme = deneme; rapor.ok = true;
+      const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
+      const net = await internetiDogrula(konumSaha);
+      rapor.durum = net && !net.var ? "zaten_hazir_internet_yok" : "zaten_hazir";
+      return bitir(konumSaha, kimlikBilgiOnce, net);
     }
     if (eylem === "modem_yok") {
       rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
@@ -218,8 +288,11 @@ export async function provisionModem(opts) {
     rapor.detay = { durum: r.durum, plan: r.plan?.degisecek_sayisi, dogrulama: r.dogrulama };
 
     if (r.ok && (r.durum === "basarili" || r.durum === "zaten_istenen_durumda")) {
-      rapor.durum = "hazir"; rapor.ok = true;
-      return bitir({ host: sahaHost, kaynakIp: sahaKaynak }, kimlikBilgiOnce);
+      rapor.ok = true;
+      const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
+      const net = await internetiDogrula(konumSaha);
+      rapor.durum = net && !net.var ? "hazir_internet_yok" : "hazir";
+      return bitir(konumSaha, kimlikBilgiOnce, net);
     }
     rapor.problems.push(...r.problems);
     bildir(opts, `deneme ${deneme} basarisiz (${r.durum}); tekrar denenecek`);

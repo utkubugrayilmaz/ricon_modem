@@ -70,6 +70,13 @@ const KATALOG = {
       + " with valid credentials.",
   }),
 
+  INTERNET_YOK: (maxSn, simDurumu) => ({
+    message: `The modem did not get a WAN IP within ${maxSn}s (SIM status: ${simDurumu || "unknown"}).`
+      + " Settings are written and verified, but the SIM could not be proven working.",
+    check: "Most common cause in the field: the SIM is PIN-locked. Also possible:"
+      + " no data plan, no coverage in the workshop, or antennas not connected."
+      + " Measured baseline: a healthy SIM came online 89s after reboot.",
+  }),
   SIM_MISSING: (durum) => ({
     message: `No SIM is readable in the modem (status: ${durum || "unknown"}), so`
       + " provisioning was refused before touching the device.",
@@ -99,7 +106,10 @@ const KATALOG = {
 
 // severity: varsayilan "error". Bazi durumlar (bos govde, kimliksiz erisim
 // beklentisi) yalnizca "warning" — sonucu ok:false yapmaz.
-const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY"]);
+// INTERNET_YOK bilerek UYARI: ayarlar dogru yazilmis, provizyon basarili.
+// Internetin gelmemesi ayri bir sorun (PIN/kapsama/paket) ve retry cozmez —
+// sonucu ok:false yapmak yanlis alarm ve gereksiz tekrar uretir.
+const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY", "INTERNET_YOK"]);
 
 export const PROBLEM_CODES = Object.freeze(Object.keys(KATALOG));
 

@@ -58,6 +58,8 @@ node --env-file=.env ricon.js uygula --uygula --yeni-host 5.5.5.1 --yeni-kaynak 
 # TELEFON ZORUNLU (cihazdan okunamıyor, kurulumda biliniyor). Verilmezse sorar.
 node --env-file=.env ricon.js hazirla --telefon 05321234567   # bir modem
 node --env-file=.env ricon.js hazirla --dongu   # çok modem: her modemde sorar
+node --env-file=.env ricon.js hazirla --telefon 05321234567 --internet-bekle 0
+                                                # SIM doğrulamasını atla
 
 # Tarayıcı arayüzü (UI) — çekirdeği tüketen üçüncü katman
 node --env-file=.env ricon.js sunucu          # http://127.0.0.1:8080
@@ -146,7 +148,15 @@ ileride **HTTP endpoint** ile tüketilir.
 - **Sır çıktıya yazılmaz** — parola/kimlik rapordan temizlenir.
 - **Kayıtsız modem sahaya çıkmaz** — `hazirla` telefon numarası (MSISDN)
   olmadan başlamaz; kural **çekirdekte** (`provisionModem`), yalnız CLI'da
-  değil — ileride HTTP endpoint de aynı kuralı devralır.
+  değil — HTTP endpoint/UI aynı kuralı devralır.
+- **SIM'siz modem onaylanmaz** — kimlik en başta okunur, ICCID yoksa hiçbir şey
+  yazılmadan reddedilir. SIM'siz provizyon "başarılı" görünür ama cihaz
+  şebekeye kaydolamaz (canlı doğrulandı).
+- **İki ayrı soru, iki ayrı cevap:** *"ayarlar doğru mu"* (nvram geri-okuma,
+  ~45 sn) ve *"SIM çalışıyor mu"* (WAN IP geldi mi). İkincisi teknisyenin elle
+  yaptığı kontrolün otomatiği — **PIN kilitli SIM'i yakalayan tek şey bu.**
+  İnternetin gelmemesi provizyonu başarısız yapmaz (uyarı), çünkü ayarlar
+  doğrudur ve tekrar denemek hiçbir şeyi çözmez.
 - **Kod adları İngilizce, yorumlar Türkçe**; CLI komutları ve `.env`
   değişkenleri Türkçe (kullanıcı yüzeyi); JSON çıktı anahtarları Türkçe (veri
   sözlüğü). Bkz. `docs/`.

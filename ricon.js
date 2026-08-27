@@ -266,6 +266,9 @@ async function komutuCalistir() {
         sahaHost, sahaKaynak: on.sahaKaynak,
         kimlik: opts.kimlik, profil,
         denemeler: Number(bayrak("--deneme")) || 3,
+        // Internet dogrulamasi (SIM calisiyor mu). 0 = kapat.
+        internetBekle: bayrak("--internet-bekle") !== undefined
+          ? Number(bayrak("--internet-bekle")) : 150,
         kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
         telefonSor,          // dongu: her modem icin sorar
         ilerle,

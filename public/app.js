@@ -235,6 +235,9 @@ const OLCUM_ETIKET = {
   reboot: "reboot gönderildi",
   dogrulandi: "cihaz geri geldi, doğrulandı",
   kimlik: "kimlik okundu (ICCID/IMEI)",
+  // İnternet doğrulaması AYRI adım: "ayarlar doğru mu" ile "SIM çalışıyor mu"
+  // iki farklı soru; metrikte de ayrı görünmeleri lazım.
+  internet: "internet doğrulandı (SIM çalışıyor)",
 };
 let baslangicMs = 0;
 let sayacZamani = null;
@@ -415,6 +418,21 @@ function akisiBaslat({ yol, tur, telefon = null, onceEtiket, sonraEtiket, calisi
 
   akim.addEventListener("reboot", () => akisaYaz("modem yeniden başlatılıyor"));
 
+  // İnternet doğrulaması — operatör beklemiyor, araç bekliyor. Ekranda ne
+  // olduğu net yazsın, donmuş gibi görünmesin.
+  akim.addEventListener("internet_bekleniyor", (e) => {
+    const o = JSON.parse(e.data);
+    altDurum.textContent = "SIM doğrulanıyor — internet bekleniyor "
+      + `(${o.gecen_sn}/${o.max_sn} sn)`;
+  });
+
+  akim.addEventListener("internet", (e) => {
+    const o = JSON.parse(e.data);
+    akisaYaz(o.var
+      ? `internet VAR: ${o.wan_ip} (${o.sure_sn} sn) — SIM çalışıyor`
+      : `internet YOK (${o.sure_sn} sn) — SIM durumu: ${o.sim_durumu || "?"}`);
+  });
+
   // Provizyon adımının bitişi (nihai sonuç değil — o `sonuc`). Yalnız
   // başarısızlıkta bilgi taşır: doğrulama neden tamamlanmadı.
   akim.addEventListener("bitti", (e) => {
@@ -545,10 +563,15 @@ function bitir(ok, o) {
     kimlikBas(el("kimlikOnce"), kayit);
   }
   altBar.dataset.hal = ok ? "hazir" : "hata";
+  const net = o.kayit?.wan_ip
+    ? ` · internet ${o.kayit.wan_ip}`
+    : (o.durum || "").includes("internet_yok") ? " · ⚠ İNTERNET YOK (SIM/PIN kontrol et)" : "";
   altDurum.textContent = ok
     ? `HAZIR — ${o.durum}${o.deneme ? ` (deneme ${o.deneme})` : ""} · ${sn(toplam)} sn`
-      + " · deftere yazıldı"
+      + `${net} · deftere yazıldı`
     : `BAŞARISIZ — ${o.durum || "bilinmeyen"}${o.cozum ? ` · ${o.cozum}` : ""}`;
+  // Internet yoksa alt bar UYARI rengine gecsin: gozden kacmasin.
+  if (ok && (o.durum || "").includes("internet_yok")) altBar.dataset.hal = "uyari";
   if (!ok && o.problems?.length) {
     akisaYaz(o.problems.map((p) => `[${p.kod}] ${p.message}`).join(" "));
   }

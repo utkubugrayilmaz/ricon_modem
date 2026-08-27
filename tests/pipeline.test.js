@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   nextAction, pcPreflight, provisionModem, provisionRecord, simTakiliMi,
 } from "../src/pipeline.js";
+import { problem, isOk } from "../src/problems.js";
 
 test("nextAction: saha adresinde + istenen durumda -> zaten_hazir", () => {
   assert.equal(nextAction(false, true, "zaten_istenen_durumda"), "zaten_hazir");
@@ -86,7 +87,8 @@ test("provisionRecord: PURE — sabit sema, telefon normalize edilmis gelir", ()
   });
   assert.deepEqual(Object.keys(k), [
     "zaman", "durum", "ok", "deneme", "profil", "modem_ip", "telefon",
-    "lan_mac", "iccid", "imsi", "imei", "operator",
+    "lan_mac", "iccid", "imsi", "imei", "operator", "sim_durumu", "wan_ip",
+    "internet_sure_sn",
   ]);
   assert.equal(k.telefon, "5321234567");
   assert.equal(k.imsi, null, "verilmeyen alan null (0 ya da bos degil)");
@@ -118,3 +120,27 @@ test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
   assert.equal(yazilan[0].telefon, "5350641858");
 });
 
+
+test("provisionRecord: wan_ip yoksa null (kurulum HATASI degil, sadece kayit)", () => {
+  const yok = provisionRecord({ kimlikBilgi: { iccid: "899", sim_durumu: "OK" } });
+  assert.equal(yok.wan_ip, null, "o an internet yoktu -> null");
+  assert.equal(yok.sim_durumu, "OK");
+  const var_ = provisionRecord({ kimlikBilgi: { wan_ip: "178.245.239.236" } });
+  assert.equal(var_.wan_ip, "178.245.239.236");
+});
+
+test("provisionRecord: internet sonucu wan_ip ve sureyi TASIR", () => {
+  const k = provisionRecord({
+    kimlikBilgi: { iccid: "899", wan_ip: null },
+    internet: { var: true, sure_sn: 88.9, wan_ip: "178.245.239.236" },
+  });
+  assert.equal(k.wan_ip, "178.245.239.236", "internet sonucu kimlikteki null'i EZER");
+  assert.equal(k.internet_sure_sn, 88.9);
+});
+
+test("INTERNET_YOK bir UYARIDIR — sonucu ok:false yapmaz", () => {
+  const p = problem("INTERNET_YOK", 150, "OK");
+  assert.equal(p.severity, "warning");
+  assert.match(p.check, /PIN-locked/, "PIN ilk suphe olarak yazili");
+  assert.equal(isOk([p]), true, "ayarlar dogru; retry hicbir seyi cozmez");
+});
