@@ -53,13 +53,30 @@ node --env-file=.env ricon.js uygula                # ne değişecek (yazmaz)
 node --env-file=.env ricon.js uygula --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.5.5.100
 
 # Tak-çalıştır: algıla → provizyon → doğrula → başarıya kadar
-node --env-file=.env ricon.js hazirla               # bir modem
-node --env-file=.env ricon.js hazirla --dongu       # çok modem (tak/çıkar döngüsü)
+# TELEFON ZORUNLU (cihazdan okunamıyor, kurulumda biliniyor). Verilmezse sorar.
+node --env-file=.env ricon.js hazirla --telefon 05321234567   # bir modem
+node --env-file=.env ricon.js hazirla --dongu   # çok modem: her modemde sorar
 
 # ortak: --json <dosya> · --kaynak <dosya> (kayıttan, cihazsız)
 ```
 
 stdout **her zaman saf JSON**; ilerleme/özet stderr'a; çıkış kodu 0 (ok)/1.
+
+## Hazırlama defteri (rollout kaydı)
+
+`hazirla` her modem için **bir satır** JSONL yazar (`data/hazirlanan.jsonl`,
+`--kayit` ile değiştirilebilir):
+
+```json
+{"zaman":"...","durum":"hazir","ok":true,"deneme":1,"profil":"saha",
+ "modem_ip":"5.5.5.1","telefon":"5321234567","lan_mac":"00:0c:43:...",
+ "iccid":"8990...","imsi":"28601...","imei":"867...","operator":"Turkcell"}
+```
+
+Sahada "bu modem hazırlanmış mıydı, hangi hat takılıydı" sorusunun tek kanıtı.
+Cihazın **etiket seri numarası ne HTTP'de ne nvram'da yok** (arandı) — kalıcı
+kimlik `lan_mac` + `imei` + `iccid`. Dosya `data/` altında ve **gitignore'da**:
+telefon/ICCID/IMEI abonelik verisidir, commit edilmez.
 
 ## Modülerlik düsturu
 
@@ -99,6 +116,9 @@ ileride **HTTP endpoint** ile tüketilir.
 - Kütüphane **throw etmez** — her sonuç `problems[]` taşır; kısmi sonuç geçerli.
 - Çıktı **ham/geçirgen** — cihazın alan adları korunur; eşlenmiş görünüm ek.
 - **Sır çıktıya yazılmaz** — parola/kimlik rapordan temizlenir.
+- **Kayıtsız modem sahaya çıkmaz** — `hazirla` telefon numarası (MSISDN)
+  olmadan başlamaz; kural **çekirdekte** (`provisionModem`), yalnız CLI'da
+  değil — ileride HTTP endpoint de aynı kuralı devralır.
 - **Kod adları İngilizce, yorumlar Türkçe**; CLI komutları ve `.env`
   değişkenleri Türkçe (kullanıcı yüzeyi); JSON çıktı anahtarları Türkçe (veri
   sözlüğü). Bkz. `docs/`.

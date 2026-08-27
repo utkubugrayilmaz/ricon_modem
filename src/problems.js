@@ -70,6 +70,12 @@ const KATALOG = {
       + " with valid credentials.",
   }),
 
+  MSISDN_REQUIRED: () => ({
+    message: "Provisioning needs the SIM's phone number (MSISDN) and none was"
+      + " supplied, so the device would go to the field with no record of its line.",
+    check: "Pass it as 05xxxxxxxxx (CLI: --telefon, or answer the prompt). It"
+      + " cannot be read from the device — it is known at install time only.",
+  }),
   MSISDN_INVALID: (v) => ({
     message: `The supplied phone number "${v}" is not a valid TR mobile number.`,
     check: "Provide it as 05xxxxxxxxx / +905xxxxxxxxx. MSISDN cannot be read from"

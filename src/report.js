@@ -75,7 +75,17 @@ export function summaryText(rapor) {
     s.push(`
   Hazirla — durum: ${g(rapor.durum)}${rapor.deneme ? " (deneme " + rapor.deneme + ")" : ""}`);
     if (rapor.son_eylem) s.push(`  Eylem: ${rapor.son_eylem}`);
-    if (rapor.hazirlanan) s.push(`  Hazirlanan modem: ${rapor.hazirlanan.length}`);
+    if (rapor.kayit) {
+      const k = rapor.kayit;
+      s.push(`  Kayit: tel ${g(k.telefon)} · ICCID ${g(k.iccid)} · IMEI ${g(k.imei)}`
+        + ` · MAC ${g(k.lan_mac)} · ${g(k.operator)}`);
+    }
+    if (rapor.hazirlanan) {
+      s.push(`  Hazirlanan modem: ${rapor.hazirlanan.length}`);
+      for (const h of rapor.hazirlanan) {
+        s.push(`    ${h.ok ? "✓" : "✗"} ${g(h.durum)} · tel ${g(h.telefon)} · ICCID ${g(h.iccid)}`);
+      }
+    }
   }
   if (rapor.komut === "uygula") {
     s.push(`\n  Provizyon (${rapor.profil}) — ${rapor.uygula ? "GERCEK YAZMA" : "KURU (dry-run)"}`);
@@ -89,7 +99,14 @@ export function summaryText(rapor) {
         s.push(`    ⚠ cihazda olmayan (yeni yazilacak): ${rapor.plan.eksik_anahtarlar.join(", ")}`);
       }
     }
-    if (rapor.dogrulama) s.push(`  Dogrulama: ${rapor.dogrulama.tamam ? "TAMAM" : "kalan: " + (rapor.dogrulama.kalan_degisecek || []).join(", ")}`);
+    if (rapor.dogrulama) {
+      s.push(`  Dogrulama: ${rapor.dogrulama.tamam
+        ? `TAMAM (${rapor.dogrulama.bekleme_sn} sn)`
+        : "kalan: " + (rapor.dogrulama.kalan_degisecek || []).join(", ")}`);
+      if (!rapor.dogrulama.tamam && rapor.dogrulama.sebep) {
+        s.push(`        → ${rapor.dogrulama.sebep}`);
+      }
+    }
     if (rapor.not) s.push(`  Not: ${rapor.not}`);
   }
   if (rapor.problems?.length) {

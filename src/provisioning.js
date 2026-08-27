@@ -157,19 +157,49 @@ async function rebootFireForget(kOpts) {
 }
 
 // Reboot sonrası cihazın gelmesini bekler + nvram'ı yeniden okuyup planın
-// boşaldığını doğrular. Doner: { tamam, kalan_degisecek, bekleme_sn }
+// boşaldığını doğrular.
+//
+// Üç durumu AYIRIR (eskiden ilk okunabilen nvram'da karar verilirdi):
+//   1) nvram okunamıyor        -> cihaz henüz gelmedi, beklemeye devam
+//   2) okunuyor, eksik var     -> boot sırasında değer henüz oturmamış olabilir,
+//                                 tekrar bak (aynı eksik ÜST ÜSTE 3 kez
+//                                 görülürse artık oturmuştur: gerçek uyuşmazlık)
+//   3) okunuyor, eksik yok     -> TAMAM
+// Doner: { tamam, kalan_degisecek, bekleme_sn, sebep }
 async function dogrula(opts, profil, anaOpts) {
   const kOpts = { host: opts.host, kaynakIp: opts.kaynakIp,
     kullanici: opts.kimlik.kullanici, sifre: opts.kimlik.sifre };
-  const maxDeneme = 20; // ~ reboot suresi
+  const maxDeneme = 20;      // ~100 sn: reboot suresinden rahat uzun
+  const KARARLI_SINIR = 3;   // ayni eksik kac kez ust uste = oturmus
+  let oncekiImza = null;
+  let ayniSayac = 0;
+  let sonKalan = null;
+
   for (let i = 0; i < maxDeneme; i += 1) {
     await bekle(5000);
     bildir(anaOpts, `dogrulama denemesi ${i + 1}/${maxDeneme}`);
     const { degerler, sayi } = await consoleNvram(kOpts);
-    if (sayi === 0) continue; // henuz gelmedi
-    const plan = planProvisioning(degerler, profil);
-    const kalan = Object.keys(plan.degisecek);
-    return { tamam: kalan.length === 0, kalan_degisecek: kalan, bekleme_sn: (i + 1) * 5 };
+    if (sayi === 0) continue;                                   // (1) gelmedi
+
+    const kalan = Object.keys(planProvisioning(degerler, profil).degisecek);
+    if (kalan.length === 0) {                                   // (3) TAMAM
+      return { tamam: true, kalan_degisecek: [], bekleme_sn: (i + 1) * 5 };
+    }
+
+    sonKalan = kalan;                                           // (2) oturmadi
+    const imza = kalan.slice().sort().join(",");
+    ayniSayac = imza === oncekiImza ? ayniSayac + 1 : 0;
+    oncekiImza = imza;
+    bildir(anaOpts, `dogrulama: ${kalan.length} anahtar henuz oturmadi (${kalan.join(", ")})`);
+    if (ayniSayac + 1 >= KARARLI_SINIR) {
+      return { tamam: false, kalan_degisecek: kalan, bekleme_sn: (i + 1) * 5,
+        sebep: `ayni eksik ${KARARLI_SINIR} kez ust uste: cihaz bu degeri kabul etmiyor` };
+    }
   }
-  return { tamam: false, kalan_degisecek: ["(cihaz reboot sonrasi gelmedi)"], bekleme_sn: maxDeneme * 5 };
+  return {
+    tamam: false,
+    kalan_degisecek: sonKalan ?? ["(cihaz reboot sonrasi gelmedi)"],
+    bekleme_sn: maxDeneme * 5,
+    sebep: sonKalan ? "sure doldu, eksikler oturmadi" : "cihaz reboot sonrasi gelmedi",
+  };
 }

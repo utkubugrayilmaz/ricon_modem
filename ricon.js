@@ -14,8 +14,10 @@
 //                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
 //                                --reboot-yok
 //   node ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
-//                                --dongu (cok modem) · --profil · --saha-host
-//                                --deneme N · --max N
+//                                TELEFON ZORUNLU: --telefon 05xx (yoksa sorar)
+//                                --dongu (cok modem; her modemde ayri sorar)
+//                                --profil · --saha-host · --deneme N · --max N
+//                                --kayit <dosya> (varsayilan data/hazirlanan.jsonl)
 //
 // Ortak: --json <dosya> (ciktiyi yaz) · --kaynak <dosya> (kayittan goster)
 // Ortam: MODEM_HOST, MODEM_KULLANICI, MODEM_SIFRE, MODEM_KAYNAK_IP,
@@ -23,12 +25,15 @@
 //
 // Sozlesme: stdout HER ZAMAN saf JSON; ilerleme/ozet stderr'a; cikis kodu ok'tan.
 
-import { writeFileSync, readFileSync } from "node:fs";
+import { writeFileSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { createInterface } from "node:readline";
 import { DEFAULT_HOST } from "./src/constants.js";
 import { findSourceIp } from "./src/network.js";
 import {
   checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
+  telefonNormalize,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report.js";
 
@@ -50,6 +55,49 @@ function ortamOpts() {
   const kimlik = kullanici ? { kullanici, sifre } : null;
   const community = (process.env.MODEM_SNMP_COMMUNITY || "public").trim();
   return { host, kaynakIp, kimlik, community, ilerle };
+}
+
+// --- Hazirlama kaydi (JSONL) ---
+// Kalici rollout defteri: her hazirlanan modem icin BIR satir. Cekirdek
+// dosyaya yazmaz; yazma karari burada. Dosya `data/` altinda ve .gitignore'da
+// — icinde telefon/ICCID/IMEI (kisisel/abonelik verisi) var, commit EDILMEZ.
+const KAYIT_DOSYA = "data/hazirlanan.jsonl";
+
+function kayitYazici(dosya) {
+  return (satir) => {
+    try {
+      mkdirSync(dirname(dosya), { recursive: true });
+      appendFileSync(dosya, JSON.stringify(satir) + "\n", "utf8");
+      process.stderr.write(`[kayit] ${dosya} <- ${satir.durum} ${satir.telefon || "—"}`
+        + ` ${satir.iccid || ""}\n`);
+    } catch (e) {
+      process.stderr.write(`[kayit] YAZILAMADI (${dosya}): ${e.message}\n`);
+    }
+  };
+}
+
+// Telefon numarasini sorar (stderr'a; stdout saf JSON kalir). Gecerli olana
+// kadar ya da bos girise kadar sorar. Doner: 5xxxxxxxxx | null
+function telefonSor(sira) {
+  // Etkilesimli degilsek (boru/servis/cron) SORMA — cekirdek MSISDN_REQUIRED
+  // der ve is duzgun basarisiz olur; kapanmis stdin'de beklemek kilitlenmedir.
+  if (!process.stdin.isTTY) {
+    process.stderr.write("[hazirla] etkilesimli terminal yok: --telefon zorunlu\n");
+    return Promise.resolve(null);
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const sor = (soru) => new Promise((c) => rl.question(soru, c));
+  return (async () => {
+    for (let i = 0; i < 3; i += 1) {
+      const ham = (await sor(`\n[${sira}. modem] SIM telefon numarasi (05xxxxxxxxx): `)).trim();
+      if (!ham) break;
+      const n = telefonNormalize(ham);
+      if (n) { rl.close(); return n; }
+      process.stderr.write("  gecersiz — TR mobil bekleniyor (05xxxxxxxxx / +905xxxxxxxxx)\n");
+    }
+    rl.close();
+    return null;
+  })();
 }
 
 // nvram JSON dosyasindan nvram nesnesini alir ({nvram:{...}} ya da ham {...}).
@@ -115,11 +163,21 @@ async function komutuCalistir() {
         sahaHost, sahaKaynak: on.sahaKaynak,
         kimlik: opts.kimlik, profil,
         denemeler: Number(bayrak("--deneme")) || 3,
+        kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
+        telefonSor,          // dongu: her modem icin sorar
         ilerle,
       };
-      return argv.includes("--dongu")
-        ? provisionLoop({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity })
-        : provisionModem(hOpts);
+      const dongu = argv.includes("--dongu");
+      if (dongu) {
+        // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli) — verilse
+        // bile yok sayilir, modem basina sorulur.
+        return provisionLoop({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity });
+      }
+      // Tek modem: --telefon verilmediyse sor. Verildiyse HAM gecer — gecersizse
+      // cekirdek MSISDN_INVALID der (sessizce yeniden sormaz).
+      const telBayrak = bayrak("--telefon");
+      const telefon = telBayrak !== undefined ? telBayrak : await telefonSor(1);
+      return provisionModem({ ...hOpts, telefon });
     }
     default: return null;
   }
@@ -141,8 +199,10 @@ async function main() {
       + "  uygula [--uygula]            provizyon (bayraksiz KURU/dry-run)\n"
       + "         [--profil saha|fabrika] [--yeni-host ip] [--yeni-kaynak ip]\n"
       + "         [--reboot-yok]\n"
-      + "  hazirla [--dongu]            tak-calistir: algila->provizyon->dogrula\n"
-      + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n\n"
+      + "  hazirla --telefon 05xx       tak-calistir: algila->provizyon->dogrula\n"
+      + "         [--dongu]             cok modem (her modemde telefon sorar)\n"
+      + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
+      + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n\n"
       + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n",
     );
     return komut && !KOMUTLAR.has(komut) ? 1 : 0;

@@ -26,7 +26,9 @@ import { problem, isOk } from "./problems.js";
 // Provizyon (Faz 3) — çekirdek dışa aktarımı (paket/CLI/endpoint aynı API).
 export { applyProvisioning, planProvisioning, splitPlan } from "./provisioning.js";
 export { FIELD_PROFILE, FACTORY_PROFILE, PROFILES } from "./profile.js";
-export { provisionModem, provisionLoop, pcPreflight, nextAction } from "./pipeline.js";
+export {
+  provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
+} from "./pipeline.js";
 export { readSim, telefonNormalize } from "./sim.js";
 
 const now = () => new Date().toISOString();
