@@ -18,9 +18,10 @@ import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./profile.js";
 import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
 import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
-import { problem } from "./problems.js";
+import { problem, isOk } from "./problems.js";
 
 const now = () => new Date().toISOString();
+const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
 // Yapilandirilmis olay (UI canli guncellemesi) — provisioning.js'teki ile ayni
@@ -330,6 +331,87 @@ async function kaydiTamamla({ rapor, konum, hazirKimlik, kimlik, telefon,
   }
   olayla(opts, { tur: "sonuc", durum: rapor.durum, ok: rapor.ok,
     deneme: rapor.deneme ?? null, kayit: rapor.kayit, problems: rapor.problems });
+  return rapor;
+}
+
+// PURE: hazırlamaya başlamak için NE EKSİK? Tüketici (UI/endpoint/terminal)
+// buna bakıp hangi ekranı göstereceğine karar verir — karar mantığı burada,
+// arayüzde değil. Sıra ÖNEMLİ: en temel eksik başta.
+//
+// Doner: ["modem"] | ["sim"] | ["telefon"] | ["pin"] | []  (boş = başlanabilir)
+export function provisionEksikleri({ modemVar, simTakili, simKilit, telefon, pin } = {}) {
+  const eksik = [];
+  if (!modemVar) eksik.push("modem");
+  else if (!simTakili) eksik.push("sim");
+  if (!normalizePhone(telefon)) eksik.push("telefon");
+  // PIN yalnızca cihaz KİLİT BİLDİRDİYSE ve elimizde PIN yoksa eksiktir.
+  // Kilit yoksa PIN sorulmaz — proje hedefi PIN'siz akış.
+  if (simKilit?.kilit === "pin" && !pin) eksik.push("pin");
+  // PUK kilidi "eksik girdi" değil, insan müdahalesi gerektiren bir arıza:
+  // eksik listesine koymuyoruz, problems ile bildiriliyor.
+  return eksik;
+}
+
+// Cihazın O ANKI durumu ve ne eksik — TEK ÇAĞRI.
+//
+// Neden ayrı fonksiyon: "modem bağlandı → numarayı çek → PIN gerekiyor mu bak
+// → gerekiyorsa iste, gerekmiyorsa başlat" kararı TÜKETİCİDE tekrarlanmasın.
+// UI, endpoint ve terminal aynı cevaba bakar.
+//
+// PAHALI: kimlik okuması (~4 sn) yapar. Sürekli yoklama için DEĞİL — modem
+// algılandığında BİR KEZ çağrılmalı (tek bağlantılı cihazı boğmayalım).
+export async function assessDevice(opts) {
+  const {
+    fabrikaHost = "192.168.1.1", sahaHost = "5.5.5.1",
+    kimlik, telefon = null, pin = null,
+  } = opts;
+  const on = pcPreflight(onekAl(fabrikaHost), onekAl(sahaHost));
+  const rapor = {
+    zaman: now(), komut: "degerlendir",
+    pc: { hazir: on.hazir, problems: on.problems },
+    modem: { konum: null, host: null },
+    kimlik: null, sim: null,
+    telefon: { numara: normalizePhone(telefon), kaynak: telefon ? "girdi" : "yok" },
+    internet: null,
+    problems: [...on.problems],
+  };
+  if (!on.hazir) {
+    rapor.eksik = ["pc"];
+    rapor.baslatilabilir = false;
+    rapor.ok = false;
+    return rapor;
+  }
+
+  const fabrikaVar = await isReachable(fabrikaHost, on.fabrikaKaynak);
+  const sahaVar = fabrikaVar ? false : await isReachable(sahaHost, on.sahaKaynak);
+  const konum = fabrikaVar
+    ? { host: fabrikaHost, kaynakIp: on.fabrikaKaynak, ad: "fabrika" }
+    : sahaVar ? { host: sahaHost, kaynakIp: on.sahaKaynak, ad: "saha" } : null;
+  rapor.modem = { konum: konum?.ad ?? null, host: konum?.host ?? null };
+
+  if (konum && kimlik) {
+    let k = null;
+    try { k = await readIdentity({ ...konum, kimlik }); } catch { /* kismi sonuc gecerli */ }
+    if (k) {
+      rapor.kimlik = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
+        lan_mac: k.lan_mac, operator: k.operator };
+      rapor.sim = { takili: simTakiliMi(k), ...k.sim };
+      rapor.internet = { var: Boolean(k.wan_ip), wan_ip: k.wan_ip };
+      if (!simTakiliMi(k)) rapor.problems.push(problem("SIM_MISSING", k.sim_durumu));
+      else if (k.sim?.kilit === "pin") rapor.problems.push(problem("SIM_PIN_LOCKED", k.sim.pin_kalan));
+      else if (k.sim?.kilit === "puk") rapor.problems.push(problem("SIM_PUK_LOCKED", k.sim.puk_kalan));
+    }
+  }
+  if (!konum) rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
+
+  rapor.eksik = provisionEksikleri({
+    modemVar: Boolean(konum),
+    simTakili: rapor.sim?.takili ?? false,
+    simKilit: rapor.sim ?? null,
+    telefon, pin,
+  });
+  rapor.baslatilabilir = rapor.eksik.length === 0;
+  rapor.ok = isOk(rapor.problems);
   return rapor;
 }
 

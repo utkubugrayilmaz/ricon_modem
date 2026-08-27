@@ -33,6 +33,7 @@ export {
 export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
   readIdentity, simTakiliMi, waitForInternet, simPinHedefi,
+  assessDevice, provisionEksikleri,
 } from "./pipeline.js";
 export { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
