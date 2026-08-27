@@ -24,6 +24,9 @@ const akis = el("akis");
 const altBar = el("alt");
 const altDurum = el("altDurum");
 const onayBtn = el("onayBtn");
+const sifirlaBtn = el("sifirlaBtn");
+const sifirlaAlan = document.querySelector(".sifirla-alan");
+const onayBalon = el("onayBalon");
 
 // ---------------- EKRAN 1: telefon numarası ----------------
 
@@ -92,11 +95,14 @@ async function durumuTazele() {
     if (!d.pc?.hazir) {
       ustDurum.dataset.hal = "hata";
       ustDurum.textContent = "PC ağı hazır değil";
+      sifirlaBtn.disabled = true;
       ipucu.dataset.hal = "hata";
       ipucu.textContent = d.pc.problems?.[0]?.check || "";
       return;
     }
     ipucu.removeAttribute("data-hal");
+    // Sıfırlanacak bir şey yoksa (modem yok / başka iş sürüyor) düğme kapalı.
+    sifirlaBtn.disabled = !d.modem.konum || d.mesgul || !d.sifirlanabilir;
     if (d.modem.konum) {
       ustDurum.dataset.hal = d.modem.konum;
       ustDurum.textContent = `modem ${d.modem.host} (${d.modem.konum})`;
@@ -212,11 +218,14 @@ function kimlikBas(hedef, k) {
 
 let akim = null;
 
-baslatBtn.addEventListener("click", () => {
-  const telefon = gizliGiris.value;
-  if (!gecerliMi(telefon)) return;
-
+// Kurulum ve sıfırlama AYNI ekranı kullanır — ikisi de "öncesi → sonrası"
+// karşılaştırması. Fark yalnızca hangi uca bağlandığı ve panel etiketleri.
+function akisiBaslat({ yol, telefon = null, onceEtiket, sonraEtiket }) {
   durumuIzle(false);
+  onayiKapat();
+  sifirlaAlan.hidden = true;      // iş sürerken sıfırlama teklif edilmez
+  el("etiketOnce").textContent = onceEtiket;
+  el("etiketSonra").textContent = sonraEtiket;
   ekranGiris.hidden = true;
   ekranKurulum.hidden = false;
   izgara.textContent = "";
@@ -230,7 +239,7 @@ baslatBtn.addEventListener("click", () => {
   altDurum.textContent = "Kurulum sürüyor…";
   akisaYaz("başlatıldı");
 
-  akim = new EventSource(`/api/hazirla?telefon=${encodeURIComponent(telefon)}`);
+  akim = new EventSource(yol);
 
   akim.addEventListener("ilerleme", (e) => akisaYaz(JSON.parse(e.data).mesaj));
 
@@ -301,6 +310,52 @@ baslatBtn.addEventListener("click", () => {
     if (akim && akim.readyState === EventSource.CLOSED) return;
     akisaYaz("bağlantı koptu");
   };
+}
+
+baslatBtn.addEventListener("click", () => {
+  const telefon = gizliGiris.value;
+  if (!gecerliMi(telefon)) return;
+  akisiBaslat({
+    yol: `/api/hazirla?telefon=${encodeURIComponent(telefon)}`,
+    telefon,
+    onceEtiket: "Kurulum öncesi",
+    sonraEtiket: "Kurulum sonrası",
+  });
+});
+
+// --- Fabrikaya döndür (sağ üst) ---
+// Yıkıcı işlem: düğme tek başına hiçbir şey yapmaz, onay balonu şart.
+function onayiKapat() {
+  onayBalon.hidden = true;
+  sifirlaBtn.disabled = false;
+}
+
+sifirlaBtn.addEventListener("click", () => {
+  onayBalon.hidden = false;
+  sifirlaBtn.disabled = true;
+  el("sifirlaHayir").focus();
+});
+
+el("sifirlaHayir").addEventListener("click", () => {
+  onayiKapat();
+  sifirlaBtn.focus();
+});
+
+el("sifirlaEvet").addEventListener("click", () => {
+  onayiKapat();
+  akisiBaslat({
+    yol: "/api/fabrikaya-dondur",
+    onceEtiket: "Şimdiki hali",
+    sonraEtiket: "Fabrika hali",
+  });
+});
+
+// Escape ile vazgeç; dışarı tıklayınca da kapan (kaza tıklaması iş yapmasın).
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !onayBalon.hidden) { onayiKapat(); sifirlaBtn.focus(); }
+});
+document.addEventListener("click", (e) => {
+  if (!onayBalon.hidden && !e.target.closest(".sifirla-alan")) onayiKapat();
 });
 
 function bitir(ok, o) {
@@ -325,6 +380,7 @@ function bitir(ok, o) {
 onayBtn.addEventListener("click", () => {
   ekranKurulum.hidden = true;
   ekranGiris.hidden = false;
+  sifirlaAlan.hidden = false;
   gizliGiris.value = "";
   haneleriBoya();
   gizliGiris.focus();

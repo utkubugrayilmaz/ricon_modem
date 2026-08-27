@@ -12,6 +12,20 @@
   <img class="ust-logo" src="aco-logo.png" alt="ACO Recycling">
   <span class="ust-ad">Modem kurulum</span>
   <span class="ust-durum" id="ustDurum" data-hal="bekle">modem aranıyor</span>
+
+  <div class="sifirla-alan">
+    <button class="sifirla-btn" id="sifirlaBtn" type="button">Fabrikaya döndür</button>
+    <div class="onay-balon" id="onayBalon" hidden role="dialog"
+         aria-labelledby="onaySoru">
+      <p class="onay-soru" id="onaySoru">Modemi fabrika ayarlarına döndür?</p>
+      <p class="onay-not">Sadece bizim ayarladığımız 12 ayar default'a alınır,
+        modem <code>192.168.1.1</code>'e döner. Tam factory reset değildir.</p>
+      <div class="onay-dugmeler">
+        <button class="onay-evet" id="sifirlaEvet" type="button">Evet, sıfırla</button>
+        <button class="onay-hayir" id="sifirlaHayir" type="button">Hayır</button>
+      </div>
+    </div>
+  </div>
 </header>
 
 <!-- ================= EKRAN 1: telefon numarası ================= -->
@@ -38,11 +52,11 @@
 <main class="ekran kurulum" id="ekranKurulum" hidden>
   <div class="kurulum-baslik">
     <div class="kb-hucre">
-      <span class="kb-etiket">Kurulum öncesi</span>
+      <span class="kb-etiket" id="etiketOnce">Kurulum öncesi</span>
       <span class="kb-yer" id="konumOnce">—</span>
     </div>
     <div class="kb-hucre kb-sonra">
-      <span class="kb-etiket">Kurulum sonrası</span>
+      <span class="kb-etiket" id="etiketSonra">Kurulum sonrası</span>
       <span class="kb-yer" id="konumSonra">—</span>
     </div>
   </div>

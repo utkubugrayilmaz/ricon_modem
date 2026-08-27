@@ -53,6 +53,52 @@ body { display: flex; flex-direction: column; }
   text-transform: uppercase;
   color: var(--gri);
 }
+/* Sağ üst: fabrikaya döndürme. Yıkıcı bir işlem olduğu için düğme sessiz
+   (çerçeveli, dolgusuz) ve onay balonu olmadan hiçbir şey yapmıyor. */
+.sifirla-alan { position: relative; }
+.sifirla-btn {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--gri);
+  background: none;
+  border: 1px solid var(--cizgi);
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.sifirla-btn:hover { color: var(--murekkep); border-color: var(--gri); }
+.sifirla-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.onay-balon {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 10;
+  width: 320px;
+  text-align: left;
+  padding: 16px;
+  background: var(--beyaz);
+  border: 1px solid var(--cizgi);
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(20, 32, 26, 0.16);
+}
+.onay-soru { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.onay-not { margin: 0 0 14px; font-size: 12.5px; line-height: 1.5; color: var(--gri); }
+.onay-not code { font-family: var(--veri); }
+.onay-dugmeler { display: flex; gap: 8px; }
+.onay-evet, .onay-hayir {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.onay-evet { color: var(--beyaz); background: var(--kirmizi); }
+.onay-hayir { color: var(--murekkep); background: none; border-color: var(--cizgi); }
+.onay-hayir:hover { border-color: var(--gri); }
+
 .ust-durum {
   margin-left: auto;
   font-family: var(--veri);

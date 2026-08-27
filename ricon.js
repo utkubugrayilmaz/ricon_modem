@@ -169,6 +169,10 @@ async function komutuCalistir() {
         sahaHost: bayrak("--saha-host") || profil.nvram.lan_ipaddr || "5.5.5.1",
         kimlik: opts.kimlik,
         profil,
+        // Arayuzdeki "Fabrikaya dondur" dugmesi bu profili uygular. DIKKAT:
+        // gercek factory reset DEGIL — yalniz bizim dokundugumuz anahtarlari
+        // default'a alir (bkz. profile.js).
+        sifirlamaProfil: PROFILES.fabrika,
         kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
         ilerle,
       });
