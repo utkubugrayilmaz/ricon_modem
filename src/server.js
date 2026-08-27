@@ -67,7 +67,7 @@ let mesgul = false;
 export function createServer(opts = {}) {
   const {
     fabrikaHost = "192.168.1.1", sahaHost = "5.5.5.1",
-    kimlik, profil, sifirlamaProfil, kayit, ilerle,
+    kimlik, profil, sifirlamaProfil, kayit, olcumKayit, ilerle,
   } = opts;
 
   return http.createServer(async (istek, yanit) => {
@@ -76,6 +76,7 @@ export function createServer(opts = {}) {
       if (url.pathname === "/api/durum") return await durumVer(yanit);
       if (url.pathname === "/api/hazirla") return await hazirlaAkit(url, istek, yanit);
       if (url.pathname === "/api/fabrikaya-dondur") return await sifirlaAkit(istek, yanit);
+      if (url.pathname === "/api/olcum") return await olcumAl(istek, yanit);
       return await statikVer(url.pathname, yanit);
     } catch (e) {
       jsonVer(yanit, 500, { ok: false, hata: `${e.name}: ${e.message}` });
@@ -94,6 +95,34 @@ export function createServer(opts = {}) {
       sifirlanabilir: Boolean(sifirlamaProfil),
       mesgul,
     });
+  }
+
+  // --- POST /api/olcum : bir calistirmanin sure olcumunu kalici kaydet ---
+  //
+  // Adim sureleri TARAYICIDA olculur (olayin ekrana geldigi an = operatorun
+  // gercekten bekledigi sure), o yuzden veri tarayicidan gelir. Sunucu
+  // yalnizca zamani damgalar ve satiri yazar; yorum yapmaz.
+  async function olcumAl(istek, yanit) {
+    if (istek.method !== "POST") return jsonVer(yanit, 405, { ok: false, hata: "POST bekleniyor" });
+    if (typeof olcumKayit !== "function") {
+      return jsonVer(yanit, 200, { ok: true, yazildi: false, not: "olcum kaydi kapali" });
+    }
+    const parcalar = [];
+    let boyut = 0;
+    for await (const p of istek) {
+      boyut += p.length;
+      if (boyut > 64 * 1024) return jsonVer(yanit, 413, { ok: false, hata: "govde cok buyuk" });
+      parcalar.push(p);
+    }
+    let gelen;
+    try {
+      gelen = JSON.parse(Buffer.concat(parcalar).toString("utf8"));
+    } catch {
+      return jsonVer(yanit, 400, { ok: false, hata: "gecersiz JSON" });
+    }
+    const satir = { zaman: new Date().toISOString(), ...gelen };
+    olcumKayit(satir);
+    jsonVer(yanit, 200, { ok: true, yazildi: true });
   }
 
   // SSE akisini acar. Doner: { gonder, kopukMu, bitir }

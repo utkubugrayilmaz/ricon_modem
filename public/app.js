@@ -239,11 +239,18 @@ const OLCUM_ETIKET = {
 let baslangicMs = 0;
 let sayacZamani = null;
 const olcumler = [];
+// Ana ekranın hazır olduğu an. "Başlat"a basılana kadar geçen süre =
+// operatörün numarayı girme süresi = insanın MEŞGUL olduğu tek an. Metrik
+// iddiası için araç süresinden ayrı tutulması şart.
+let girisHazirMs = performance.now();
 
 const gecenSn = () => (performance.now() - baslangicMs) / 1000;
 const sn = (x) => x.toFixed(1);
 
+let girisSn = null;
+
 function olcumBasla() {
+  girisSn = Number(((performance.now() - girisHazirMs) / 1000).toFixed(1));
   baslangicMs = performance.now();
   olcumler.length = 0;
   olcumBolum.hidden = true;
@@ -297,7 +304,18 @@ function olcumBitir() {
     hucre("", "olcum-toplam"),
   );
   olcumBolum.hidden = false;
-  return toplam;
+  return { toplam, satirDizi };
+}
+
+// Ölçümü sunucuya yolla (data/olcumler.jsonl). Metrik iddiası için süreler
+// ekranda kaybolmamalı. Başarısız gönderim akışı bozmaz — ölçüm, işin kendisi
+// değil.
+function olcumGonder(govde) {
+  fetch("/api/olcum", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(govde),
+  }).catch(() => { /* olcum kaydi kritik degil */ });
 }
 
 // Karşılaştırma ekranını KOMPLE boşaltır. Tek yerde toplandı: temizliği alan
@@ -334,6 +352,7 @@ function anaEkrana(duyuruMetni = "") {
   haneleriBoya();
   duyuru.textContent = duyuruMetni;
   duyuru.hidden = !duyuruMetni;
+  girisHazirMs = performance.now();
   gizliGiris.focus();
   durumuIzle(true);            // durum çubuğunu bekletmeden tazeler
 }
@@ -491,7 +510,25 @@ document.addEventListener("click", (e) => {
 
 function bitir(ok, o) {
   if (akim) { akim.close(); akim = null; }
-  const toplam = olcumBitir();
+  const { toplam, satirDizi } = olcumBitir();
+
+  olcumGonder({
+    tur: akisTuru,
+    durum: o.durum ?? null,
+    ok: Boolean(ok),
+    deneme: o.deneme ?? null,
+    toplam_sn: Number(sn(toplam)),
+    giris_sn: girisSn,
+    adimlar: satirDizi.map((s) => ({ ad: s.etiket, sure_sn: Number(sn(s.sure)),
+      an_sn: Number(sn(s.an)) })),
+    degisen_ayar: [...satirlar.values()].filter((s) => s.sag.dataset.hal !== "sabit").length,
+    ayni_ayar: [...satirlar.values()].filter((s) => s.sag.dataset.hal === "sabit").length,
+    telefon: o.kayit?.telefon ?? null,
+    iccid: o.kayit?.iccid ?? null,
+    imei: o.kayit?.imei ?? null,
+    lan_mac: o.kayit?.lan_mac ?? null,
+    modem_ip: o.kayit?.modem_ip ?? null,
+  });
 
   // Sıfırlama BAŞARILIYSA oturum burada biter: modem sıfırlandı, ekran da
   // sıfırdan başlamalı. Sonuç ekranında bekletip fazladan tıklama istemek

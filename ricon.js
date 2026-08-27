@@ -34,7 +34,7 @@ import { findSourceIp } from "./src/network.js";
 import {
   checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
-  normalizePhone,
+  normalizePhone, summarizeMetrics,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report.js";
 
@@ -69,16 +69,21 @@ function ortamOpts() {
 // dosyaya yazmaz; yazma karari burada. Dosya `data/` altinda ve .gitignore'da
 // — icinde telefon/ICCID/IMEI (kisisel/abonelik verisi) var, commit EDILMEZ.
 const KAYIT_DOSYA = "data/hazirlanan.jsonl";
+// Sure olcumleri ayri dosyada: defter "hangi modem sahaya cikti" sorusunun
+// kaydi, olcum dosyasi "surec ne kadar suruyor" sorusunun kaydi. Karistirmak
+// ikisini de bulaniklastirir.
+const OLCUM_DOSYA = "data/olcumler.jsonl";
 
-function kayitYazici(dosya) {
+function kayitYazici(dosya, etiket = "kayit") {
   return (satir) => {
     try {
       mkdirSync(dirname(dosya), { recursive: true });
       appendFileSync(dosya, JSON.stringify(satir) + "\n", "utf8");
-      process.stderr.write(`[kayit] ${dosya} <- ${satir.durum} ${satir.telefon || "—"}`
-        + ` ${satir.iccid || ""}\n`);
+      const ek = satir.toplam_sn != null ? `${satir.toplam_sn} sn` : (satir.iccid || "");
+      process.stderr.write(`[${etiket}] ${dosya} <- ${satir.durum} `
+        + `${satir.telefon || "—"} ${ek}\n`);
     } catch (e) {
-      process.stderr.write(`[kayit] YAZILAMADI (${dosya}): ${e.message}\n`);
+      process.stderr.write(`[${etiket}] YAZILAMADI (${dosya}): ${e.message}\n`);
     }
   };
 }
@@ -148,6 +153,31 @@ async function komutuCalistir() {
         yeniKaynakIp: bayrak("--yeni-kaynak"),
       }, profil);
     }
+    case "olcum": {
+      // Kaydedilmis calistirmalardan savunulabilir sayi uretir. Cihaza GITMEZ.
+      // --elle-dk: elle surecin suresi (KARSILASTIRMA TABANI). Bu bir olcum ya
+      // da beyandir; hangisi oldugunu --elle-kaynak ile ACIKCA soyle.
+      const dosya = bayrak("--kayit") || OLCUM_DOSYA;
+      let satirlar = [];
+      try {
+        satirlar = readFileSync(dosya, "utf8").split("\n")
+          .filter((s) => s.trim())
+          .map((s) => JSON.parse(s));
+      } catch {
+        return { zaman: new Date().toISOString(), komut: "olcum", ok: false,
+          problems: [{ kod: "OLCUM_DOSYA_YOK", severity: "error",
+            message: `Metric file not found or unreadable: ${dosya}`,
+            check: "Run the UI flow (node ricon.js sunucu) a few times first;"
+              + " each finished run appends one line." }] };
+      }
+      const elleDk = Number(bayrak("--elle-dk"));
+      return summarizeMetrics(satirlar, {
+        elleSn: Number.isFinite(elleDk) && elleDk > 0 ? elleDk * 60 : undefined,
+        elleKaynak: bayrak("--elle-kaynak"),
+        elleN: Number(bayrak("--elle-n")) || undefined,
+        modemSayisi: Number(bayrak("--modem-sayisi")) || undefined,
+      });
+    }
     case "sunucu": {
       // UI/HTTP katmani: cekirdegi TUKETIR. Kural eklemez — telefon
       // zorunlulugu ve defter kaydi zaten cekirdekte.
@@ -174,6 +204,7 @@ async function komutuCalistir() {
         // default'a alir (bkz. profile.js).
         sifirlamaProfil: PROFILES.fabrika,
         kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
+        olcumKayit: kayitYazici(bayrak("--olcum") || OLCUM_DOSYA, "olcum"),
         ilerle,
       });
       await new Promise((c) => sunucu.listen(port, adres, c));
@@ -225,7 +256,7 @@ async function komutuCalistir() {
 }
 
 const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
-  "fark", "uygula", "hazirla", "sunucu"]);
+  "fark", "uygula", "hazirla", "sunucu", "olcum"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {
@@ -246,7 +277,10 @@ async function main() {
       + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
       + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
       + "  sunucu                       tarayici arayuzu (UI) — cekirdegi tuketir\n"
-      + "         [--port 8080] [--dinle 127.0.0.1] [--profil ad] [--kayit <dosya>]\n\n"
+      + "         [--port 8080] [--dinle 127.0.0.1] [--profil ad] [--kayit <dosya>]\n"
+      + "  olcum                        kaydedilmis surelerden metrik ozeti (cihazsiz)\n"
+      + "         [--elle-dk 15] [--elle-kaynak \"3 olcum, teknisyen A\"] [--elle-n 3]\n"
+      + "         [--modem-sayisi 400] [--kayit data/olcumler.jsonl]\n\n"
       + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n"
       + "       --host <ip> · --kaynak-ip <ip>  (.env'i ezer; modem o an neredeyse)\n",
     );

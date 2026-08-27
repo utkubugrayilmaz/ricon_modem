@@ -46,6 +46,53 @@ export function settingLabel(anahtar, deger) {
   return { anahtar, ad: t?.ad || anahtar, sayfa: t?.sayfa || null, gosterim, ham };
 }
 
+// Olcum ozeti metni. Dagilimi saklamaz: medyanin yaninda min-maks da yazar,
+// cunku tek sayi soylemek kucuk orneklemde yanlis guven verir.
+function olcumMetni(r) {
+  const s = [];
+  const d = (x) => (x.medyan == null ? "—"
+    : `${x.medyan} sn  (n=${x.n}, ${x.min}–${x.maks}, ort ${x.ortalama})`);
+  s.push("\n  OLCUM OZETI");
+  s.push(`    kayit                 : ${r.kayit_sayisi} satir`);
+  s.push(`    kurulum               : ${r.kurulum.basarili}/${r.kurulum.denenen} basarili`
+    + `${r.kurulum.basari_orani != null ? ` (%${r.kurulum.basari_orani})` : ""}`
+    + ` · ilk denemede ${r.kurulum.ilk_denemede}`
+    + ` · ${r.kurulum.farkli_cihaz} farkli cihaz`);
+  s.push(`    arac suresi (medyan)  : ${d(r.arac_sn)}`);
+  s.push(`    numara girisi (medyan): ${d(r.giris_sn)}`);
+  s.push(`    dongu (giris + arac)  : ${r.dongu_sn ?? "—"} sn`);
+
+  if (r.adimlar?.length) {
+    s.push("\n    Adim kirilimi (medyan):");
+    for (const a of r.adimlar) {
+      s.push(`      ${a.darbogaz ? "▲" : " "} ${String(a.ad).padEnd(34)}`
+        + `${String(a.medyan).padStart(6)} sn  (${a.min}–${a.maks})`);
+    }
+  }
+
+  const k = r.karsilastirma;
+  if (k) {
+    s.push(`\n    ELLE SUREC: ${k.elle_sn} sn (${(k.elle_sn / 60).toFixed(1)} dk)`
+      + ` · kaynak: ${k.elle_kaynak}${k.elle_n ? ` (n=${k.elle_n})` : ""}`);
+    if (k.dongu) {
+      s.push(`      dongu suresi      : %${k.dongu.azalma_yuzde} azalma`
+        + ` · ${k.dongu.kat}x hizli · modem basina ${k.dongu.kazanilan_sn} sn kazanc`);
+    }
+    if (k.insan_mesgul) {
+      s.push(`      insan mesgul suresi: %${k.insan_mesgul.azalma_yuzde} azalma`
+        + ` · ${k.insan_mesgul.kat}x · gerisi GOZETIMSIZ geciyor`);
+    }
+    if (k.olcek) {
+      s.push(`      ${k.olcek.modem} modemde toplam kazanc: ${k.olcek.kazanilan_saat} saat`);
+    }
+    if (k.uyari) s.push(`      ! ${k.uyari}`);
+    if (k.uyari_elle) s.push(`      ! ${k.uyari_elle}`);
+  } else {
+    s.push("\n    (Elle sureci karsilastirmak icin: --elle-dk 15 --elle-kaynak \"...\")");
+  }
+  return s;
+}
+
 // Insan-okunur ozet (stderr'a; stdout saf JSON kalir).
 export function summaryText(rapor) {
   const s = [];
@@ -126,6 +173,7 @@ export function summaryText(rapor) {
     }
     if (rapor.not) s.push(`  Not: ${rapor.not}`);
   }
+  if (rapor.komut === "olcum") s.push(...olcumMetni(rapor));
   if (rapor.problems?.length) {
     s.push("\n  Sorunlar:");
     for (const p of rapor.problems) {

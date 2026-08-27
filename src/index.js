@@ -33,6 +33,8 @@ export {
 export { readSim, normalizePhone } from "./sim.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
 export { settingLabel } from "./report.js";
+// Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.
+export { summarizeMetrics, dagilim } from "./metrics.js";
 export { SETTING_LABELS };
 
 const now = () => new Date().toISOString();
