@@ -10,7 +10,7 @@
 // alınır (bağlantı kopar). Reboot açık bildirilir.
 
 import { consoleNvram, consoleWrite, runConsole } from "./console.js";
-import { LAN_IP_KEYS } from "./profile.js";
+import { LAN_IP_KEYS, WRITE_GROUPS } from "./profile.js";
 import { problem, isOk } from "./problems.js";
 
 const now = () => new Date().toISOString();
@@ -48,15 +48,33 @@ export function planProvisioning(mevcut, profil) {
   return { degisecek, ayni, eksik, onceki, hedef: hedefler };
 }
 
-// Planı LAN-IP ve LAN-IP-olmayan diye ayırır (yazma sırası için).
-export function splitPlan(degisecek) {
-  const lanIp = {};
-  const digerleri = {};
-  for (const [k, v] of Object.entries(degisecek)) {
-    if (LAN_IP_KEYS.includes(k)) lanIp[k] = v; else digerleri[k] = v;
+// PURE: planı YAZMA SIRASINA göre gruplar (Modem/WAN -> DHCP -> LAN).
+// Gruplanmamış anahtar "Diger" grubuna düşer ve LAN'dan ÖNCE yazılır — yönetim
+// adresi her zaman en sonda kalsın. Neden sıra: profile.js WRITE_GROUPS notu.
+// Doner: [{ ad, ciftler:{k:{mevcut,hedef}} }]  (boş gruplar atlanır)
+export function groupPlan(degisecek) {
+  const kalan = new Set(Object.keys(degisecek));
+  const gruplar = [];
+  for (const g of WRITE_GROUPS) {
+    const ciftler = {};
+    for (const k of g.anahtarlar) {
+      if (kalan.has(k)) { ciftler[k] = degisecek[k]; kalan.delete(k); }
+    }
+    if (Object.keys(ciftler).length) gruplar.push({ ad: g.ad, ciftler });
   }
-  return { lanIp, digerleri };
+  if (kalan.size) {
+    const ciftler = {};
+    for (const k of kalan) ciftler[k] = degisecek[k];
+    const grup = { ad: "Diger", ciftler };
+    const lanSira = gruplar.findIndex((g) => g.ad === "LAN");
+    if (lanSira === -1) gruplar.push(grup); else gruplar.splice(lanSira, 0, grup);
+  }
+  return gruplar;
 }
+
+// Bir grup yönetim adresini (LAN IP) değiştiriyor mu?
+const yonetimAdresiniDegistirir = (ciftler) =>
+  Object.keys(ciftler).some((k) => LAN_IP_KEYS.includes(k));
 
 // Provizyon: oku → planla → (uygula ise) yaz → reboot → doğrula.
 // opts: { host, kaynakIp, kimlik, uygula:false, reboot:true,
@@ -82,12 +100,14 @@ export async function applyProvisioning(opts, profil) {
 
   // 2) Planla
   const plan = planProvisioning(degerler, profil);
-  const { lanIp, digerleri } = splitPlan(plan.degisecek);
+  const gruplar = groupPlan(plan.degisecek);
+  const lanDegisiyor = gruplar.some((g) => yonetimAdresiniDegistirir(g.ciftler));
   rapor.plan = {
     degisecek_sayisi: Object.keys(plan.degisecek).length,
     ayni_sayisi: plan.ayni.length,
     degisecek: plan.degisecek,
-    lan_ip_degisecek: Object.keys(lanIp),
+    yazma_sirasi: gruplar.map((g) => ({ ad: g.ad, anahtar: Object.keys(g.ciftler) })),
+    lan_ip_degisecek: lanDegisiyor ? LAN_IP_KEYS.filter((k) => k in plan.degisecek) : [],
     onceki: plan.onceki,
     hedef: plan.hedef,
   };
@@ -113,34 +133,26 @@ export async function applyProvisioning(opts, profil) {
     return rapor;
   }
 
-  // 4) YAZ — önce LAN-IP olmayanlar (bağlantı kopmaz).
-  if (Object.keys(digerleri).length) {
-    bildir(opts, `${Object.keys(digerleri).length} ayar yaziliyor (LAN IP haric)`);
-    olayla(opts, { tur: "yaziliyor", anahtarlar: Object.keys(digerleri) });
-    const y = await consoleWrite(kOpts, esle(digerleri));
+  // 4) YAZ — grup grup, SIRAYLA. Yönetim adresi (LAN IP) en son grupta.
+  rapor.yazilan = {};
+  for (const grup of gruplar) {
+    const anahtarlar = Object.keys(grup.ciftler);
+    bildir(opts, `${grup.ad}: ${anahtarlar.length} ayar yaziliyor`);
+    olayla(opts, { tur: "yaziliyor", grup: grup.ad, anahtarlar });
+    const y = await consoleWrite(kOpts, esle(grup.ciftler));
     rapor.problems.push(...y.problems);
-    rapor.yazilan_diger = y.yazilan;
+    rapor.yazilan[grup.ad] = y.yazilan;
     if (!y.ok) {
-      rapor.durum = "yazma_hatasi"; rapor.ok = false;
-      olayla(opts, { tur: "yazma_hatasi", anahtarlar: Object.keys(digerleri) });
+      // Yönetim adresi grubunda kaldıysa cihaz HALA eski adreste — sıranın
+      // sebebi tam bu (bkz. profile.js WRITE_GROUPS).
+      rapor.durum = yonetimAdresiniDegistirir(grup.ciftler)
+        ? "lan_yazma_hatasi" : "yazma_hatasi";
+      rapor.basarisiz_grup = grup.ad;
+      rapor.ok = false;
+      olayla(opts, { tur: "yazma_hatasi", grup: grup.ad, anahtarlar });
       return rapor;
     }
-    olayla(opts, { tur: "yazildi", anahtarlar: y.yazilan });
-  }
-
-  // 5) LAN IP anahtarları (bağlantı bundan sonra yeni adrese taşınır).
-  if (Object.keys(lanIp).length) {
-    bildir(opts, `LAN IP yaziliyor: ${Object.entries(lanIp).map(([k, v]) => `${k}=${v.hedef}`).join(", ")}`);
-    olayla(opts, { tur: "yaziliyor", anahtarlar: Object.keys(lanIp) });
-    const y = await consoleWrite(kOpts, esle(lanIp));
-    rapor.problems.push(...y.problems);
-    rapor.yazilan_lan = y.yazilan;
-    if (!y.ok) {
-      rapor.durum = "lan_yazma_hatasi"; rapor.ok = false;
-      olayla(opts, { tur: "yazma_hatasi", anahtarlar: Object.keys(lanIp) });
-      return rapor;
-    }
-    olayla(opts, { tur: "yazildi", anahtarlar: y.yazilan });
+    olayla(opts, { tur: "yazildi", grup: grup.ad, anahtarlar: y.yazilan });
   }
 
   // 6) Reboot (config'i temiz uygula). Fire-and-forget: reboot bağlantıyı
@@ -154,9 +166,9 @@ export async function applyProvisioning(opts, profil) {
 
   // 7) Doğrulama: LAN IP değiştiyse cihaz yeni adreste; doğrulama için yeni
   // host/kaynak gerekir. Yoksa kullanıcıya bırak.
-  const dogrulamaHost = opts.yeniHost || (Object.keys(lanIp).length ? profil.nvram.lan_ipaddr : host);
+  const dogrulamaHost = opts.yeniHost || (lanDegisiyor ? profil.nvram.lan_ipaddr : host);
   const dogrulamaKaynak = opts.yeniKaynakIp || kaynakIp;
-  if (opts.yeniHost || !Object.keys(lanIp).length) {
+  if (opts.yeniHost || !lanDegisiyor) {
     bildir(opts, `dogrulama: ${dogrulamaHost} bekleniyor`);
     const dog = await dogrula(
       { host: dogrulamaHost, kaynakIp: dogrulamaKaynak, kimlik }, profil, opts,

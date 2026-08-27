@@ -124,7 +124,11 @@ async function komutuCalistir() {
     case "dogrula": return checkDevice(opts);
     case "kesif": return discoverDevice(opts);
     case "oku": return readDevice(opts);
-    case "izle": return watchDevice({ ...opts, sureSn: Number(bayrak("--sure")) || 30 });
+    case "izle": return watchDevice({
+      ...opts,
+      sureSn: Number(bayrak("--sure")) || 60,
+      aralikSn: Number(bayrak("--aralik")) || 5,
+    });
     case "konsol": return readConsole({ ...opts, nvram: argv.includes("--nvram") });
     case "sim": return readSim({ ...opts, telefon: bayrak("--telefon") });
     case "fark": {

@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planProvisioning, splitPlan, applyProvisioning } from "../src/provisioning.js";
+import { planProvisioning, groupPlan, applyProvisioning } from "../src/provisioning.js";
 import { FIELD_PROFILE, LAN_IP_KEYS } from "../src/profile.js";
 import { consoleWrite, shQuote } from "../src/console.js";
 
@@ -30,15 +30,31 @@ test("planProvisioning: cihazda olmayan anahtar eksik listesine girer", () => {
   assert.equal(p.degisecek.yeni_anahtar.mevcut, null);
 });
 
-test("splitPlan: LAN IP anahtarlarini ayirir (en sona yazilir)", () => {
+test("groupPlan: yazma sirasi Modem/WAN -> LAN, LAN EN SONDA", () => {
   const degisecek = {
     lan_ipaddr: { mevcut: "192.168.1.1", hedef: "5.5.5.1" },
-    wl0_net_mode: { mevcut: "mixed", hedef: "disabled" },
+    wl0_net_mode: { mevcut: "ap", hedef: "disabled" },
+    w1_wan_proto: { mevcut: "m13gdhcp", hedef: "m13g" },
+    lan_netmask_ex1: { mevcut: "255.255.255.0", hedef: "0.0.0.0" },
   };
-  const { lanIp, digerleri } = splitPlan(degisecek);
-  assert.ok("lan_ipaddr" in lanIp);
-  assert.ok("wl0_net_mode" in digerleri);
-  assert.ok(!("lan_ipaddr" in digerleri));
+  const gruplar = groupPlan(degisecek);
+  assert.deepEqual(gruplar.map((g) => g.ad), ["Modem/WAN", "LAN"]);
+  const lan = gruplar[gruplar.length - 1];
+  const lanAnahtar = Object.keys(lan.ciftler);
+  assert.equal(lanAnahtar[lanAnahtar.length - 1], "lan_ipaddr",
+    "yonetim adresi tum yazmanin EN SONU");
+});
+
+test("groupPlan: bilinmeyen anahtar Diger grubuna duser ve LANdan ONCE yazilir", () => {
+  const gruplar = groupPlan({
+    lan_ipaddr: { mevcut: "a", hedef: "b" },
+    bilinmeyen_ayar: { mevcut: "1", hedef: "2" },
+  });
+  assert.deepEqual(gruplar.map((g) => g.ad), ["Diger", "LAN"]);
+});
+
+test("groupPlan: bos plan -> bos grup listesi", () => {
+  assert.deepEqual(groupPlan({}), []);
 });
 
 test("FIELD_PROFILE: doğrulanmis anahtarlari tasir, hedefler string", () => {

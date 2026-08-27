@@ -15,6 +15,43 @@
 // testte de böyle doğrulandı).
 export const LAN_IP_KEYS = ["lan_ipaddr"];
 
+// YAZMA SIRASI — teknisyenin arayuzde izledigi sira: Modem/WAN -> DHCP -> LAN.
+//
+// DURUST NOT: nvram'a yazma teknik olarak SIRASIZ'dir; hicbir deger `nvram
+// commit` + reboot'a kadar yururluge girmez. Yani bu sira SONUCU DEGISTIRMEZ.
+// Yine de bu sirayla yaziyoruz, iki gercek sebep var:
+//   1) Yazma yarida kalirsa (baglanti dustu, konsol koptu) yonetim adresi EN
+//      SON degistigi icin cihaz hala eski adreste bulunabilir — kurtarilabilir.
+//   2) Plan/ilerleme ekrani teknisyenin kafasindaki sirayla akar.
+// Listede olmayan anahtar "Diger" grubuna duser ve LAN'dan ONCE yazilir.
+export const WRITE_GROUPS = [
+  {
+    ad: "Modem/WAN",
+    anahtarlar: [
+      "w1_wan_proto", "m1simswtch", "mullinkfail",
+      "m1s1wanapn", "m1s1pppuser", "m1s1ppppwd", "m1s2pppuser", "m1s2ppppwd",
+      "w1_connfailsw", "w1_kponm",
+      "m1_pap_allowed", "m1_chap_allowed", "m1_chapms_allowed", "m1_chapms_v2_allowed",
+      "w2_wan_proto",
+      "wl0_net_mode", "wl_net_mode",
+    ],
+  },
+  {
+    ad: "DHCP",
+    // Anahtar diff ile TEYIT EDILINCE buraya eklenecek (tahmin konmaz).
+    anahtarlar: [],
+  },
+  {
+    ad: "LAN",
+    anahtarlar: [
+      "lan_ipaddr_ex1", "lan_netmask_ex1",
+      "lan_ipaddr_ex2", "lan_netmask_ex2",
+      "lan_ipaddr_ex3", "lan_netmask_ex3",
+      "lan_ipaddr",     // yonetim adresi — grubun ve tum yazmanin EN SONU
+    ],
+  },
+];
+
 export const FIELD_PROFILE = {
   ad: "saha",
   aciklama: "ACO RVM saha profili — Ricon S9922M44",
@@ -52,7 +89,18 @@ export const FIELD_PROFILE = {
 
     // LAN (Faz1 canlı + ekran kıyası + nvram ile doğrulandı)
     lan_ipaddr: "5.5.5.1",
-    lan_ipaddr_ex1: "0.0.0.0", // fabrika ikincil IP'sini sil (nvram: 192.168.8.1)
+    // İkincil LAN adreslerinin TAMAMI sıfırlanır (2026-08-27 teknisyen isteği).
+    // Arayüzdeki "Local IP Address1/2/3" ve "Subnet Mask1/2/3" alanları bunlar;
+    // nvram adları arayüz etiketleriyle birebir. 2 ve 3 fabrikada zaten 0.0.0.0
+    // — idempotent güvence olarak yazılır (dokunmaz, sadece garanti eder).
+    // DOKUNULMAYANLAR: lan_ipaddr (5.5.5.1), lan_netmask (255.255.255.0),
+    // Local DNS ve Loopback — bunlar profile HİÇ girmiyor.
+    lan_ipaddr_ex1: "0.0.0.0",   // fabrikada 192.168.8.1
+    lan_netmask_ex1: "0.0.0.0",  // fabrikada 255.255.255.0
+    lan_ipaddr_ex2: "0.0.0.0",
+    lan_netmask_ex2: "0.0.0.0",
+    lan_ipaddr_ex3: "0.0.0.0",
+    lan_netmask_ex3: "0.0.0.0",
   },
 
   // BİLEREK profile KONULMAYAN anahtar: `lan_cclass`. Uçtan uca testte (2026-
@@ -86,6 +134,9 @@ export const FACTORY_PROFILE = {
     // LAN defaults
     lan_ipaddr: "192.168.1.1",
     lan_ipaddr_ex1: "192.168.8.1",
+    lan_netmask_ex1: "255.255.255.0",
+    lan_ipaddr_ex2: "0.0.0.0", lan_netmask_ex2: "0.0.0.0",
+    lan_ipaddr_ex3: "0.0.0.0", lan_netmask_ex3: "0.0.0.0",
     // WLAN default (zaten kapali)
     wl0_net_mode: "disabled", wl_net_mode: "disabled",
   },

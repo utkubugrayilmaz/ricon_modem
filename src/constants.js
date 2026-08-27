@@ -127,7 +127,17 @@ export const SETTING_LABELS = Object.freeze({
     degerler: { disabled: "kapali" } },
 
   lan_ipaddr: { ad: "Local IP", sayfa: "LAN" },
-  lan_ipaddr_ex1: { ad: "Local IP Address1 (ikincil)", sayfa: "LAN",
+  lan_ipaddr_ex1: { ad: "Local IP Address1", sayfa: "LAN",
+    degerler: { "0.0.0.0": "yok (silinmis)" } },
+  lan_netmask_ex1: { ad: "Subnet Mask1", sayfa: "LAN",
+    degerler: { "0.0.0.0": "yok (silinmis)" } },
+  lan_ipaddr_ex2: { ad: "Local IP Address2", sayfa: "LAN",
+    degerler: { "0.0.0.0": "yok (silinmis)" } },
+  lan_netmask_ex2: { ad: "Subnet Mask2", sayfa: "LAN",
+    degerler: { "0.0.0.0": "yok (silinmis)" } },
+  lan_ipaddr_ex3: { ad: "Local IP Address3", sayfa: "LAN",
+    degerler: { "0.0.0.0": "yok (silinmis)" } },
+  lan_netmask_ex3: { ad: "Subnet Mask3", sayfa: "LAN",
     degerler: { "0.0.0.0": "yok (silinmis)" } },
 });
 

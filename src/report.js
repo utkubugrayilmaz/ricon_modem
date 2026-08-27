@@ -177,6 +177,24 @@ export function summaryText(rapor) {
     }
     if (rapor.not) s.push(`  Not: ${rapor.not}`);
   }
+  if (rapor.komut === "izle") {
+    s.push(`\n  Izleme: ${rapor.ornek_sayisi} ornek · ${rapor.aralik_sn} sn aralik`
+      + ` · ${rapor.sure_sn} sn`);
+    for (const o of rapor.ornekler || []) {
+      s.push(`    ${String(o.an_sn).padStart(6)} sn  erisim ${o.erisim ? "var" : "YOK"}`
+        + `  internet ${o.internet ? g(o.wan_ip) : "YOK"}`
+        + `  sinyal ${g(o.sinyal_dbm)}  degisen ${o.degisen_alan}`);
+    }
+    if (rapor.kesintiler?.length) {
+      s.push("\n  KESINTILER:");
+      for (const k of rapor.kesintiler) {
+        s.push(`    ${k.tur.padEnd(9)} ${k.basla_sn} sn -> ${k.bitis_sn} sn`
+          + `  = ${k.sure_sn} sn${k.hala_suruyor ? "  (HALA SURUYOR)" : ""}`);
+      }
+    } else {
+      s.push("  KESINTI YOK (ne internet ne yonetim erisimi dustu)");
+    }
+  }
   if (rapor.komut === "olcum") s.push(...olcumMetni(rapor));
   if (rapor.problems?.length) {
     s.push("\n  Sorunlar:");
