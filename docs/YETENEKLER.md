@@ -48,15 +48,27 @@ Standart SSH/telnet/SNMP kapalı. Alttaki OS OpenWrt/Linux. Otomasyon (Faz
   ve root veriyor (yukarı bkz.) — otomasyonun asıl kanalı bu.
 - **Parolasız SIM/ayar:** alınamaz (401). Sistem bilgisi parolasız gelir.
 
-## Sıradaki (Faz 2/3 — henüz yapılmadı)
+## Faz 2/3 — TAMAMLANDI (2026-08-26)
 
-- **Faz 2:** telnet+nvram kanalını sağlam bir modüle (`console.js`) oturtmak;
-  sonra web arayüzünde bir ayar (WLAN, APN, LAN IP, ...) değiştirilirken
-  **nvram öncesi/sonrası farkını** alıp "bu ayar hangi nvram anahtarını
-  değiştiriyor + ne apply gerekiyor" haritasını çıkarmak.
-- **Faz 3:** "istenen durum" profili (LAN 5.5.5.1, WLAN kapalı, APN internet,
-  ...) → `nvram get/set/commit` ile oku/karşılaştır/yaz/doğrula: fikir-sabit
-  otomatik hazırlama.
+- **Faz 2 ✅** telnet+nvram kanalı `console.js`'e oturdu; arayüzdeki her ayar
+  nvram öncesi/sonrası **farkıyla** ilgili anahtara eşlendi
+  (`docs/hazirlama-profili.md`).
+- **Faz 3 ✅** "istenen durum" profili (`src/profile.js`) → oku/karşılaştır/
+  yaz/doğrula motoru + tak-çalıştır pipeline. Sıfır cihazda **tek komutla**
+  (`hazirla`) uçtan uca çalıştı, idempotent, yan etkisiz.
 
-Bu iki faz için elimizdeki temel hazır: erişim, protokol, tam nvram, uç
-listesi, web formu ve **root telnet konsolu** doğrulandı.
+### Yapabildiklerimize eklenenler ✅
+- `uygula` — provizyonu uygula (varsayılan KURU/dry-run; gerçek yazma
+  `--uygula` ister). `--profil fabrika` ile bizim dokunduğumuz ayarları
+  default'a geri alır (**gerçek factory reset değil** — bkz. `profile.js`).
+- `hazirla` — tak-çalıştır: algıla → provizyon → reboot → yeni adreste
+  doğrula → başarıya kadar retry. `--dongu` ile seri (tak/çıkar) akış.
+- `sim` — SIM/hücresel özet; `--telefon` ile MSISDN dışarıdan verilir.
+
+## Sıradaki
+- **Çok modemli saha denemesi:** `--dongu` tek modemde kanıtlandı, seri
+  akışta henüz denenmedi. Aynı ağda **tek modem** olmalı (hepsi 192.168.1.1'de
+  gelir → çakışır).
+- **MSISDN:** operatörden ICCID→numara listesi (cihazdan alınamıyor).
+- **HTTP endpoint + UI:** çekirdek hazır (importlanabilir fonksiyonlar),
+  sunucu katmanı henüz yazılmadı.

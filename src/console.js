@@ -6,9 +6,9 @@
 // kanali: tek anahtara dokunur, digerlerini ezmez.
 //
 // GUVENLIK: varsayilan SALT OKUNUR. `nvram set/unset/commit`, `reboot`, `rm`,
-// `>` gibi yazan komutlar yazmaIzni acikca verilmeden reddedilir. Yazma Faz
-// 3'te acilir. Telnet DUZ METIN'dir — parola sifresiz gider; sadece yerel
-// hazirlama agi icin uygundur, sahaya/WAN'a acilmamali.
+// `>` gibi yazan komutlar yazmaIzni acikca verilmeden reddedilir; yazma iznini
+// yalnizca provizyon motoru verir. Telnet DUZ METIN'dir — parola sifresiz
+// gider; sadece yerel hazirlama agi icin uygundur, sahaya/WAN'a acilmamali.
 //
 // Tasarim: komut CALISTIRMA (soket) ile CIKTI AYRISTIRMA (saf fonksiyonlar)
 // ayri; ayristirma cihaz olmadan test edilebilir. Katman throw etmez.

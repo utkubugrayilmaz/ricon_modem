@@ -5,14 +5,15 @@
 // da canlı ölçümle DOĞRULANMIŞ anahtarlar konur — tahmin konmaz.
 //
 // Kaynak: docs/hazirlama-profili.md (sahadaki teyitli kontrol listesi).
-// Durum: EKSIK — Modem/WAN sayfasının nvram anahtarları toplu diff ile
-// eklenecek (Connection Type, SIM Backup, Auth, Connect Fail, Keep Alive,
-// Backup Link, Link Fail, SIM user/pass). Aşağıdakiler DOĞRULANMIŞ olanlar.
+// Durum: TAMAM — sahadaki 11 ayarın tümü + LAN nvram anahtarlarıyla eşlendi
+// (2026-08-26 diff) ve uçtan uca canlı doğrulandı.
 
-// LAN IP'yi etkileyen anahtarlar — bunlar yazılınca yönetim bağlantısı yeni
-// adrese taşınır; motor bunları EN SONA alır ve reboot/yeni-adres akışıyla
-// ele alır.
-export const LAN_IP_KEYS = ["lan_ipaddr", "lan_ipaddr1"];
+// YÖNETİM adresini taşıyan anahtarlar — bunlar yazılınca mevcut bağlantı
+// kopar; motor bunları EN SONA alır ve reboot/yeni-adres akışıyla ele alır.
+// `lan_ipaddr_ex1` (ikincil LAN IP) BİLEREK burada DEĞİL: bağlandığımız adres
+// o değil, silinmesi bağlantıyı koparmaz — normal grupta yazılır (uçtan uca
+// testte de böyle doğrulandı).
+export const LAN_IP_KEYS = ["lan_ipaddr"];
 
 export const FIELD_PROFILE = {
   ad: "saha",
@@ -54,11 +55,9 @@ export const FIELD_PROFILE = {
     lan_ipaddr_ex1: "0.0.0.0", // fabrika ikincil IP'sini sil (nvram: 192.168.8.1)
   },
 
-  // Henüz profile EKLENMEMİŞ, apply anında doğrulanacak:
-  bekleyen: [
-    "lan_cclass (LAN IP ile birlikte) — LAN IP degistiginde UI bunu da '5.5.5.' "
-    + "yaziyor olabilir; gercek apply aninda (reboot sonrasi) dogrulanacak.",
-  ],
+  // BİLEREK profile KONULMAYAN anahtar: `lan_cclass`. Uçtan uca testte (2026-
+  // 08-26) cihazın LAN IP değişince reboot'ta bunu KENDİ türettiği görüldü
+  // (192.168.1. -> 5.5.5.). Yazmaya gerek yok; yazmak gereksiz risk.
 };
 
 // FABRIKA profili — DIKKAT: bu GERCEK bir factory reset DEGILDIR. Yalnizca

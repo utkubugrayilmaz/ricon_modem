@@ -8,9 +8,14 @@
 //   node ricon.js oku            HER SEYI cek (sistem + SIM + ayar + nvram)
 //   node ricon.js izle           Fark tabanli ornekleme (--sure sn)
 //   node ricon.js konsol         Telnet root shell kesfi (--nvram = tam nvram)
+//   node ricon.js sim            SIM/hucresel ozet (--telefon 05xx = MSISDN girisi)
 //   node ricon.js fark A.json B.json   Iki nvram anlik goruntusunu karsilastir
-//   node ricon.js uygula --uygula      Provizyon uygula (--kuru varsayilan)
-//   node ricon.js hazirla [--dongu]    Tak-calistir: algila->provizyon->dogrula
+//   node ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
+//                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
+//                                --reboot-yok
+//   node ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
+//                                --dongu (cok modem) · --profil · --saha-host
+//                                --deneme N · --max N
 //
 // Ortak: --json <dosya> (ciktiyi yaz) · --kaynak <dosya> (kayittan goster)
 // Ortam: MODEM_HOST, MODEM_KULLANICI, MODEM_SIFRE, MODEM_KAYNAK_IP,
@@ -97,7 +102,10 @@ async function komutuCalistir() {
             message: `Bilinmeyen profil: ${profilAd}`, check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
       }
       const sahaHost = bayrak("--saha-host") || profil.nvram.lan_ipaddr || "5.5.5.1";
-      const on = pcPreflight("192.168.1.", sahaHost.split(".").slice(0, 3).join(".") + ".");
+      const onek = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
+      // Fabrika oneki .env'deki MODEM_HOST'tan turer (varsayilan 192.168.1.1);
+      // boylece host degistirilince on-kontrol de dogru alt agi arar.
+      const on = pcPreflight(onek(opts.host), onek(sahaHost));
       if (!on.hazir) {
         return { zaman: new Date().toISOString(), komut: "hazirla", ok: false,
           durum: "pc_hazir_degil", problems: on.problems };
@@ -122,8 +130,20 @@ const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim", "f
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {
     process.stderr.write(
-      "Kullanim: node ricon.js <dogrula|kesif|oku|izle|konsol|fark> "
-      + "[--json d] [--kaynak d] [--sure sn] [--nvram]\n",
+      "Kullanim: node --env-file=.env ricon.js <komut> [bayraklar]\n\n"
+      + "  dogrula                      ortam/erisim teshisi\n"
+      + "  kesif                        port + parmak izi + SNMP (salt okunur)\n"
+      + "  oku                          HER SEYI cek (sistem+SIM+ayar+nvram)\n"
+      + "  izle --sure <sn>             fark tabanli canli alan tespiti\n"
+      + "  konsol [--nvram]             telnet root shell / tam nvram\n"
+      + "  sim [--telefon 05xxxxxxxxx]  SIM/hucresel ozet (+MSISDN girisi)\n"
+      + "  fark <A.json> <B.json>       iki nvram anlik goruntusu diff\n"
+      + "  uygula [--uygula]            provizyon (bayraksiz KURU/dry-run)\n"
+      + "         [--profil saha|fabrika] [--yeni-host ip] [--yeni-kaynak ip]\n"
+      + "         [--reboot-yok]\n"
+      + "  hazirla [--dongu]            tak-calistir: algila->provizyon->dogrula\n"
+      + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n\n"
+      + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n",
     );
     return komut && !KOMUTLAR.has(komut) ? 1 : 0;
   }

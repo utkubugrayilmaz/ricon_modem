@@ -12,7 +12,8 @@
 // (MODEM_KAYNAK_IP) verilince oradan cikariz.
 //
 // Guvenlik: salt-okunur modda (varsayilan) yalnizca GET'e izin verilir;
-// POST/PUT/DELETE reddedilir. Yazma Faz 3'te acikca acilir.
+// POST/PUT/DELETE reddedilir. Not: provizyon HTTP formu DEGIL telnet+nvram
+// uzerinden yazar (console.js) — bu istemci pratikte hep salt-okunur kalir.
 
 import http from "node:http";
 import {

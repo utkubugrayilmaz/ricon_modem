@@ -14,7 +14,9 @@ WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
   (bkz. `docs/arayuz-haritasi.md`, `docs/hazirlama-profili.md`).
 - **Faz 3 — Otomatik provizyon:** ✅ Motor + tak-çalıştır pipeline; sıfır
   cihazda tek komutla uçtan uca doğrulandı, idempotent.
-- **48 test** (`node --test`), sıfır bağımlılık.
+- **51 test** (`npm test`), sıfır bağımlılık.
+- **Sırada:** çok modemli saha denemesi (`hazirla --dongu` tek modemde
+  kanıtlandı, seri akışta henüz denenmedi).
 
 ## Kurulum
 
@@ -41,6 +43,8 @@ node --env-file=.env ricon.js dogrula     # ortam/erişim teşhisi
 node --env-file=.env ricon.js kesif       # port + parmak izi + SNMP (salt okunur)
 node --env-file=.env ricon.js oku         # HER ŞEYİ çek (sistem+SIM+ayar+nvram)
 node --env-file=.env ricon.js konsol --nvram   # telnet root: tam nvram
+node --env-file=.env ricon.js sim              # SIM/hücresel özet
+node --env-file=.env ricon.js sim --telefon 05xxxxxxxxx   # MSISDN'i dışarıdan ver
 node --env-file=.env ricon.js izle --sure 60   # fark tabanlı canlı alan tespiti
 node --env-file=.env ricon.js fark A.json B.json   # iki nvram anlık görüntüsü diff
 
@@ -75,6 +79,7 @@ ileride **HTTP endpoint** ile tüketilir.
 | `src/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |
 | `src/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |
 | `src/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
+| `src/sim.js` | SIM/hücresel okuma + MSISDN (dış girdi, cihazda yok) |
 | `src/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + diff |
 | `src/network.js` | Arayüz/kaynak IP, ARP + IPv6 komşu |
 | `src/scanner.js` | Paralel TCP port taraması |

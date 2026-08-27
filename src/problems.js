@@ -44,8 +44,8 @@ const KATALOG = {
   }),
   HTTP_ERROR: (yol, kod) => ({
     message: `${yol} returned an unexpected HTTP status ${kod}.`,
-    check: "The endpoint path may differ on this firmware. See the discovered"
-      + " endpoint list; ucbulucu extracts live paths from the page itself.",
+    check: "The endpoint path may differ on this firmware. Compare with the"
+      + " verified list in constants.js (ENDPOINTS).",
   }),
   REQUEST_FAILED: (yol, sebep) => ({
     message: `The request to ${yol} could not be completed: ${sebep}`,
@@ -70,7 +70,7 @@ const KATALOG = {
       + " with valid credentials.",
   }),
 
-  MSISDN_GECERSIZ: (v) => ({
+  MSISDN_INVALID: (v) => ({
     message: `The supplied phone number "${v}" is not a valid TR mobile number.`,
     check: "Provide it as 05xxxxxxxxx / +905xxxxxxxxx. MSISDN cannot be read from"
       + " the device; it is operator/UI input.",

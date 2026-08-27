@@ -16,7 +16,7 @@ import {
 import { parsePairs, simView } from "./ddwrt.js";
 import { parseNvram, diffNvram } from "./nvram.js";
 import {
-  localInterfaces, arpTable, guessVendor,
+  localInterfaces, arpTable, ipv6Neighbors, guessVendor,
 } from "./network.js";
 import { scanPorts, isReachable } from "./scanner.js";
 import { snmpIdentity } from "./snmp.js";
@@ -127,6 +127,11 @@ export async function discoverDevice(opts) {
   rapor.arp = await arpTable(onekAl(host));
   rapor.mac = rapor.arp[host] || null;
   rapor.mac_uretici = guessVendor(rapor.mac);
+  // IPv6 komsu tablosu: cihazin IPv4'u bilinmiyorsa (yanlis alt ag) OUI'den
+  // yine de "orada bir Ricon var" denebilir — yanlis-IP teshisini kolaylastirir.
+  rapor.ipv6_komsular = (await ipv6Neighbors())
+    .map((k) => ({ ...k, uretici: guessVendor(k.mac) }))
+    .filter((k) => k.uretici);
 
   const c = new Client({ host, kaynakIp, kimlik: null });
   bildir(opts, "HTTP parmak izi");

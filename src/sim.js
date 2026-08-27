@@ -43,7 +43,7 @@ export async function readSim(opts) {
 
   // MSISDN: cihazdan gelmez; operator/UI girdisi (opts.telefon).
   const norm = telefonNormalize(telefon);
-  if (telefon && !norm) rapor.problems.push(problem("MSISDN_GECERSIZ", telefon));
+  if (telefon && !norm) rapor.problems.push(problem("MSISDN_INVALID", telefon));
   rapor.msisdn = norm;
   rapor.msisdn_kaynak = norm ? "operator_girisi" : null;
   if (!norm) {

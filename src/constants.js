@@ -5,7 +5,7 @@
 // Bu dosyadaki uc adresleri ve alan adlari 2026-08-26'da CANLI cihazda
 // (Ricon S9922M44-DOA, firmware V7.3.0_SE) dogrulandi. Onceki Python
 // calismasindaki (.live.asp) yollarin bir kismi bu firmware'de (.live.htm)
-// oldu; bu yuzden uc listesi sabit degil, ucbulucu.js sayfadan da cikarir.
+// oldu — firmware degisirse ilk bakilacak yer bu liste.
 
 // Modemin fabrika IP'si.
 export const DEFAULT_HOST = "192.168.1.1";
@@ -26,13 +26,9 @@ export const TCP_PORTS = Object.freeze([
   { kapi: 9999, ad: "DTU / ham TCP" },
 ]);
 
-// UDP kapilari — ayri (dgram) kontrol edilir.
-export const UDP_PORTS = Object.freeze([
-  { kapi: 161, ad: "SNMP" },
-  { kapi: 162, ad: "SNMP trap" },
-  { kapi: 500, ad: "IPSec IKE" },
-  { kapi: 4500, ad: "IPSec NAT-T" },
-]);
+// Not: UDP kapi listesi YOK — UDP'de "kapali" ile "cevapsiz" ayirt edilemez,
+// tarama yanlis guven verir. Tek gereken UDP servisi SNMP; o snmp.js'te
+// dogrudan gercek bir GET ile yoklanir (kesin cevap).
 
 // HTTP uclari. tur: "sistem" = kimliksiz erisilebilir (2026-08-26 dogrulandi),
 // "kimlik" = HTTP Basic gerekli, "config" = tam yapilandirma yedegi.
