@@ -153,6 +153,13 @@ const KATALOG = {
       + " probe instead of assuming. Widen AT_PORT_ADAYLARI in at.js, or run"
       + " 'ls -la /dev/ttyUSB*' on the device to find the live node.",
   }),
+  MSISDN_UYUSMAZLIK: (elle, cihaz) => ({
+    message: `The number typed by the operator (${elle}) differs from the one`
+      + ` written on the SIM (${cihaz}). The SIM's own value was used.`,
+    check: "Most likely a typo in the manual entry. The SIM's EF_MSISDN is the"
+      + " authoritative source, so that value goes into the record and the device"
+      + " name. If the SIM value looks wrong instead, check with the operator.",
+  }),
   MSISDN_CIHAZDA_YOK: () => ({
     message: "AT+CNUM returned no number: the phone number is not written on"
       + " this SIM (EF_MSISDN is empty).",
@@ -199,7 +206,7 @@ const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
   // durum ("hazir") ile problems'i celiskiye dusuruyordu.
   "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED", "PIN_ALREADY_TRIED",
   // Numara SIM'de yazili degilse bu bir ARIZA degil: operator elle girer.
-  "MSISDN_CIHAZDA_YOK", "PIN_LOCK_NOT_DISABLED"]);
+  "MSISDN_CIHAZDA_YOK", "PIN_LOCK_NOT_DISABLED", "MSISDN_UYUSMAZLIK"]);
 
 export const PROBLEM_CODES = Object.freeze(Object.keys(KATALOG));
 

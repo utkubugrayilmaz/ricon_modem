@@ -96,6 +96,11 @@ const beklet = (ms) => new Promise((r) => setTimeout(r, ms));
 // ara sira dusuyor). Yazma korumasi retry'dan once, bir kez.
 // Doner: { ok, ciktilar, problems }  (throw etmez)
 export async function runConsole(opts, komutlar) {
+  // Deneme sayisi CAGRIYA GORE degisebilir. Sebep: port TARAMASI gibi "olu
+  // olabilir, hizli vazgec" isleri 3x22 sn beklememeli — 5 adayla carpilinca
+  // 5.5 dakika ediyordu (olculdu). Gercek komutlar varsayilan 3 denemede kalir.
+  const denemeSayisi = Number.isInteger(opts.denemeler) && opts.denemeler > 0
+    ? opts.denemeler : CONSOLE_RETRIES;
   if (!opts.yazmaIzni) {
     const yazan = komutlar.find((k) => WRITE_PATTERN.test(k));
     if (yazan) {
@@ -104,10 +109,10 @@ export async function runConsole(opts, komutlar) {
     }
   }
   let son;
-  for (let deneme = 0; deneme < CONSOLE_RETRIES; deneme += 1) {
+  for (let deneme = 0; deneme < denemeSayisi; deneme += 1) {
     son = await _trySession(opts, komutlar);   // her deneme = taze soket + login
     if (son.ok) return son;
-    if (deneme < CONSOLE_RETRIES - 1) await beklet(CONSOLE_RETRY_GAP);
+    if (deneme < denemeSayisi - 1) await beklet(CONSOLE_RETRY_GAP);
   }
   return son;   // tum denemeler basarisiz — son sonuc (problems ile)
 }

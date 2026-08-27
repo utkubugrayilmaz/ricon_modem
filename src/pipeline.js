@@ -19,6 +19,7 @@ import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
 import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 import { problem, isOk } from "./problems.js";
+import { readMsisdn } from "./at.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
@@ -403,6 +404,26 @@ export async function assessDevice(opts) {
     }
   }
   if (!konum) rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
+
+  // TELEFON NUMARASINI CIHAZDAN OKU — artik elle girmeye gerek yok.
+  // Yalnizca SIM HAZIRSA denenir: kilitli SIM abone verisini (EF_MSISDN)
+  // acmiyor, canli olculdu (2026-08-27). Kilitliyse once PIN, sonra numara.
+  if (konum && kimlik && rapor.sim?.hazir) {
+    bildir(opts, "telefon numarasi cihazdan okunuyor (AT+CNUM)");
+    const n = await readMsisdn({ ...konum, kimlik });
+    rapor.at_port = n.at_port;
+    if (n.telefon) {
+      const elle = normalizePhone(telefon);
+      if (elle && elle !== n.telefon) {
+        // Cihazdaki numara SIM'in KENDISINDEN geliyor; elle girilen yanlis
+        // olabilir. Sessizce birini secmek yerine ikisini de bildiriyoruz.
+        rapor.problems.push(problem("MSISDN_UYUSMAZLIK", elle, n.telefon));
+      }
+      rapor.telefon = { numara: n.telefon, kaynak: "cihaz" };
+    } else {
+      rapor.problems.push(...n.problems);
+    }
+  }
 
   rapor.eksik = provisionEksikleri({
     modemVar: Boolean(konum),

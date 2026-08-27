@@ -13,8 +13,8 @@
 // Komut sonu `\r` SART (`\n` yetmez). `ATL:` oneki gercek modul cevabini
 // kabuk gurultusunden ayirir.
 //
-// AT PORTU VARSAYILMAZ, OLCULUR: cihaz /dev/ttyUSB0..N arasi cok dugum
-// gosterir, cogu olu. Adaylara `AT` gonderip `OK` doneni seceriz.
+// AT PORTU: /dev/ttyUSB0 olculdu ve sabit. Cok portlu TARAMA bilerek YOK —
+// gerekcesi AT_PORT tanimindaki notta.
 //
 // KAPSAM KARARI — USSD (*101#) yolu BILEREK YOK. Kardes calismada var ama
 // GSM7 paketleme + UCS2 cozme ~150 satir ve bizim SIM'lerde CNUM zaten
@@ -26,10 +26,16 @@ import { runConsole } from "./console.js";
 import { normalizePhone } from "./sim.js";
 import { problem } from "./problems.js";
 
-// AT portu adaylari. Ilk sirada olculmus olan (2026-08-27 canli: ttyUSB0).
-export const AT_PORT_ADAYLARI = Object.freeze([
-  "/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2", "/dev/ttyUSB3", "/dev/ttyUSB4",
-]);
+// AT portu. OLCULDU (2026-08-27 canli, Ricon S9922M44 + Quectel Q200AF):
+// /dev/ttyUSB0 AT komutlarina OK donuyor ve numara 3 saniyede geliyor.
+//
+// TARAMA YOK — BILEREK. Once 5 aday portu yoklayan bir tarama yazdim; cihaz
+// ara sira takildigi icin ya calisan portu olu saydi ya da 109 saniye yiyip
+// basarisiz oldu. Spekulatif bir yetenek icin gercek yolu yavaslatmak ve
+// kirilganlastirmak yanlisti. Farkli bir cihazda port farkliysa: cihazda
+// `ls -la /dev/ttyUSB*` bakilir ve BURASI degistirilir (ya da opts.atPort
+// verilir). Insan bir kez bakar, arac her seferinde 100 saniye harcamaz.
+export const AT_PORT = "/dev/ttyUSB0";
 
 // SIM/modul uzerinde DEGISIKLIK yapan AT komutlari. Salt-okunur modda
 // reddedilir — nvram tarafindaki yazma kapisinin AT karsiligi.
@@ -112,39 +118,54 @@ export function atCevabiAyikla(ham) {
 // icin bu kacinilmaz, o yuzden yazmaIzni veriliyor — ama AT SEVIYESINDE
 // kendi kapimiz var (AT_YAZAN): PIN harcayan komutlar acik izin olmadan
 // gecmiyor.
-export async function atKomut(opts, komut, { okumaSn = 3, yazmaIzni = false } = {}) {
+export async function atKomut(opts, komut, { okumaSn = 3, yazmaIzni = false,
+  denemeler, zamanAsimiMs } = {}) {
   if (!yazmaIzni && AT_YAZAN.test(komut)) {
     return { ok: false, cevap: "", problems: [problem("WRITE_BLOCKED_READONLY", `AT: ${komut}`)] };
   }
-  const port = opts.atPort || AT_PORT_ADAYLARI[0];
+  const port = opts.atPort || AT_PORT;
   const kabuk = atKabukKomutu(port, komut, okumaSn);
   const r = await runConsole(
-    { ...opts, yazmaIzni: true, zamanAsimiMs: 20000 + okumaSn * 1000 },
+    { ...opts, yazmaIzni: true, denemeler,
+      zamanAsimiMs: zamanAsimiMs ?? (20000 + okumaSn * 1000) },
     ["stty -echo 2>/dev/null", kabuk],
   );
   if (!r.ok) return { ok: false, cevap: "", problems: r.problems };
   return { ok: true, cevap: atCevabiAyikla(r.ciktilar?.[kabuk]), problems: [] };
 }
 
-// AT portunu OLCEREK bulur (varsaymaz). Doner: { port, problems }
+// AT portu cevap veriyor mu? Doner: { port, problems }
 export async function atPortBul(opts) {
-  for (const port of AT_PORT_ADAYLARI) {
-    const r = await atKomut({ ...opts, atPort: port }, "AT", { okumaSn: 2 });
-    if (r.ok && atTamam(r.cevap)) return { port, problems: [] };
-  }
-  return { port: null, problems: [problem("AT_PORT_YOK", AT_PORT_ADAYLARI.join(", "))] };
+  const port = opts.atPort || AT_PORT;
+  const r = await atKomut({ ...opts, atPort: port }, "AT", { okumaSn: 2 });
+  if (r.ok && atTamam(r.cevap)) return { port, problems: [] };
+  return { port: null, problems: r.problems.length ? r.problems : [problem("AT_PORT_YOK", port)] };
 }
 
 // SIM'in TELEFON NUMARASINI okur. Bugune kadar operator elle giriyordu;
 // numara SIM'de yaziliysa (EF_MSISDN) buradan okunabiliyor.
 // Doner: { telefon, yontem: "cnum"|"yok", iccid, at_port, problems }
 export async function readMsisdn(opts) {
-  const { port, problems: portSorun } = opts.atPort
-    ? { port: opts.atPort, problems: [] } : await atPortBul(opts);
-  if (!port) return { telefon: null, yontem: "yok", iccid: null, at_port: null, problems: portSorun };
-
+  let port = opts.atPort ?? null;
+  let cnum = null;
+  // Olculmus porta DOGRUDAN gercek komutu gonderiyoruz — ayrica bir yoklama
+  // turu yapmiyoruz. Cevap hic AT gibi degilse (ne OK ne +CNUM) portu bir kez
+  // dogrulayip net bir hata veriyoruz.
+  if (!port) {
+    port = AT_PORT;
+    cnum = await atKomut({ ...opts, atPort: port }, "AT+CNUM");
+    if (!atTamam(cnum.cevap) && !/\+CNUM/.test(cnum.cevap)) {
+      const bulunan = await atPortBul(opts);
+      if (!bulunan.port) {
+        return { telefon: null, yontem: "yok", iccid: null, at_port: null,
+          problems: bulunan.problems };
+      }
+      port = bulunan.port;
+      cnum = null;
+    }
+  }
   const atOpts = { ...opts, atPort: port };
-  const cnum = await atKomut(atOpts, "AT+CNUM");
+  if (!cnum) cnum = await atKomut(atOpts, "AT+CNUM");
   const telefon = parseCnum(cnum.cevap);
   if (telefon) {
     return { telefon, yontem: "cnum", iccid: null, at_port: port, problems: [] };
