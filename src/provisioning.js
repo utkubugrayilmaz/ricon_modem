@@ -17,19 +17,35 @@ const now = () => new Date().toISOString();
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
 
+// Yapilandirilmis olay bildirimi (UI canli guncellemesi icin). `ilerle` insana
+// okunur METIN yollar; `olay` makineye NESNE yollar. Ikisi de OPSIYONEL ve
+// tuketicinin isi — cekirdek hicbir yere yazmaz, sadece haber verir. Tuketici
+// patlarsa provizyon akisi bozulmaz.
+const olayla = (opts, olay) => {
+  if (typeof opts.olay !== "function") return;
+  try { opts.olay(olay); } catch { /* dinleyici hatasi akisi kesmez */ }
+};
+
 // PURE: mevcut nvram + profil -> plan. Cihaza gitmez, test edilebilir.
-// Doner: { degisecek:{k:{mevcut,hedef}}, ayni:[k], eksik:[k] }
+// Doner: { degisecek:{k:{mevcut,hedef}}, ayni:[k], eksik:[k], onceki:{k:v}, hedef:{k:v} }
+// `onceki`/`hedef`: profildeki TUM anahtarlarin oncesi/hedefi — degismeyenler
+// dahil. Gosterim tarafi (UI'in "kurulum oncesi" paneli) tam liste ister;
+// motorun kendisi yalnizca `degisecek`i kullanir.
 export function planProvisioning(mevcut, profil) {
   const degisecek = {};
   const ayni = [];
   const eksik = [];
+  const onceki = {};
+  const hedefler = {};
   for (const [k, hedefRaw] of Object.entries(profil.nvram)) {
     const hedef = String(hedefRaw);
+    hedefler[k] = hedef;
+    onceki[k] = k in mevcut ? mevcut[k] : null;
     if (!(k in mevcut)) { eksik.push(k); degisecek[k] = { mevcut: null, hedef }; continue; }
     if (mevcut[k] === hedef) ayni.push(k);
     else degisecek[k] = { mevcut: mevcut[k], hedef };
   }
-  return { degisecek, ayni, eksik };
+  return { degisecek, ayni, eksik, onceki, hedef: hedefler };
 }
 
 // Planı LAN-IP ve LAN-IP-olmayan diye ayırır (yazma sırası için).
@@ -72,7 +88,10 @@ export async function applyProvisioning(opts, profil) {
     ayni_sayisi: plan.ayni.length,
     degisecek: plan.degisecek,
     lan_ip_degisecek: Object.keys(lanIp),
+    onceki: plan.onceki,
+    hedef: plan.hedef,
   };
+  olayla(opts, { tur: "plan", plan: rapor.plan });
   if (plan.eksik.length) {
     // Profilde olup cihazda hiç olmayan anahtar — beklenmedik, uyar (yazılır
     // ama dikkat).
@@ -97,25 +116,38 @@ export async function applyProvisioning(opts, profil) {
   // 4) YAZ — önce LAN-IP olmayanlar (bağlantı kopmaz).
   if (Object.keys(digerleri).length) {
     bildir(opts, `${Object.keys(digerleri).length} ayar yaziliyor (LAN IP haric)`);
+    olayla(opts, { tur: "yaziliyor", anahtarlar: Object.keys(digerleri) });
     const y = await consoleWrite(kOpts, esle(digerleri));
     rapor.problems.push(...y.problems);
     rapor.yazilan_diger = y.yazilan;
-    if (!y.ok) { rapor.durum = "yazma_hatasi"; rapor.ok = false; return rapor; }
+    if (!y.ok) {
+      rapor.durum = "yazma_hatasi"; rapor.ok = false;
+      olayla(opts, { tur: "yazma_hatasi", anahtarlar: Object.keys(digerleri) });
+      return rapor;
+    }
+    olayla(opts, { tur: "yazildi", anahtarlar: y.yazilan });
   }
 
   // 5) LAN IP anahtarları (bağlantı bundan sonra yeni adrese taşınır).
   if (Object.keys(lanIp).length) {
     bildir(opts, `LAN IP yaziliyor: ${Object.entries(lanIp).map(([k, v]) => `${k}=${v.hedef}`).join(", ")}`);
+    olayla(opts, { tur: "yaziliyor", anahtarlar: Object.keys(lanIp) });
     const y = await consoleWrite(kOpts, esle(lanIp));
     rapor.problems.push(...y.problems);
     rapor.yazilan_lan = y.yazilan;
-    if (!y.ok) { rapor.durum = "lan_yazma_hatasi"; rapor.ok = false; return rapor; }
+    if (!y.ok) {
+      rapor.durum = "lan_yazma_hatasi"; rapor.ok = false;
+      olayla(opts, { tur: "yazma_hatasi", anahtarlar: Object.keys(lanIp) });
+      return rapor;
+    }
+    olayla(opts, { tur: "yazildi", anahtarlar: y.yazilan });
   }
 
   // 6) Reboot (config'i temiz uygula). Fire-and-forget: reboot bağlantıyı
   // koparır, cevap beklemeyiz.
   if (reboot) {
     bildir(opts, "reboot (config uygulaniyor)");
+    olayla(opts, { tur: "reboot" });
     await rebootFireForget(kOpts);
     rapor.reboot_gonderildi = true;
   }
@@ -132,6 +164,7 @@ export async function applyProvisioning(opts, profil) {
     rapor.dogrulama = dog;
     rapor.durum = dog.tamam ? "basarili" : "dogrulama_bekliyor";
     rapor.ok = dog.tamam && isOk(rapor.problems);
+    olayla(opts, { tur: "bitti", durum: rapor.durum, ok: rapor.ok, dogrulama: dog });
   } else {
     // LAN IP değişti ama yeni adres verilmedi -> PC'yi 5.5.5.x'e alıp doğrula.
     rapor.durum = "reboot_sonrasi_dogrulama_gerek";
@@ -179,12 +212,17 @@ async function dogrula(opts, profil, anaOpts) {
     await bekle(5000);
     bildir(anaOpts, `dogrulama denemesi ${i + 1}/${maxDeneme}`);
     const { degerler, sayi } = await consoleNvram(kOpts);
-    if (sayi === 0) continue;                                   // (1) gelmedi
+    if (sayi === 0) {                                           // (1) gelmedi
+      olayla(anaOpts, { tur: "dogrulama", deneme: i + 1, durum: "cihaz_bekleniyor" });
+      continue;
+    }
 
     const kalan = Object.keys(planProvisioning(degerler, profil).degisecek);
     if (kalan.length === 0) {                                   // (3) TAMAM
+      olayla(anaOpts, { tur: "dogrulandi", bekleme_sn: (i + 1) * 5 });
       return { tamam: true, kalan_degisecek: [], bekleme_sn: (i + 1) * 5 };
     }
+    olayla(anaOpts, { tur: "dogrulama", deneme: i + 1, durum: "oturmadi", kalan });
 
     sonKalan = kalan;                                           // (2) oturmadi
     const imza = kalan.slice().sort().join(",");

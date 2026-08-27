@@ -9,7 +9,7 @@
 // opts (ortak): { host, kaynakIp, kimlik:{kullanici,sifre}|null }
 // Ilerleme bildirimi istersen opts.ilerle(mesaj) verilebilir (varsayilan: yok).
 
-import { ENDPOINTS, TCP_PORTS } from "./constants.js";
+import { ENDPOINTS, TCP_PORTS, SETTING_LABELS } from "./constants.js";
 import {
   Client, isHostBusy, lockHost, unlockHost,
 } from "./client.js";
@@ -28,8 +28,12 @@ export { applyProvisioning, planProvisioning, splitPlan } from "./provisioning.j
 export { FIELD_PROFILE, FACTORY_PROFILE, PROFILES } from "./profile.js";
 export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
+  readIdentity,
 } from "./pipeline.js";
 export { readSim, telefonNormalize } from "./sim.js";
+// Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
+export { settingLabel } from "./report.js";
+export { SETTING_LABELS };
 
 const now = () => new Date().toISOString();
 const onekAl = (host) => host.split(".").slice(0, 3).join(".") + ".";

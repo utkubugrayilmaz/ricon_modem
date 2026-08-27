@@ -13,6 +13,7 @@
 //   node ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
 //                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
 //                                --reboot-yok
+//   node ricon.js sunucu         Tarayici arayuzu (UI) — http://127.0.0.1:8080
 //   node ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
 //                                TELEFON ZORUNLU: --telefon 05xx (yoksa sorar)
 //                                --dongu (cok modem; her modemde ayri sorar)
@@ -147,6 +148,36 @@ async function komutuCalistir() {
         yeniKaynakIp: bayrak("--yeni-kaynak"),
       }, profil);
     }
+    case "sunucu": {
+      // UI/HTTP katmani: cekirdegi TUKETIR. Kural eklemez — telefon
+      // zorunlulugu ve defter kaydi zaten cekirdekte.
+      const profilAd = bayrak("--profil") || "saha";
+      const profil = PROFILES[profilAd];
+      if (!profil) {
+        return { zaman: new Date().toISOString(), komut: "sunucu", ok: false,
+          problems: [{ kod: "ARGS", severity: "error",
+            message: `Bilinmeyen profil: ${profilAd}`,
+            check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
+      }
+      const { createServer } = await import("./src/server.js");
+      const port = Number(bayrak("--port")) || 8080;
+      // Varsayilan YALNIZCA 127.0.0.1: bu servis cihaza YAZAR, agda
+      // yayinlanmasi acik bir karar olmali.
+      const adres = bayrak("--dinle") || "127.0.0.1";
+      const sunucu = createServer({
+        fabrikaHost: opts.host,
+        sahaHost: bayrak("--saha-host") || profil.nvram.lan_ipaddr || "5.5.5.1",
+        kimlik: opts.kimlik,
+        profil,
+        kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
+        ilerle,
+      });
+      await new Promise((c) => sunucu.listen(port, adres, c));
+      process.stderr.write(`\nModem kurulum arayuzu: http://${adres}:${port}\n`
+        + `  profil: ${profil.ad} · fabrika: ${opts.host}\n`
+        + "  Ctrl+C ile kapat.\n\n");
+      return null;   // sunucu calisir; JSON ciktisi/cikis yok
+    }
     case "hazirla": {
       const profilAd = bayrak("--profil") || "saha";
       const profil = PROFILES[profilAd];
@@ -189,7 +220,8 @@ async function komutuCalistir() {
   }
 }
 
-const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim", "fark", "uygula", "hazirla"]);
+const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
+  "fark", "uygula", "hazirla", "sunucu"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {
@@ -208,12 +240,18 @@ async function main() {
       + "  hazirla --telefon 05xx       tak-calistir: algila->provizyon->dogrula\n"
       + "         [--dongu]             cok modem (her modemde telefon sorar)\n"
       + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
-      + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n\n"
+      + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
+      + "  sunucu                       tarayici arayuzu (UI) — cekirdegi tuketir\n"
+      + "         [--port 8080] [--dinle 127.0.0.1] [--profil ad] [--kayit <dosya>]\n\n"
       + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n"
       + "       --host <ip> · --kaynak-ip <ip>  (.env'i ezer; modem o an neredeyse)\n",
     );
     return komut && !KOMUTLAR.has(komut) ? 1 : 0;
   }
+
+  // sunucu: surekli calisir — JSON basmaz, cikmaz. Dinleyen sunucu olay
+  // dongusunu acik tutar; asagidaki process.exit'e DUSMEMESI gerekir.
+  if (komut === "sunucu") { await komutuCalistir(); return null; }
 
   const kaynak = bayrak("--kaynak");
   const rapor = kaynak
@@ -232,7 +270,7 @@ async function main() {
   return rapor.ok ? 0 : 1;
 }
 
-main().then((kod) => process.exit(kod)).catch((e) => {
+main().then((kod) => { if (kod !== null) process.exit(kod); }).catch((e) => {
   process.stderr.write(`Beklenmeyen hata: ${e?.stack || e}\n`);
   process.exit(1);
 });

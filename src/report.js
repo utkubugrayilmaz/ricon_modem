@@ -4,6 +4,8 @@
 // zaten kimlik tasimaz; yine de guvenlik agi olarak temizle() ile ozyinelemeli
 // alan-adi + regex suzgeci uygulanir. Rapor paylasilabilir olmali.
 
+import { SETTING_LABELS } from "./constants.js";
+
 // Cikti nesnesinden sir tasiyabilecek alanlari ozyinelemeli siler.
 const SIR_ALANLARI = new Set(["sifre", "password", "kimlik", "auth", "authorization"]);
 const SIR_DESENI = /Basic\s+[A-Za-z0-9+/=]+/g;
@@ -28,6 +30,21 @@ export function writeJson(nesne) {
 
 // Bilinmeyen deger 0 degil "—" gosterilir.
 const g = (v) => (v == null || v === "" ? "—" : v);
+
+// PURE: bir nvram anahtar/deger ciftini gosterime cevirir (UI + rapor ortak).
+// Sozlukte olmayan anahtar da calisir — adi anahtarin kendisi olur (gecirgen).
+// Doner: { anahtar, ad, sayfa, gosterim, ham }
+export function settingLabel(anahtar, deger) {
+  const t = SETTING_LABELS[anahtar];
+  const ham = deger == null ? null : String(deger);
+  let gosterim;
+  if (ham === null) gosterim = "—";
+  else if (t?.gizli) gosterim = ham === "" ? "(bos)" : "••••";
+  else if (t?.degerler && ham in t.degerler) gosterim = t.degerler[ham];
+  else if (ham === "") gosterim = "(bos)";
+  else gosterim = t?.birim ? `${ham} ${t.birim}` : ham;
+  return { anahtar, ad: t?.ad || anahtar, sayfa: t?.sayfa || null, gosterim, ham };
+}
 
 // Insan-okunur ozet (stderr'a; stdout saf JSON kalir).
 export function summaryText(rapor) {

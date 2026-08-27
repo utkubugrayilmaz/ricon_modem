@@ -58,6 +58,11 @@ Standart SSH/telnet/SNMP kapalı. Alttaki OS OpenWrt/Linux. Otomasyon (Faz
   (`hazirla`) uçtan uca çalıştı, idempotent, yan etkisiz.
 
 ### Yapabildiklerimize eklenenler ✅
+- `sunucu` — tarayıcı arayüzü: telefon girişi → kurulum öncesi/sonrası
+  karşılaştırma ekranı, canlı güncellenen. Çekirdeğin üçüncü tüketicisi
+  (terminal · npm paketi · HTTP/UI); arayüzde iş mantığı YOK.
+- Hazırlama defteri (`data/hazirlanan.jsonl`) — her modem için bir satır:
+  telefon + ICCID/IMEI/IMSI/MAC/operatör + durum.
 - `uygula` — provizyonu uygula (varsayılan KURU/dry-run; gerçek yazma
   `--uygula` ister). `--profil fabrika` ile bizim dokunduğumuz ayarları
   default'a geri alır (**gerçek factory reset değil** — bkz. `profile.js`).
@@ -70,5 +75,7 @@ Standart SSH/telnet/SNMP kapalı. Alttaki OS OpenWrt/Linux. Otomasyon (Faz
   akışta henüz denenmedi. Aynı ağda **tek modem** olmalı (hepsi 192.168.1.1'de
   gelir → çakışır).
 - **MSISDN:** operatörden ICCID→numara listesi (cihazdan alınamıyor).
-- **HTTP endpoint + UI:** çekirdek hazır (importlanabilir fonksiyonlar),
-  sunucu katmanı henüz yazılmadı.
+- **Telefon numarasını cihaza gömme:** yer hazır (`router_name` = arayüzdeki
+  Device Name). Not: o alan kimliksiz sayfada görünmez — gömülen numara
+  ancak parolayla girince okunur.
+- **SIM karttan OCR** ile numarayı kameradan okumak.

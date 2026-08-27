@@ -83,6 +83,54 @@ export const OPERATORS = Object.freeze({
   28604: "Turk Telekom",
 });
 
+// Ayar sozlugu — nvram anahtari -> insan-okunur ayar (arayuzdeki adiyla).
+// SIM_FIELD_MAP ile ayni fikir: cihazin dili -> bizim dilimiz. Kaynak:
+// docs/hazirlama-profili.md (default/duzeltilmis ekran kiyasiyla teyitli).
+//
+// Motor bunu KULLANMAZ — motor yalnizca anahtar/deger bilir. Bu tablo sadece
+// GOSTERIM icin (UI, rapor). Yeni ayar = yeni satir.
+//   ad      : arayuzdeki alan adi
+//   sayfa   : arayuzde hangi sayfada
+//   degerler: ham deger -> okunabilir etiket (yoksa ham deger gosterilir)
+//   birim   : sayisal degerin birimi
+//   gizli   : degeri ekranda maskele (parola alani)
+export const SETTING_LABELS = Object.freeze({
+  w1_wan_proto: { ad: "Connection Type", sayfa: "Modem/WAN → Main Link",
+    degerler: { m13gdhcp: "M1-DHCP", m13g: "M1-PPP" } },
+  m1simswtch: { ad: "SIM Backup", sayfa: "Modem/WAN → Main Link",
+    degerler: { 0: "Disable", 1: "Enable" } },
+  mullinkfail: { ad: "Link Fail to Restart", sayfa: "Modem/WAN → Main Link", birim: "dk" },
+  m1s1wanapn: { ad: "APN (SIM1)", sayfa: "Modem/WAN → Main Link" },
+  m1s1pppuser: { ad: "SIM1 User Name", sayfa: "Modem/WAN → Main Link" },
+  m1s1ppppwd: { ad: "SIM1 Password", sayfa: "Modem/WAN → Main Link", gizli: true },
+  m1s2pppuser: { ad: "SIM2 User Name", sayfa: "Modem/WAN → Main Link" },
+  m1s2ppppwd: { ad: "SIM2 Password", sayfa: "Modem/WAN → Main Link", gizli: true },
+
+  w1_connfailsw: { ad: "Connect Fail", sayfa: "Modem/WAN → Others" },
+  w1_kponm: { ad: "Keep Alive", sayfa: "Modem/WAN → Others",
+    degerler: { 1: "None", 7: "ICMP+" } },
+  m1_pap_allowed: { ad: "Authentication · PAP", sayfa: "Modem/WAN → Others",
+    degerler: { 0: "kapali", 1: "acik" } },
+  m1_chap_allowed: { ad: "Authentication · CHAP", sayfa: "Modem/WAN → Others",
+    degerler: { 0: "kapali", 1: "acik" } },
+  m1_chapms_allowed: { ad: "Authentication · MS-CHAP", sayfa: "Modem/WAN → Others",
+    degerler: { 0: "kapali", 1: "acik" } },
+  m1_chapms_v2_allowed: { ad: "Authentication · MS-CHAPv2", sayfa: "Modem/WAN → Others",
+    degerler: { 0: "kapali", 1: "acik" } },
+
+  w2_wan_proto: { ad: "Connection Type", sayfa: "Modem/WAN → Backup Link",
+    degerler: { disabled: "Disabled", dhcp: "Automatic Configuration - DHCP" } },
+
+  wl0_net_mode: { ad: "WLAN radyo", sayfa: "Wireless",
+    degerler: { disabled: "kapali" } },
+  wl_net_mode: { ad: "WLAN radyo (genel)", sayfa: "Wireless",
+    degerler: { disabled: "kapali" } },
+
+  lan_ipaddr: { ad: "Local IP", sayfa: "LAN" },
+  lan_ipaddr_ex1: { ad: "Local IP Address1 (ikincil)", sayfa: "LAN",
+    degerler: { "0.0.0.0": "yok (silinmis)" } },
+});
+
 // MAC uretici onekleri (OUI). Cihazi adresini bilmeden komsu tablosunda
 // tanimak icin. 00:0C:43 = bu unitede olculen chipset (Ralink/MediaTek).
 export const OUI_VENDORS = Object.freeze({

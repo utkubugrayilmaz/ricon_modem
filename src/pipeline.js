@@ -22,12 +22,18 @@ import { problem } from "./problems.js";
 const now = () => new Date().toISOString();
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
+// Yapilandirilmis olay (UI canli guncellemesi) — provisioning.js'teki ile ayni
+// sozlesme: opsiyonel, tuketicinin isi, dinleyici hatasi akisi kesmez.
+const olayla = (opts, olay) => {
+  if (typeof opts.olay !== "function") return;
+  try { opts.olay(olay); } catch { /* dinleyici hatasi akisi kesmez */ }
+};
 
 // Cihaz kimliği — "bu hangi modemdi" sorusunun kalıcı cevabı.
 // NOT: cihazın ETİKET seri numarası ne HTTP'de ne nvram'da YOK (2026-08-27
 // arandı; BULGULAR'daki S/N fiziksel etiketten okundu). Bu yüzden kalıcı
 // kimlik: LAN MAC (cihaza ait, kimliksiz okunur) + IMEI (modül) + ICCID (SIM).
-async function readIdentity({ host, kaynakIp, kimlik }) {
+export async function readIdentity({ host, kaynakIp, kimlik }) {
   const sonuc = { lan_mac: null, iccid: null, imsi: null, imei: null, operator: null };
   const c = new Client({ host, kaynakIp, kimlik });
   const bilgi = await c.get("/asp/status/Info.live.htm");
@@ -94,6 +100,7 @@ export async function provisionModem(opts) {
       } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
     }
     rapor.kimlik_bilgi = kimlikBilgi;
+    if (konum && kimlik) olayla(opts, { tur: "kimlik", kimlik_bilgi: kimlikBilgi });
     rapor.kayit = provisionRecord({
       sonuc: rapor, telefon: telefonNormalize(telefon), kimlikBilgi,
       profilAd: profil?.ad, host: konum?.host ?? null,
@@ -101,6 +108,8 @@ export async function provisionModem(opts) {
     if (typeof opts.kayit === "function") {
       try { opts.kayit(rapor.kayit); } catch { /* kayit yazimi akisi bozmaz */ }
     }
+    olayla(opts, { tur: "sonuc", durum: rapor.durum, ok: rapor.ok,
+      deneme: rapor.deneme ?? null, kayit: rapor.kayit, problems: rapor.problems });
     return rapor;
   };
 
@@ -124,13 +133,16 @@ export async function provisionModem(opts) {
     let sahaDry = null;
     if (sahaVar) {
       const d = await applyProvisioning(
-        { host: sahaHost, kaynakIp: sahaKaynak, kimlik, uygula: false }, profil,
+        { host: sahaHost, kaynakIp: sahaKaynak, kimlik, uygula: false, olay: opts.olay },
+        profil,
       );
       sahaDry = d.durum;
     }
 
     const eylem = nextAction(fabrikaVar, sahaVar, sahaDry);
     rapor.son_eylem = eylem;
+    olayla(opts, { tur: "algilandi", eylem, deneme,
+      konum: fabrikaVar ? fabrikaHost : sahaVar ? sahaHost : null });
 
     if (eylem === "zaten_hazir") {
       rapor.durum = "zaten_hazir"; rapor.deneme = deneme; rapor.ok = true;
@@ -150,7 +162,7 @@ export async function provisionModem(opts) {
       kaynakIp: fabrikada ? fabrikaKaynak : sahaKaynak,
       kimlik, uygula: true,
       yeniHost: sahaHost, yeniKaynakIp: sahaKaynak,
-      ilerle: opts.ilerle,
+      ilerle: opts.ilerle, olay: opts.olay,
     }, profil);
     rapor.deneme = deneme;
     rapor.detay = { durum: r.durum, plan: r.plan?.degisecek_sayisi, dogrulama: r.dogrulama };

@@ -14,9 +14,11 @@ WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
   (bkz. `docs/arayuz-haritasi.md`, `docs/hazirlama-profili.md`).
 - **Faz 3 — Otomatik provizyon:** ✅ Motor + tak-çalıştır pipeline; sıfır
   cihazda tek komutla uçtan uca doğrulandı, idempotent.
-- **51 test** (`npm test`), sıfır bağımlılık.
-- **Sırada:** çok modemli saha denemesi (`hazirla --dongu` tek modemde
-  kanıtlandı, seri akışta henüz denenmedi).
+- **Faz 4 — Arayüz:** ✅ HTTP endpoint (SSE) + tarayıcı UI; çekirdeğin
+  **üçüncü tüketicisi** (terminal · npm paketi · HTTP/UI).
+- **65 test** (`npm test`), sıfır bağımlılık.
+- **Sırada:** çok modemli saha denemesi (tek modemde kanıtlandı, seri akışta
+  henüz denenmedi) · telefon numarasını cihaza gömme · SIM karttan OCR.
 
 ## Kurulum
 
@@ -57,10 +59,34 @@ node --env-file=.env ricon.js uygula --uygula --yeni-host 5.5.5.1 --yeni-kaynak 
 node --env-file=.env ricon.js hazirla --telefon 05321234567   # bir modem
 node --env-file=.env ricon.js hazirla --dongu   # çok modem: her modemde sorar
 
+# Tarayıcı arayüzü (UI) — çekirdeği tüketen üçüncü katman
+node --env-file=.env ricon.js sunucu          # http://127.0.0.1:8080
+
 # ortak: --json <dosya> · --kaynak <dosya> (kayıttan, cihazsız)
+#        --host <ip> · --kaynak-ip <ip> (.env'i ezer; modem o an neredeyse)
 ```
 
 stdout **her zaman saf JSON**; ilerleme/özet stderr'a; çıkış kodu 0 (ok)/1.
+
+## Arayüz (UI)
+
+```bash
+node --env-file=.env ricon.js sunucu     # http://127.0.0.1:8080
+```
+
+İki ekran: (1) büyük telefon numarası girişi — 11 hane hücresi, eksik/fazla
+giremez; (2) sol **beyaz** panel kurulum öncesi, sağ **yeşil** panel kurulum
+sonrası — satırlar geldikçe `yazılıyor → yazıldı → doğrulandı` olarak güncellenir.
+Onaylayınca ilk ekrana döner, sıradaki modem takılır.
+
+Modülerlik kuralı burada da geçerli: **UI'da iş mantığı yok.** Telefon
+zorunluluğu, idempotency, LAN IP'nin en sona yazılması, defter kaydı — hepsi
+çekirdekte. `src/server.js` yalnızca isteği `opts`a çevirir, olayları akıtır;
+tarayıcı nvram anahtarı bile bilmez (satırlar ekrana hazır gelir). Çekirdek
+sunucuyu **tanımaz**.
+
+Güvenlik: sunucu varsayılan olarak **yalnız `127.0.0.1`**'i dinler — bu servis
+cihaza yazar, ağa açılması açık bir karar olmalı (`--dinle 0.0.0.0`).
 
 ## Hazırlama defteri (rollout kaydı)
 
@@ -105,8 +131,10 @@ ileride **HTTP endpoint** ile tüketilir.
 | `src/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü) |
 | `src/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
 | `src/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
-| `src/report.js` | JSON + insan-okunur çıktı, sır temizleme |
-| `src/constants.js` | Tüm sabitler (port/uç/alan haritaları) |
+| `src/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |
+| `src/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
+| `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez |
+| `public/` | Tarayıcı arayüzü (düz HTML/CSS/JS, build yok) |
 
 ## Değişmeyen kurallar
 

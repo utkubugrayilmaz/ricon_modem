@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modem kurulum — ACO Recycling</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="ust">
+  <img class="ust-logo" src="aco-logo.png" alt="ACO Recycling">
+  <span class="ust-ad">Modem kurulum</span>
+  <span class="ust-durum" id="ustDurum" data-hal="bekle">modem aranıyor</span>
+</header>
+
+<!-- ================= EKRAN 1: telefon numarası ================= -->
+<main class="ekran" id="ekranGiris">
+  <div class="giris">
+    <h1 class="giris-baslik">SIM kartın telefon numarası</h1>
+    <p class="giris-alt">Kurulum bu numara olmadan başlamaz. Numara modemden
+      okunamıyor — kayıt için tek kaynak sensin.</p>
+
+    <div class="haneler" id="haneler" role="group" aria-label="Telefon numarası"></div>
+    <input class="gizli" id="gizliGiris" type="text" inputmode="numeric"
+           autocomplete="off" spellcheck="false" maxlength="11"
+           aria-label="Telefon numarası, 11 hane">
+
+    <p class="uyari" id="uyari" role="status">&nbsp;</p>
+
+    <button class="baslat" id="baslatBtn" type="button" disabled>Kurulumu başlat</button>
+
+    <p class="ipucu" id="ipucu"></p>
+  </div>
+</main>
+
+<!-- ================= EKRAN 2: öncesi / sonrası ================= -->
+<main class="ekran kurulum" id="ekranKurulum" hidden>
+  <div class="kurulum-baslik">
+    <div class="kb-hucre">
+      <span class="kb-etiket">Kurulum öncesi</span>
+      <span class="kb-yer" id="konumOnce">—</span>
+    </div>
+    <div class="kb-hucre kb-sonra">
+      <span class="kb-etiket">Kurulum sonrası</span>
+      <span class="kb-yer" id="konumSonra">—</span>
+    </div>
+  </div>
+
+  <div class="kimlik-serit">
+    <div class="ks-hucre" id="kimlikOnce"></div>
+    <div class="ks-hucre ks-sonra">
+      <p class="akis" id="akis">hazırlanıyor…</p>
+    </div>
+  </div>
+
+  <div class="izgara" id="izgara"></div>
+
+  <footer class="alt" id="alt">
+    <span class="alt-durum" id="altDurum">Kurulum sürüyor…</span>
+    <button class="onay" id="onayBtn" type="button" hidden>Onayla ve sıradaki modem</button>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
