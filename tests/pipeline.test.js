@@ -170,11 +170,20 @@ test("PIN_INVALID ve PIN_REQUIRED PUK riskini ACIKCA soyluyor", () => {
 });
 
 test("provisionRecord: PIN'in KENDISI kayda GIRMEZ, sadece denendi mi", () => {
-  const k = provisionRecord({ sonuc: { pin_denemesi: { denendi: true } } });
-  assert.equal(k.pin_denendi, true);
-  const duz = JSON.stringify(k);
-  assert.ok(!duz.includes("pin_deger") && !/"\d{4,8}"/.test(duz.replace(/"zaman":"[^"]*"/, "")),
-    "kayitta PIN degeri gorunmemeli");
+  // PIN degerini kayda sizabilecegi HER yerden gecirmeye calis: girdi
+  // nesnelerinin hicbiri kayitta PIN degeri uretmemeli.
+  const PIN = "4271";
+  const k = provisionRecord({
+    sonuc: { pin_denemesi: { denendi: true, pin: PIN }, pin: PIN },
+    kimlikBilgi: { iccid: "8990", pin: PIN, m1s1simpin: PIN },
+    internet: { var: false, sure_sn: 150, pin: PIN },
+    telefon: "05350641858",
+  });
+  assert.equal(k.pin_denendi, true, "sadece 'denendi mi' bilgisi tasinir");
+  assert.ok(!JSON.stringify(k).includes(PIN), "PIN degeri kayitta HIC gorunmemeli");
+  // Sema sabit: PIN tasiyabilecek yeni bir alan sessizce eklenmis olmasin.
+  assert.ok(!Object.keys(k).some((a) => /pin/.test(a) && a !== "pin_denendi"),
+    "pin_denendi disinda pin icerikli alan yok");
 });
 
 test("stripSecrets: PIN alanlari ciktidan silinir", () => {

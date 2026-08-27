@@ -86,13 +86,24 @@ export function simTakiliMi(kimlikBilgi = {}) {
 export async function waitForInternet({ host, kaynakIp, kimlik }, maxSn = 150, opts = {}) {
   const baslangic = Date.now();
   const gecen = () => Math.round((Date.now() - baslangic) / 100) / 10;
+  // Yoklamada readIdentity DEĞİL readSim kullanıyoruz: readIdentity ayrıca
+  // Info.live.htm'i de çekiyor (yalnızca lan_mac için) ve burada lan_mac'e
+  // ihtiyaç yok. Tek uç = yoklama başına ~2 sn tasarruf, tek bağlantılı
+  // cihazda da yarı yük.
+  const bak = async () => {
+    const s = await readSim({ host, kaynakIp, kimlik });
+    const s1 = s.sim1 || {};
+    const wan = (s1.wan_ip || "").trim();
+    return { wan_ip: wan && wan !== "0.0.0.0" ? wan : null,
+      sim_durumu: s1.sim_durumu || null };
+  };
   for (;;) {
     let k = null;
-    try { k = await readIdentity({ host, kaynakIp, kimlik }); } catch { /* yeniden dene */ }
+    try { k = await bak(); } catch { /* cihaz reboot'ta olabilir; yeniden dene */ }
     if (k?.wan_ip) {
       const sure = gecen();
       olayla(opts, { tur: "internet", var: true, sure_sn: sure, wan_ip: k.wan_ip });
-      return { var: true, sure_sn: sure, wan_ip: k.wan_ip, sim_durumu: k.sim_durumu ?? null };
+      return { var: true, sure_sn: sure, wan_ip: k.wan_ip, sim_durumu: k.sim_durumu };
     }
     if (gecen() >= maxSn) {
       olayla(opts, { tur: "internet", var: false, sure_sn: gecen(),
@@ -138,6 +149,66 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
   };
 }
 
+// İnternet doğrulaması + gerekirse TEK PIN denemesi. `rapor`u günceller.
+// provisionModem'in içinde closure olarak duruyordu; tek işi olan ayrı bir
+// fonksiyon olarak daha okunur (ve provisionModem 75 satır kısaldı).
+//
+// Sıra önemli: önce internet beklenir. Gelirse PIN'e HİÇ dokunulmaz — kilitli
+// olmayan SIM'e PIN yazmak 3 denemeden birini yakmak demek (bkz. applyPin).
+async function internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts }) {
+  if (!(internetBekle > 0)) return null;
+  bildir(opts, "internet dogrulamasi (SIM calisiyor mu)");
+  let sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+
+  if (!sonuc.var && pin) {
+    bildir(opts, "internet yok — SIM PIN denenecek (tek deneme)");
+    const p = await applyPin(
+      { ...konum, kimlik, ilerle: opts.ilerle, olay: opts.olay }, pin,
+    );
+    rapor.pin_denemesi = { denendi: p.denendi, atlandi: p.atlandi };
+    rapor.problems.push(...p.problems);
+    if (p.denendi) {
+      sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+      rapor.pin_denemesi.sonuc = sonuc.var ? "internet_geldi" : "internet_gelmedi";
+    }
+  } else if (!sonuc.var && !pin) {
+    // PIN girilmemiş: ne yapılacağını söyle, kendi başına deneme yapma.
+    rapor.problems.push(problem("PIN_REQUIRED"));
+    rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi" };
+  }
+
+  rapor.internet = sonuc;
+  if (!sonuc.var) {
+    rapor.problems.push(problem("INTERNET_YOK", internetBekle, sonuc.sim_durumu));
+  }
+  return sonuc;
+}
+
+// Her çıkışta çalışır: kimliği tamamla, kalıcı kayıt satırını üret, dışarıya
+// bildir. Çekirdek DOSYAYA YAZMAZ — nereye yazılacağı tüketicinin kararı.
+async function kaydiTamamla({ rapor, konum, hazirKimlik, kimlik, telefon,
+  profil, internet, opts }) {
+  let kimlikBilgi = hazirKimlik || {};
+  if (!hazirKimlik && konum && kimlik) {
+    try {
+      bildir(opts, "cihaz kimligi okunuyor (kayit icin)");
+      kimlikBilgi = await readIdentity({ ...konum, kimlik });
+    } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
+  }
+  rapor.kimlik_bilgi = kimlikBilgi;
+  if (konum && kimlik) olayla(opts, { tur: "kimlik", kimlik_bilgi: kimlikBilgi });
+  rapor.kayit = provisionRecord({
+    sonuc: rapor, telefon: normalizePhone(telefon), kimlikBilgi,
+    profilAd: profil?.ad, host: konum?.host ?? null, internet,
+  });
+  if (typeof opts.kayit === "function") {
+    try { opts.kayit(rapor.kayit); } catch { /* kayit yazimi akisi bozmaz */ }
+  }
+  olayla(opts, { tur: "sonuc", durum: rapor.durum, ok: rapor.ok,
+    deneme: rapor.deneme ?? null, kayit: rapor.kayit, problems: rapor.problems });
+  return rapor;
+}
+
 // PURE: konum + dry-run durumuna göre sıradaki eylem. Test edilebilir.
 // Doner: "zaten_hazir" | "provizyon_fabrika" | "provizyon_saha" | "modem_yok"
 export function nextAction(fabrikaVar, sahaVar, sahaDryRunDurum) {
@@ -167,66 +238,15 @@ export async function provisionModem(opts) {
   } = opts;
   const rapor = { zaman: now(), komut: "hazirla", problems: [] };
 
-  // Her cikista: cihaz kimligini oku (mumkunse), kalici kayit satirini uret,
-  // varsa opts.kayit(satir) ile disariya bildir. Cekirdek DOSYAYA YAZMAZ —
-  // nereye yazilacagi tuketicinin (CLI/endpoint) karari.
-  // İnternet doğrulaması: ayarlar doğrulandıktan SONRA "SIM çalışıyor mu".
-  // Ayrı bir soru olduğu için ayrı raporlanır; başarısızlığı provizyonu
-  // BAŞARISIZ yapmaz (retry hiçbir şeyi düzeltmez — ayarlar zaten doğru).
-  const internetiDogrula = async (konum) => {
-    if (!(internetBekle > 0)) return null;
-    bildir(opts, "internet dogrulamasi (SIM calisiyor mu)");
-    let sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+  // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
+  // kaydiTamamla). Cagri yerleri degismedi.
+  const internetiDogrula = (konum) =>
+    internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts });
 
-    // İnternet yok + PIN verilmiş -> TEK deneme. PIN'i yalnızca BURADA yazıyoruz:
-    // yani kilitli olmadığı anlaşılan bir SIM'e asla PIN gitmiyor. applyPin
-    // kendi içinde de biçim kontrolü yapıyor ve aynı PIN yazılıysa denemiyor
-    // (bkz. provisioning.js — 3 yanlış deneme SIM'i PUK'a kilitler).
-    if (!sonuc.var && pin) {
-      bildir(opts, "internet yok — SIM PIN denenecek (tek deneme)");
-      const p = await applyPin(
-        { ...konum, kimlik, ilerle: opts.ilerle, olay: opts.olay }, pin,
-      );
-      rapor.pin_denemesi = { denendi: p.denendi, atlandi: p.atlandi };
-      rapor.problems.push(...p.problems);
-      if (p.denendi) {
-        sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
-        rapor.pin_denemesi.sonuc = sonuc.var ? "internet_geldi" : "internet_gelmedi";
-      }
-    } else if (!sonuc.var && !pin) {
-      // PIN girilmemiş: ne yapılacağını söyle, kendi başına deneme yapma.
-      rapor.problems.push(problem("PIN_REQUIRED"));
-      rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi" };
-    }
 
-    rapor.internet = sonuc;
-    if (!sonuc.var) {
-      rapor.problems.push(problem("INTERNET_YOK", internetBekle, sonuc.sim_durumu));
-    }
-    return sonuc;
-  };
+  const bitir = (konum, hazirKimlik = null, internet = null) =>
+    kaydiTamamla({ rapor, konum, hazirKimlik, kimlik, telefon, profil, internet, opts });
 
-  const bitir = async (konum, hazirKimlik = null, internet = null) => {
-    let kimlikBilgi = hazirKimlik || {};
-    if (!hazirKimlik && konum && kimlik) {
-      try {
-        bildir(opts, "cihaz kimligi okunuyor (kayit icin)");
-        kimlikBilgi = await readIdentity({ ...konum, kimlik });
-      } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
-    }
-    rapor.kimlik_bilgi = kimlikBilgi;
-    if (konum && kimlik) olayla(opts, { tur: "kimlik", kimlik_bilgi: kimlikBilgi });
-    rapor.kayit = provisionRecord({
-      sonuc: rapor, telefon: normalizePhone(telefon), kimlikBilgi,
-      profilAd: profil?.ad, host: konum?.host ?? null, internet,
-    });
-    if (typeof opts.kayit === "function") {
-      try { opts.kayit(rapor.kayit); } catch { /* kayit yazimi akisi bozmaz */ }
-    }
-    olayla(opts, { tur: "sonuc", durum: rapor.durum, ok: rapor.ok,
-      deneme: rapor.deneme ?? null, kayit: rapor.kayit, problems: rapor.problems });
-    return rapor;
-  };
 
   if (!kimlik) {
     rapor.problems.push(problem("AUTH_REQUIRED", "modem"));

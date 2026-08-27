@@ -30,7 +30,7 @@ export const SIM_PIN_KEY = "m1s1simpin";
 // (bkz. pipeline.js). Fabrika profilinde default değeri var ki
 // "fabrikaya döndür" bunu da geri alsın.
 export const DEVICE_NAME_KEY = "router_name";
-export const DEVICE_NAME_DEFAULT = "Industrial Cellular Router";
+const DEVICE_NAME_DEFAULT = "Industrial Cellular Router";
 
 // YAZMA SIRASI — teknisyenin arayuzde izledigi sira: Modem/WAN -> DHCP -> LAN.
 //

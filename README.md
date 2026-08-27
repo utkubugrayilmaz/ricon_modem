@@ -16,7 +16,7 @@ WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
   cihazda tek komutla uçtan uca doğrulandı, idempotent.
 - **Faz 4 — Arayüz:** ✅ HTTP endpoint (SSE) + tarayıcı UI; çekirdeğin
   **üçüncü tüketicisi** (terminal · npm paketi · HTTP/UI).
-- **65 test** (`npm test`), sıfır bağımlılık.
+- **95 test** (`npm test`), sıfır bağımlılık.
 - **Sırada:** çok modemli saha denemesi (tek modemde kanıtlandı, seri akışta
   henüz denenmedi) · telefon numarasını cihaza gömme · SIM karttan OCR.
 
@@ -63,6 +63,10 @@ node --env-file=.env ricon.js hazirla --telefon 05321234567 --internet-bekle 0
 
 # Tarayıcı arayüzü (UI) — çekirdeği tüketen üçüncü katman
 node --env-file=.env ricon.js sunucu          # http://127.0.0.1:8080
+
+# Metrik: süreler kalıcı kaydedilir, tek komutla özetlenir
+node ricon.js olcum-elle --dk 15.5 --kim "teknisyen A"   # elle sürecin kronometresi
+node ricon.js olcum --modem-sayisi 400                   # özet + karşılaştırma
 
 # ortak: --json <dosya> · --kaynak <dosya> (kayıttan, cihazsız)
 #        --host <ip> · --kaynak-ip <ip> (.env'i ezer; modem o an neredeyse)
@@ -134,6 +138,7 @@ ileride **HTTP endpoint** ile tüketilir.
 | `src/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
 | `src/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
 | `src/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |
+| `src/metrics.js` | Ölçüm özetleyici (PURE) — süre istatistikleri, karşılaştırma |
 | `src/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
 | `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez |
 | `public/` | Tarayıcı arayüzü (düz HTML/CSS/JS, build yok) |
@@ -174,7 +179,7 @@ provision** the Ricon **S9922M44-DOA** industrial cellular router.
 All three phases are done and verified on the live device: read-everything
 (system + SIM/cellular + full nvram), UI→nvram mapping (every setting matched
 via nvram diff), and one-command provisioning (fresh device → fully
-provisioned → verified at 5.5.5.1, idempotent). 48 tests, zero deps.
+provisioned → verified at 5.5.5.1, idempotent). 95 tests, zero deps.
 
 Core logic lives in importable `opts`-taking functions in `src/index.js`
 (`readDevice`, `applyProvisioning`, `provisionModem`...) consumed as a CLI, an
