@@ -134,6 +134,32 @@ const KATALOG = {
       + " PIN-locked, the fix is to turn the PIN off from a phone (project"
       + " decision) — a PIN can still be entered on the result screen if needed.",
   }),
+  PIN_REJECTED: (kalan) => ({
+    message: `The SIM rejected the PIN (attempts left before this try: ${kalan ?? "?"}).`
+      + " It was NOT retried.",
+    check: "One attempt is now spent. Read the PIN off the SIM card holder and"
+      + " verify it before trying again — three wrong attempts PUK-lock the SIM."
+      + " The tool never retries a rejected PIN on its own.",
+  }),
+  PIN_LOCK_NOT_DISABLED: () => ({
+    message: "The SIM was unlocked but the PIN requirement could not be turned"
+      + " off permanently.",
+    check: "The SIM works now but will ask for the PIN again after a power cycle."
+      + " Turn the PIN off from a phone, or retry; the SIM is not at risk.",
+  }),
+  AT_PORT_YOK: (adaylar) => ({
+    message: `None of the candidate AT ports answered AT with OK (${adaylar}).`,
+    check: "The device exposes many /dev/ttyUSB* nodes and most are dead, so we"
+      + " probe instead of assuming. Widen AT_PORT_ADAYLARI in at.js, or run"
+      + " 'ls -la /dev/ttyUSB*' on the device to find the live node.",
+  }),
+  MSISDN_CIHAZDA_YOK: () => ({
+    message: "AT+CNUM returned no number: the phone number is not written on"
+      + " this SIM (EF_MSISDN is empty).",
+    check: "Enter the number by hand this time. To avoid it in future, ask the"
+      + " operator to deliver SIMs with the MSISDN written on the card, or match"
+      + " the reported ICCID against the operator's list.",
+  }),
   SIM_MISSING: (durum) => ({
     message: `No SIM is readable in the modem (status: ${durum || "unknown"}), so`
       + " provisioning was refused before touching the device.",
@@ -171,7 +197,9 @@ const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
   // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
   // bilinmemesi bizim hatamiz degil ve tekrar denemek cozmez. Error yapmak
   // durum ("hazir") ile problems'i celiskiye dusuruyordu.
-  "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED", "PIN_ALREADY_TRIED"]);
+  "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED", "PIN_ALREADY_TRIED",
+  // Numara SIM'de yazili degilse bu bir ARIZA degil: operator elle girer.
+  "MSISDN_CIHAZDA_YOK", "PIN_LOCK_NOT_DISABLED"]);
 
 export const PROBLEM_CODES = Object.freeze(Object.keys(KATALOG));
 

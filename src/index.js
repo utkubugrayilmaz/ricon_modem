@@ -36,6 +36,11 @@ export {
   assessDevice, provisionEksikleri,
 } from "./pipeline.js";
 export { readSim, normalizePhone, parseSimStatus } from "./sim.js";
+// AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
+export {
+  readMsisdn, readSimLock, simPinKaldir, atPortBul, atKomut,
+  parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
+} from "./at.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
 export { settingLabel } from "./report.js";
 // Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.
