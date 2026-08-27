@@ -236,6 +236,7 @@ function kimlikBas(hedef, k) {
 
 let akim = null;
 let akisTuru = null;   // "kurulum" | "sifirlama" — bitişte ne yapılacağını belirler
+let simKilit = null;   // cihazın bildirdiği PIN/PUK kilidi (varsa)
 
 // --- Süre ölçümü (TEST) ---
 // "Başlat"a bastığımdan bitişe kadar kaç saniye? Ölçüm noktası olayın EKRANA
@@ -343,6 +344,7 @@ function panelleriTemizle() {
   satirlar.clear();
   akisSatirlari.length = 0;
   akis.textContent = "";
+  simKilit = null;
   el("kimlikOnce").textContent = "";
   el("konumOnce").textContent = "—";
   el("konumSonra").textContent = "—";
@@ -451,6 +453,15 @@ function akisiBaslat({ yol, tur, telefon = null, onceEtiket, sonraEtiket, calisi
 
   // Kurulum akışında PIN otomatik denenirse (baştan girilmişse) haber ver.
   akim.addEventListener("pin_deneniyor", () => akisaYaz("SIM PIN yazılıyor (tek deneme)"));
+
+  // Cihaz PIN/PUK kilidini kendisi söylüyor ("Need verification PIN code
+  // (PIN: 3/3, PUK: 10/10)") — internet beklemeye gerek yok, anında bildir.
+  akim.addEventListener("sim_kilit", (e) => {
+    const o = JSON.parse(e.data);
+    simKilit = o;
+    akisaYaz(`SIM ${o.kilit.toUpperCase()} KİLİTLİ — kalan hak: PIN ${o.pin_kalan ?? "?"}`
+      + `, PUK ${o.puk_kalan ?? "?"}`);
+  });
 
   // Provizyon adımının bitişi (nihai sonuç değil — o `sonuc`). Yalnız
   // başarısızlıkta bilgi taşır: doğrulama neden tamamlanmadı.
@@ -596,9 +607,24 @@ function bitir(ok, o) {
   if (!ok && o.problems?.length) {
     akisaYaz(o.problems.map((p) => `[${p.kod}] ${p.message}`).join(" "));
   }
-  // İnternet gelmedi VE PIN denenmedi -> operatörü ana ekrana atmadan burada
-  // sor. Provizyon tekrarlanmayacak; yalnızca PIN yazılacak (ayrı iş).
-  const pinGerekli = (o.problems || []).some((p) => p.kod === "PIN_REQUIRED");
+  // SIM kilidi cihazdan geldiyse BİRİNCİL çözümü söyle: PIN'i telefondan kapat.
+  // Proje kararı PIN saklamak değil, PIN'i ortadan kaldırmak.
+  const kod = (k) => (o.problems || []).some((p) => p.kod === k);
+  if (simKilit?.kilit === "puk") {
+    altBar.dataset.hal = "hata";
+    altDurum.textContent = `SIM PUK KİLİTLİ (kalan ${simKilit.puk_kalan ?? "?"})`
+      + " — telefonla PUK ile aç; PIN yazmak işe yaramaz";
+  } else if (simKilit?.kilit === "pin") {
+    altBar.dataset.hal = "uyari";
+    altDurum.textContent = `SIM PIN KİLİTLİ (kalan ${simKilit.pin_kalan ?? "?"} hak)`
+      + " — SIM'i telefona takıp PIN'i KAPAT, sonra geri tak";
+  }
+
+  // PIN kilidi VE PIN denenmedi -> operatörü ana ekrana atmadan burada sor.
+  // Kurtarma yolu: provizyon tekrarlanmaz, yalnızca PIN yazılır (ayrı iş).
+  // Son hak korumasına takıldıysa da sor: kararı insan verecek.
+  const pinGerekli = (kod("PIN_REQUIRED") || kod("SIM_PIN_LOCKED")
+    || kod("PIN_LAST_ATTEMPT")) && simKilit?.kilit !== "puk";
   pinIstek.hidden = !pinGerekli;
   if (pinGerekli) {
     pinIstekGiris.value = "";

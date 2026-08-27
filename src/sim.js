@@ -16,6 +16,42 @@ import { problem, isOk } from "./problems.js";
 const now = () => new Date().toISOString();
 const SIM_UC = "/asp/status/Status_Internet.live.asp";
 
+// PURE: "Status of SIM" metnini çözer. Cihazın verdiği metin (2026-08-27
+// canlı, PIN kilitli SIM):
+//
+//   "OK"
+//   "Not Insert"
+//   "Invalid"
+//   "Need verification PIN code (PIN: 3/3, PUK: 10/10)"
+//
+// Son satır ALTIN DEĞERİNDE: yalnızca "PIN gerekli" demiyor, KALAN DENEME
+// sayısını da veriyor. Bu yüzden PIN yazmadan önce kaç hak kaldığını
+// biliyoruz — 3 yanlış deneme SIM'i PUK'a kilitler, son hakkı kör körüne
+// harcamak zorunda değiliz.
+//
+// Doner: { ham, kilit: "pin"|"puk"|null, hazir, pin_kalan, pin_toplam,
+//          puk_kalan, puk_toplam }
+export function parseSimStatus(ham) {
+  const metin = String(ham ?? "").trim();
+  const sayac = (ad) => {
+    const m = metin.match(new RegExp(`${ad}:\\s*(\\d+)\\s*/\\s*(\\d+)`, "i"));
+    return m ? { kalan: Number(m[1]), toplam: Number(m[2]) } : { kalan: null, toplam: null };
+  };
+  const pin = sayac("PIN");
+  const puk = sayac("PUK");
+  let kilit = null;
+  if (/verification\s+puk|puk\s+(code\s+)?required|puk\s+lock/i.test(metin)) kilit = "puk";
+  else if (/verification\s+pin|pin\s+(code\s+)?required|pin\s+lock/i.test(metin)) kilit = "pin";
+  return {
+    ham: metin || null,
+    kilit,
+    // "hazir": SIM kullanıma hazır. Kilit varsa ya da metin boş/OK değilse hayır.
+    hazir: kilit === null && /^ok$/i.test(metin),
+    pin_kalan: pin.kalan, pin_toplam: pin.toplam,
+    puk_kalan: puk.kalan, puk_toplam: puk.toplam,
+  };
+}
+
 // Turkiye mobil numarasini 5xxxxxxxxx (10 hane) olarak normalize eder.
 // Gecersizse null. (+90 / 0 / bosluk-tire kabul.)
 export function normalizePhone(ham) {

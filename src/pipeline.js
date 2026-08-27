@@ -17,7 +17,7 @@ import { applyProvisioning, applyPin } from "./provisioning.js";
 import { DEVICE_NAME_KEY } from "./profile.js";
 import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
-import { readSim, normalizePhone } from "./sim.js";
+import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 import { problem } from "./problems.js";
 
 const now = () => new Date().toISOString();
@@ -47,6 +47,9 @@ export async function readIdentity({ host, kaynakIp, kimlik }) {
   sonuc.imei = s1.imei || null;
   sonuc.operator = s1.operator || null;
   sonuc.sim_durumu = s1.sim_durumu || null;
+  // Durum metnini çöz: kilit var mı, kaç deneme kaldı. PIN kilidini 150 sn
+  // internet bekleyerek anlamak yerine BURADA, ~4 sn'de anlıyoruz.
+  sonuc.sim = parseSimStatus(s1.sim_durumu);
   // WAN IP zaten bu okumada geliyor — BEDAVA kanıt: "bu SIM o an çevrimiçiydi".
   // Beklemiyoruz, yoksa yok yazıyoruz; kurulum süresine tek saniye eklemiyor.
   const wan = (s1.wan_ip || "").trim();
@@ -149,32 +152,91 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
   };
 }
 
+// PIN denemesi kararı — TEK YER. `rapor.pin_denemesi`yi doldurur.
+//
+// EN ÖNEMLİ KURAL: SON HAK OTOMATİK YAKILMAZ. Cihaz kalan deneme sayısını
+// söylüyor ("PIN: 3/3"); 1 hak kalmışsa yanlış bir PIN SIM'i PUK'a kilitler ve
+// bunu bir otomasyonun kendi başına riske atması kabul edilemez. O durumda
+// karar insana bırakılır.
+async function pinDene({ konum, kimlik, pin, rapor, opts, simDurum }) {
+  const kalan = simDurum?.pin_kalan ?? null;
+  if (!pin) {
+    rapor.problems.push(problem("PIN_REQUIRED"));
+    rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi", pin_kalan: kalan };
+    return;
+  }
+  if (kalan !== null && kalan <= 1) {
+    rapor.problems.push(problem("PIN_LAST_ATTEMPT", kalan));
+    rapor.pin_denemesi = { denendi: false, atlandi: "son_hak_korumasi", pin_kalan: kalan };
+    return;
+  }
+  bildir(opts, `SIM PIN denenecek (kalan hak: ${kalan ?? "?"})`);
+  const p = await applyPin(
+    { ...konum, kimlik, ilerle: opts.ilerle, olay: opts.olay }, pin,
+  );
+  rapor.pin_denemesi = { denendi: p.denendi, atlandi: p.atlandi, pin_kalan: kalan };
+  rapor.problems.push(...p.problems);
+}
+
 // İnternet doğrulaması + gerekirse TEK PIN denemesi. `rapor`u günceller.
 // provisionModem'in içinde closure olarak duruyordu; tek işi olan ayrı bir
 // fonksiyon olarak daha okunur (ve provisionModem 75 satır kısaldı).
 //
 // Sıra önemli: önce internet beklenir. Gelirse PIN'e HİÇ dokunulmaz — kilitli
 // olmayan SIM'e PIN yazmak 3 denemeden birini yakmak demek (bkz. applyPin).
-async function internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts }) {
+async function internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts,
+  simDurum = null }) {
   if (!(internetBekle > 0)) return null;
+
+  // HIZLI YOL — cihaz "Need verification PIN code (PIN: 3/3, PUK: 10/10)"
+  // diyorsa interneti beklemenin ANLAMI YOK: cevabı zaten biliyoruz. 150 sn
+  // yerine 0 sn. (2026-08-27 canlı: bu metin PIN kilitli SIM'de görüldü.)
+  if (simDurum?.kilit) {
+    bildir(opts, `SIM ${simDurum.kilit.toUpperCase()} kilitli — internet beklenmiyor`);
+    olayla(opts, { tur: "sim_kilit", kilit: simDurum.kilit,
+      pin_kalan: simDurum.pin_kalan, puk_kalan: simDurum.puk_kalan, ham: simDurum.ham });
+    rapor.sim_kilit = simDurum;
+    const sonuc = { var: false, sure_sn: 0, wan_ip: null, sim_durumu: simDurum.ham };
+
+    // PUK kilidi: PIN yazmak İŞE YARAMAZ, dokunmayız. Operatör PUK'la açacak.
+    if (simDurum.kilit === "puk") {
+      rapor.problems.push(problem("SIM_PUK_LOCKED", simDurum.puk_kalan));
+      rapor.internet = sonuc;
+      return sonuc;
+    }
+    // PIN kilidi. BİRİNCİL mesaj: "PIN'i telefondan kapat" — proje kararı PIN
+    // saklamak değil, PIN'i ortadan kaldırmak.
+    rapor.problems.push(problem("SIM_PIN_LOCKED", simDurum.pin_kalan));
+    // PIN verilmişse ve SON HAK değilse tek deneme (kurtarma yolu).
+    // PIN VERİLMEDİYSE burada PIN_REQUIRED EKLEMİYORUZ: SIM_PIN_LOCKED zaten
+    // durumu ve doğru çözümü ("PIN'i telefondan kapat") söylüyor. İkinci bir
+    // mesaj hem tekrar hem de ters yönü ("PIN gir") öneriyor olurdu.
+    if (pin) await pinDene({ konum, kimlik, pin, rapor, opts, simDurum });
+    else rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi",
+      pin_kalan: simDurum.pin_kalan };
+    if (rapor.pin_denemesi?.denendi) {
+      const yeni = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+      rapor.pin_denemesi.sonuc = yeni.var ? "internet_geldi" : "internet_gelmedi";
+      rapor.internet = yeni;
+      if (!yeni.var) rapor.problems.push(problem("INTERNET_YOK", internetBekle, yeni.sim_durumu));
+      return yeni;
+    }
+    rapor.internet = sonuc;
+    return sonuc;
+  }
+
   bildir(opts, "internet dogrulamasi (SIM calisiyor mu)");
   let sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
 
-  if (!sonuc.var && pin) {
-    bildir(opts, "internet yok — SIM PIN denenecek (tek deneme)");
-    const p = await applyPin(
-      { ...konum, kimlik, ilerle: opts.ilerle, olay: opts.olay }, pin,
-    );
-    rapor.pin_denemesi = { denendi: p.denendi, atlandi: p.atlandi };
-    rapor.problems.push(...p.problems);
-    if (p.denendi) {
+  if (!sonuc.var) {
+    // İnternet gelmedi ama cihaz PIN kilidi de DEMEDİ. Yine de PIN verilmişse
+    // deneriz (kilit metni her firmwarede aynı olmayabilir); son hak koruması
+    // pinDene içinde.
+    await pinDene({ konum, kimlik, pin, rapor, opts, simDurum });
+    if (rapor.pin_denemesi?.denendi) {
       sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
       rapor.pin_denemesi.sonuc = sonuc.var ? "internet_geldi" : "internet_gelmedi";
     }
-  } else if (!sonuc.var && !pin) {
-    // PIN girilmemiş: ne yapılacağını söyle, kendi başına deneme yapma.
-    rapor.problems.push(problem("PIN_REQUIRED"));
-    rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi" };
   }
 
   rapor.internet = sonuc;
@@ -241,7 +303,8 @@ export async function provisionModem(opts) {
   // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
   // kaydiTamamla). Cagri yerleri degismedi.
   const internetiDogrula = (konum) =>
-    internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts });
+    internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts,
+      simDurum: kimlikBilgiOnce?.sim ?? null });
 
 
   const bitir = (konum, hazirKimlik = null, internet = null) =>
@@ -324,7 +387,8 @@ export async function provisionModem(opts) {
       rapor.deneme = deneme; rapor.ok = true;
       const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
       const net = await internetiDogrula(konumSaha);
-      rapor.durum = net && !net.var ? "zaten_hazir_internet_yok" : "zaten_hazir";
+      rapor.durum = !net || net.var ? "zaten_hazir"
+        : (rapor.sim_kilit?.kilit ? "zaten_hazir_sim_kilitli" : "zaten_hazir_internet_yok");
       return bitir(konumSaha, kimlikBilgiOnce, net);
     }
     if (eylem === "modem_yok") {
@@ -350,7 +414,8 @@ export async function provisionModem(opts) {
       rapor.ok = true;
       const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
       const net = await internetiDogrula(konumSaha);
-      rapor.durum = net && !net.var ? "hazir_internet_yok" : "hazir";
+      rapor.durum = !net || net.var ? "hazir"
+        : (rapor.sim_kilit?.kilit ? "hazir_sim_kilitli" : "hazir_internet_yok");
       return bitir(konumSaha, kimlikBilgiOnce, net);
     }
     rapor.problems.push(...r.problems);

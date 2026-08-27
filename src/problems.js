@@ -77,6 +77,26 @@ const KATALOG = {
       + " no data plan, no coverage in the workshop, or antennas not connected."
       + " Measured baseline: a healthy SIM came online 89s after reboot.",
   }),
+  SIM_PIN_LOCKED: (kalan) => ({
+    message: "The SIM is PIN-locked, so the modem cannot register on the network"
+      + ` (PIN attempts left: ${kalan ?? "?"}).`,
+    check: "Preferred fix, and the decision taken on this project: take the SIM"
+      + " out, put it in a phone and TURN THE PIN OFF, then put it back. That"
+      + " removes the problem permanently instead of storing PINs anywhere. Also"
+      + " ask the operator to ship SIMs with the PIN already disabled.",
+  }),
+  SIM_PUK_LOCKED: (kalan) => ({
+    message: `The SIM is PUK-locked (PUK attempts left: ${kalan ?? "?"}).`
+      + " Entering a PIN cannot help, so nothing was written.",
+    check: "Unlock it with the PUK printed on the SIM card holder, using a phone."
+      + " Do not guess: running out of PUK attempts destroys the SIM for good.",
+  }),
+  PIN_LAST_ATTEMPT: (kalan) => ({
+    message: `Only ${kalan} PIN attempt(s) remain, so no automatic attempt was made.`,
+    check: "A wrong PIN here would PUK-lock the SIM. This is left to a human on"
+      + " purpose: read the PIN off the card holder and verify it, or simply turn"
+      + " the PIN off from a phone.",
+  }),
   PIN_INVALID: () => ({
     message: "The supplied SIM PIN is not 4-8 digits, so it was refused before"
       + " reaching the device.",
@@ -86,9 +106,10 @@ const KATALOG = {
   PIN_REQUIRED: () => ({
     message: "The modem has no internet and no SIM PIN was supplied, so nothing"
       + " further was attempted.",
-    check: "If this SIM is PIN-locked, enter the PIN on the result screen — only"
-      + " the PIN is written, the verified settings are left alone. If the SIM has"
-      + " no PIN, check coverage, antennas and the data plan instead.",
+    check: "The settings are written and verified. If the modem did not report a"
+      + " PIN lock, look at coverage, antennas and the data plan first. If it is"
+      + " PIN-locked, the fix is to turn the PIN off from a phone (project"
+      + " decision) — a PIN can still be entered on the result screen if needed.",
   }),
   SIM_MISSING: (durum) => ({
     message: `No SIM is readable in the modem (status: ${durum || "unknown"}), so`
@@ -122,7 +143,12 @@ const KATALOG = {
 // INTERNET_YOK bilerek UYARI: ayarlar dogru yazilmis, provizyon basarili.
 // Internetin gelmemesi ayri bir sorun (PIN/kapsama/paket) ve retry cozmez —
 // sonucu ok:false yapmak yanlis alarm ve gereksiz tekrar uretir.
-const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY", "INTERNET_YOK"]);
+const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
+  "INTERNET_YOK", "SIM_PIN_LOCKED", "SIM_PUK_LOCKED", "PIN_LAST_ATTEMPT",
+  // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
+  // bilinmemesi bizim hatamiz degil ve tekrar denemek cozmez. Error yapmak
+  // durum ("hazir") ile problems'i celiskiye dusuruyordu.
+  "PIN_REQUIRED"]);
 
 export const PROBLEM_CODES = Object.freeze(Object.keys(KATALOG));
 
