@@ -9,6 +9,8 @@ WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
 
 ## Durum
 
+> Oturum devri / kaldigimiz yer: **[docs/DEVAM.md](docs/DEVAM.md)**
+
 - **Faz 1 — Her şeyi çek:** ✅ Canlı doğrulandı (sistem + SIM/hücresel + tam nvram).
 - **Faz 2 — Arayüz→nvram haritası:** ✅ Tüm ayarlar nvram diff'i ile eşlendi
   (bkz. `docs/arayuz-haritasi.md`, `docs/hazirlama-profili.md`).
