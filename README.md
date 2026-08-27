@@ -18,9 +18,10 @@ WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
   cihazda tek komutla uçtan uca doğrulandı, idempotent.
 - **Faz 4 — Arayüz:** ✅ HTTP endpoint (SSE) + tarayıcı UI; çekirdeğin
   **üçüncü tüketicisi** (terminal · npm paketi · HTTP/UI).
-- **95 test** (`npm test`), sıfır bağımlılık.
-- **Sırada:** çok modemli saha denemesi (tek modemde kanıtlandı, seri akışta
-  henüz denenmedi) · telefon numarasını cihaza gömme · SIM karttan OCR.
+- **148 test** (`npm test`), sıfır bağımlılık.
+- **Faz 5 — SIM ile konuşma:** ✅ Telefon numarası **cihazdan** okunuyor
+  (`AT+CNUM`), SIM PIN/PUK kilidi ve kalan hak modülden geliyor.
+- **Sırada:** bkz. [docs/DEVAM.md](docs/DEVAM.md) — 1 açık hata + iş listesi.
 
 ## Kurulum
 
@@ -57,8 +58,9 @@ node --env-file=.env ricon.js uygula                # ne değişecek (yazmaz)
 node --env-file=.env ricon.js uygula --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.5.5.100
 
 # Tak-çalıştır: algıla → provizyon → doğrula → başarıya kadar
-# TELEFON ZORUNLU (cihazdan okunamıyor, kurulumda biliniyor). Verilmezse sorar.
+# TELEFON ZORUNLU. Cihazdan okunabiliyorsa otomatik gelir; okunamazsa sorar.
 node --env-file=.env ricon.js hazirla --telefon 05321234567   # bir modem
+#   NOT: numara artık cihazdan okunabiliyor (AT+CNUM); elle giriş FALLBACK
 node --env-file=.env ricon.js hazirla --dongu   # çok modem: her modemde sorar
 node --env-file=.env ricon.js hazirla --telefon 05321234567 --internet-bekle 0
                                                 # SIM doğrulamasını atla
@@ -151,7 +153,8 @@ ileride **HTTP endpoint** ile tüketilir.
 | `src/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |
 | `src/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |
 | `src/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
-| `src/sim.js` | SIM/hücresel okuma + MSISDN (dış girdi, cihazda yok) |
+| `src/sim.js` | SIM/hücresel okuma (HTTP) + `Status of SIM` çözümleyici |
+| `src/at.js` | ⭐ AT komut katmanı — telefon numarası (`AT+CNUM`), SIM kilidi, PIN kaldırma |
 | `src/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + diff |
 | `src/network.js` | Arayüz/kaynak IP, ARP + IPv6 komşu |
 | `src/scanner.js` | Paralel TCP port taraması |
