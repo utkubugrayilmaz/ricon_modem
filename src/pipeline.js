@@ -16,7 +16,7 @@ import { findSourceIp } from "./network.js";
 import { applyProvisioning } from "./provisioning.js";
 import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
-import { readSim, telefonNormalize } from "./sim.js";
+import { readSim, normalizePhone } from "./sim.js";
 import { problem } from "./problems.js";
 
 const now = () => new Date().toISOString();
@@ -102,7 +102,7 @@ export async function provisionModem(opts) {
     rapor.kimlik_bilgi = kimlikBilgi;
     if (konum && kimlik) olayla(opts, { tur: "kimlik", kimlik_bilgi: kimlikBilgi });
     rapor.kayit = provisionRecord({
-      sonuc: rapor, telefon: telefonNormalize(telefon), kimlikBilgi,
+      sonuc: rapor, telefon: normalizePhone(telefon), kimlikBilgi,
       profilAd: profil?.ad, host: konum?.host ?? null,
     });
     if (typeof opts.kayit === "function") {
@@ -119,7 +119,7 @@ export async function provisionModem(opts) {
   }
   // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi: kurulum aninda biliniyor,
   // sonradan cihazdan OKUNAMIYOR (bkz. sim.js). Kayitsiz modem sahaya cikmasin.
-  if (!telefonNormalize(telefon)) {
+  if (!normalizePhone(telefon)) {
     rapor.problems.push(problem(telefon ? "MSISDN_INVALID" : "MSISDN_REQUIRED", telefon || "—"));
     rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
   }

@@ -34,7 +34,7 @@ import { findSourceIp } from "./src/network.js";
 import {
   checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
-  telefonNormalize,
+  normalizePhone,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report.js";
 
@@ -98,7 +98,7 @@ function telefonSor(sira) {
     for (let i = 0; i < 3; i += 1) {
       const ham = (await sor(`\n[${sira}. modem] SIM telefon numarasi (05xxxxxxxxx): `)).trim();
       if (!ham) break;
-      const n = telefonNormalize(ham);
+      const n = normalizePhone(ham);
       if (n) { rl.close(); return n; }
       process.stderr.write("  gecersiz — TR mobil bekleniyor (05xxxxxxxxx / +905xxxxxxxxx)\n");
     }

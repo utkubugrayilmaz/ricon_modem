@@ -30,7 +30,7 @@ export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
   readIdentity,
 } from "./pipeline.js";
-export { readSim, telefonNormalize } from "./sim.js";
+export { readSim, normalizePhone } from "./sim.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
 export { settingLabel } from "./report.js";
 export { SETTING_LABELS };

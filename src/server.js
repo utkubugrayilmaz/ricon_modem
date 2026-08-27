@@ -19,7 +19,7 @@ import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   provisionModem, applyProvisioning, provisionRecord, pcPreflight, readIdentity,
-  telefonNormalize, settingLabel, SETTING_LABELS,
+  normalizePhone, settingLabel, SETTING_LABELS,
 } from "./index.js";
 import { isReachable } from "./scanner.js";
 
@@ -203,7 +203,7 @@ export function createServer(opts = {}) {
         mesaj: "Baska bir kurulum surüyor. Bitmesini bekle." });
       return yanit.end();
     }
-    const n = telefonNormalize(telefon);
+    const n = normalizePhone(telefon);
     if (!n) {
       // Cekirdek de reddeder; burada erken donuyoruz ki cihaza hic gidilmesin.
       gonder("hata", { kod: "MSISDN", mesaj: "Gecerli telefon numarasi gerekli (05xxxxxxxxx)." });

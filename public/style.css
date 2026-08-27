@@ -194,6 +194,19 @@ body { display: flex; flex-direction: column; }
 .baslat:hover:not(:disabled) { background: var(--yesil-koyu); }
 .baslat:disabled { background: #c7cfca; cursor: not-allowed; }
 
+/* Bir önceki işin sonucu — ana ekrana dönüldüğünde görünür kalır, yeni iş
+   başlayınca silinir. Sonuç ekranında bekletmek yerine buraya taşıdık. */
+.duyuru {
+  margin: 22px auto 0;
+  max-width: 46ch;
+  font-size: 15px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  color: var(--yesil-koyu);
+  background: rgba(50, 130, 62, 0.1);
+  border: 1px solid rgba(50, 130, 62, 0.3);
+}
+
 .ipucu {
   margin: 22px 0 0;
   font-family: var(--veri);

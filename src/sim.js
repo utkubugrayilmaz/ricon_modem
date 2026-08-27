@@ -18,7 +18,7 @@ const SIM_UC = "/asp/status/Status_Internet.live.asp";
 
 // Turkiye mobil numarasini 5xxxxxxxxx (10 hane) olarak normalize eder.
 // Gecersizse null. (+90 / 0 / bosluk-tire kabul.)
-export function telefonNormalize(ham) {
+export function normalizePhone(ham) {
   if (!ham) return null;
   const d = String(ham).replace(/[\s.\-()]/g, "").replace(/^\+?90/, "").replace(/^0/, "");
   return /^5\d{9}$/.test(d) ? d : null;
@@ -42,7 +42,7 @@ export async function readSim(opts) {
   rapor.sim2 = sim2;
 
   // MSISDN: cihazdan gelmez; operator/UI girdisi (opts.telefon).
-  const norm = telefonNormalize(telefon);
+  const norm = normalizePhone(telefon);
   if (telefon && !norm) rapor.problems.push(problem("MSISDN_INVALID", telefon));
   rapor.msisdn = norm;
   rapor.msisdn_kaynak = norm ? "operator_girisi" : null;

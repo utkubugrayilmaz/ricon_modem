@@ -1,20 +1,20 @@
 // SIM modulu testleri — cihaz gerektirmez.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readSim, telefonNormalize } from "../src/sim.js";
+import { readSim, normalizePhone } from "../src/sim.js";
 
-test("telefonNormalize: TR mobil formatlarini 5xxxxxxxxx yapar", () => {
-  assert.equal(telefonNormalize("05551234567"), "5551234567");
-  assert.equal(telefonNormalize("+90 555 123 45 67"), "5551234567");
-  assert.equal(telefonNormalize("555-123-45-67"), "5551234567");
-  assert.equal(telefonNormalize("5551234567"), "5551234567");
+test("normalizePhone: TR mobil formatlarini 5xxxxxxxxx yapar", () => {
+  assert.equal(normalizePhone("05551234567"), "5551234567");
+  assert.equal(normalizePhone("+90 555 123 45 67"), "5551234567");
+  assert.equal(normalizePhone("555-123-45-67"), "5551234567");
+  assert.equal(normalizePhone("5551234567"), "5551234567");
 });
 
-test("telefonNormalize: gecersiz -> null", () => {
-  assert.equal(telefonNormalize("1234"), null);
-  assert.equal(telefonNormalize("02121234567"), null); // sabit hat
-  assert.equal(telefonNormalize(""), null);
-  assert.equal(telefonNormalize(null), null);
+test("normalizePhone: gecersiz -> null", () => {
+  assert.equal(normalizePhone("1234"), null);
+  assert.equal(normalizePhone("02121234567"), null); // sabit hat
+  assert.equal(normalizePhone(""), null);
+  assert.equal(normalizePhone(null), null);
 });
 
 test("readSim: kimliksiz AUTH_REQUIRED (cihaza gitmez)", async () => {

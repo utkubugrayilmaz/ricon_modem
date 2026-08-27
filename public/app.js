@@ -27,6 +27,7 @@ const onayBtn = el("onayBtn");
 const sifirlaBtn = el("sifirlaBtn");
 const sifirlaAlan = document.querySelector(".sifirla-alan");
 const onayBalon = el("onayBalon");
+const duyuru = el("duyuru");
 
 // ---------------- EKRAN 1: telefon numarası ----------------
 
@@ -217,26 +218,57 @@ function kimlikBas(hedef, k) {
 }
 
 let akim = null;
+let akisTuru = null;   // "kurulum" | "sifirlama" — bitişte ne yapılacağını belirler
 
-// Kurulum ve sıfırlama AYNI ekranı kullanır — ikisi de "öncesi → sonrası"
-// karşılaştırması. Fark yalnızca hangi uca bağlandığı ve panel etiketleri.
-function akisiBaslat({ yol, telefon = null, onceEtiket, sonraEtiket }) {
-  durumuIzle(false);
-  onayiKapat();
-  sifirlaAlan.hidden = true;      // iş sürerken sıfırlama teklif edilmez
-  el("etiketOnce").textContent = onceEtiket;
-  el("etiketSonra").textContent = sonraEtiket;
-  ekranGiris.hidden = true;
-  ekranKurulum.hidden = false;
+// Karşılaştırma ekranını KOMPLE boşaltır. Tek yerde toplandı: temizliği alan
+// alan yapmak, bir alanı unutup önceki modemin bilgisini gösterme hatasının
+// kaynağıydı. Yeni alan eklenirse SADECE buraya eklenir.
+function panelleriTemizle() {
   izgara.textContent = "";
   satirlar.clear();
   akisSatirlari.length = 0;
+  akis.textContent = "";
   el("kimlikOnce").textContent = "";
   el("konumOnce").textContent = "—";
   el("konumSonra").textContent = "—";
   onayBtn.hidden = true;
   altBar.removeAttribute("data-hal");
-  altDurum.textContent = "Kurulum sürüyor…";
+  altDurum.textContent = "";
+}
+
+// Ana ekrana dön ve OTURUMU SIFIRLA: akış kapanır, paneller boşalır, numara
+// silinir. duyuru varsa ana ekranda görünür kalır (bir önceki işin sonucu).
+function anaEkrana(duyuruMetni = "") {
+  if (akim) { akim.close(); akim = null; }
+  akisTuru = null;
+  panelleriTemizle();
+  ekranKurulum.hidden = true;
+  ekranGiris.hidden = false;
+  sifirlaAlan.hidden = false;
+  gizliGiris.value = "";
+  haneleriBoya();
+  duyuru.textContent = duyuruMetni;
+  duyuru.hidden = !duyuruMetni;
+  gizliGiris.focus();
+  durumuIzle(true);            // durum çubuğunu bekletmeden tazeler
+}
+
+// Kurulum ve sıfırlama AYNI ekranı kullanır — ikisi de "öncesi → sonrası"
+// karşılaştırması. Fark: hangi uca bağlandığı, panel etiketleri ve bitişte
+// ne olacağı (kurulum onay bekler, sıfırlama ana ekrana döner).
+function akisiBaslat({ yol, tur, telefon = null, onceEtiket, sonraEtiket, calisirkenMetin }) {
+  if (akim) { akim.close(); akim = null; }   // çift başlatmaya karşı
+  durumuIzle(false);
+  onayiKapat();
+  akisTuru = tur;
+  sifirlaAlan.hidden = true;      // iş sürerken sıfırlama teklif edilmez
+  duyuru.hidden = true;           // önceki işin duyurusu yeni işle silinir
+  panelleriTemizle();
+  el("etiketOnce").textContent = onceEtiket;
+  el("etiketSonra").textContent = sonraEtiket;
+  ekranGiris.hidden = true;
+  ekranKurulum.hidden = false;
+  altDurum.textContent = calisirkenMetin;
   akisaYaz("başlatıldı");
 
   akim = new EventSource(yol);
@@ -317,9 +349,11 @@ baslatBtn.addEventListener("click", () => {
   if (!gecerliMi(telefon)) return;
   akisiBaslat({
     yol: `/api/hazirla?telefon=${encodeURIComponent(telefon)}`,
+    tur: "kurulum",
     telefon,
     onceEtiket: "Kurulum öncesi",
     sonraEtiket: "Kurulum sonrası",
+    calisirkenMetin: "Kurulum sürüyor…",
   });
 });
 
@@ -345,8 +379,10 @@ el("sifirlaEvet").addEventListener("click", () => {
   onayiKapat();
   akisiBaslat({
     yol: "/api/fabrikaya-dondur",
+    tur: "sifirlama",
     onceEtiket: "Şimdiki hali",
     sonraEtiket: "Fabrika hali",
+    calisirkenMetin: "Fabrikaya döndürülüyor…",
   });
 });
 
@@ -360,6 +396,16 @@ document.addEventListener("click", (e) => {
 
 function bitir(ok, o) {
   if (akim) { akim.close(); akim = null; }
+
+  // Sıfırlama BAŞARILIYSA oturum burada biter: modem sıfırlandı, ekran da
+  // sıfırdan başlamalı. Sonuç ekranında bekletip fazladan tıklama istemek
+  // yanlıştı — sonuç ana ekranda duyuru olarak görünür.
+  if (ok && akisTuru === "sifirlama") {
+    anaEkrana(`Modem fabrikaya döndürüldü · ${o.kayit?.modem_ip || "192.168.1.1"}`
+      + " — sıradaki kurulum için hazır.");
+    return;
+  }
+
   const kayit = o.kayit;
   if (kayit) {
     el("konumSonra").textContent = kayit.modem_ip || "—";
@@ -377,12 +423,4 @@ function bitir(ok, o) {
   onayBtn.focus();
 }
 
-onayBtn.addEventListener("click", () => {
-  ekranKurulum.hidden = true;
-  ekranGiris.hidden = false;
-  sifirlaAlan.hidden = false;
-  gizliGiris.value = "";
-  haneleriBoya();
-  gizliGiris.focus();
-  durumuIzle(true);
-});
+onayBtn.addEventListener("click", () => anaEkrana());
