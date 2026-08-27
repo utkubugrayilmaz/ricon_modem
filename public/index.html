@@ -42,6 +42,14 @@
 
     <p class="uyari" id="uyari" role="status">&nbsp;</p>
 
+    <div class="pin-alan">
+      <label class="pin-etiket" for="pinGiris">SIM PIN <span>— biliyorsan yaz, boş da bırakabilirsin</span></label>
+      <input class="pin-giris" id="pinGiris" type="text" inputmode="numeric"
+             autocomplete="off" maxlength="8" placeholder="••••">
+      <p class="pin-not">Sadece internet gelmezse denenir. Kilitli olmayan SIM'e
+        <strong>yazılmaz</strong> — 3 yanlış deneme SIM'i PUK'a kilitler.</p>
+    </div>
+
     <button class="baslat" id="baslatBtn" type="button" disabled>Kurulumu başlat</button>
 
     <p class="duyuru" id="duyuru" role="status" hidden></p>
@@ -74,6 +82,20 @@
   <section class="olcum" id="olcumBolum" hidden>
     <span class="olcum-etiket">süre ölçümü · test</span>
     <div class="olcum-tablo" id="olcumTablo"></div>
+  </section>
+
+  <!-- İnternet gelmedi + PIN girilmemiş: operatörü ana ekrana atmadan,
+       YERİNDE PIN sor. Provizyon tekrarlanmaz, sadece PIN yazılır. -->
+  <section class="pin-istek" id="pinIstek" hidden>
+    <p class="pin-istek-baslik">İnternet gelmedi — SIM PIN kilitli olabilir</p>
+    <p class="pin-istek-not">Ayarlar yazıldı ve doğrulandı; tekrarlanmayacak.
+      PIN'i girersen <strong>yalnızca PIN</strong> yazılıp modem yeniden başlatılır.
+      Emin değilsen boş bırak: <strong>3 yanlış deneme SIM'i PUK'a kilitler.</strong></p>
+    <div class="pin-istek-satir">
+      <input class="pin-giris" id="pinIstekGiris" type="text" inputmode="numeric"
+             autocomplete="off" maxlength="8" placeholder="PIN (4-8 hane)">
+      <button class="pin-dene" id="pinDeneBtn" type="button">PIN'i dene</button>
+    </div>
   </section>
 
   <footer class="alt" id="alt">

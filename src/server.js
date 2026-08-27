@@ -18,8 +18,8 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  provisionModem, applyProvisioning, provisionRecord, pcPreflight, readIdentity,
-  normalizePhone, settingLabel, SETTING_LABELS,
+  provisionModem, applyProvisioning, applyPin, provisionRecord, pcPreflight,
+  readIdentity, waitForInternet, normalizePhone, settingLabel, SETTING_LABELS,
 } from "./index.js";
 import { isReachable } from "./scanner.js";
 
@@ -78,6 +78,7 @@ export function createServer(opts = {}) {
       if (url.pathname === "/api/durum") return await durumVer(yanit);
       if (url.pathname === "/api/hazirla") return await hazirlaAkit(url, istek, yanit);
       if (url.pathname === "/api/fabrikaya-dondur") return await sifirlaAkit(istek, yanit);
+      if (url.pathname === "/api/pin") return await pinAkit(url, istek, yanit);
       if (url.pathname === "/api/olcum") return await olcumAl(istek, yanit);
       return await statikVer(url.pathname, yanit);
     } catch (e) {
@@ -224,6 +225,52 @@ export function createServer(opts = {}) {
     }
   }
 
+  // --- GET /api/pin?pin=1234 : SADECE PIN dene + interneti tekrar kontrol ---
+  //
+  // AYRI BIR IS: provizyon bitmis ve dogrulanmis, tekrarlanmaz. Burada yalnizca
+  // SIM PIN yazilir, cihaz reboot edilir ve internet bir daha beklenir.
+  // Operatoru ana ekrana geri atmamak icin var: modem hala takili, ayarlar
+  // dogru, eksik olan tek sey PIN.
+  //
+  // ⚠ TEK DENEME: applyPin bicim kontrolu yapar, ayni PIN yaziliysa denemez
+  // (3 yanlis deneme SIM'i PUK'a kilitler).
+  async function pinAkit(url, istek, yanit) {
+    const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
+    if (mesgul) {
+      gonder("hata", { kod: "MESGUL", mesaj: "Baska bir islem surüyor." });
+      return bitir();
+    }
+    const pin = url.searchParams.get("pin");
+    mesgul = true;
+    try {
+      const { konum, on } = await modemiBul();
+      if (!on.hazir || !konum) {
+        gonder("hata", { kod: "MODEM_YOK",
+          mesaj: "Modem bulunamadi; PIN denenmedi.",
+          cozum: "Kablonun takili oldugundan emin ol." });
+        return;
+      }
+      const p = await applyPin({ ...konum, kimlik,
+        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
+        olay: (o) => gonder(o.tur, o) }, pin);
+
+      if (!p.denendi) {
+        gonder("pin_sonuc", { denendi: false, atlandi: p.atlandi,
+          problems: p.problems });
+        return;
+      }
+      // PIN yazildi + reboot edildi: cihaz yeni bastan gelecek, interneti bekle.
+      const net = await waitForInternet({ ...konum, kimlik }, internetBekle, {
+        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
+        olay: (o) => gonder(o.tur, o),
+      });
+      gonder("pin_sonuc", { denendi: true, internet: net, problems: p.problems });
+    } finally {
+      mesgul = false;
+      if (!kopukMu()) yanit.end();
+    }
+  }
+
   // --- GET /api/hazirla?telefon=05xx : SSE ile canli provizyon ---
   async function hazirlaAkit(url, istek, yanit) {
     const telefon = url.searchParams.get("telefon");
@@ -265,6 +312,8 @@ export function createServer(opts = {}) {
         sahaHost, sahaKaynak: on.sahaKaynak,
         kimlik, profil, telefon: n, kayit, kimlikBilgi,
         internetBekle,
+        // PIN OPSIYONEL: yalnizca internet gelmezse denenir (cekirdek karari).
+        pin: url.searchParams.get("pin") || null,
         ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
         olay: (o) => {
           if (o.tur === "plan") gonder("plan", { satirlar: planRows(o.plan) });

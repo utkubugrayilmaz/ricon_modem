@@ -31,6 +31,20 @@ const duyuru = el("duyuru");
 const olcumBolum = el("olcumBolum");
 const olcumTablo = el("olcumTablo");
 const altSure = el("altSure");
+const pinGiris = el("pinGiris");
+const pinIstek = el("pinIstek");
+const pinIstekGiris = el("pinIstekGiris");
+const pinDeneBtn = el("pinDeneBtn");
+
+// PIN girişleri: sadece rakam, en fazla 8 hane. Bozuk PIN bir deneme yakar,
+// o yüzden kaynağında süzülüyor (çekirdek de ayrıca reddediyor).
+for (const g of [pinGiris, pinIstekGiris]) {
+  g.addEventListener("input", () => {
+    g.value = g.value.replace(/\D/g, "").slice(0, 8);
+    if (g === pinIstekGiris) pinDeneBtn.disabled = !/^\d{4,8}$/.test(g.value);
+  });
+}
+pinDeneBtn.disabled = true;
 
 // ---------------- EKRAN 1: telefon numarası ----------------
 
@@ -335,6 +349,7 @@ function panelleriTemizle() {
   onayBtn.hidden = true;
   altBar.removeAttribute("data-hal");
   altDurum.textContent = "";
+  pinIstek.hidden = true;
   olcumBolum.hidden = true;
   olcumTablo.textContent = "";
   altSure.textContent = "0.0 sn";
@@ -352,6 +367,7 @@ function anaEkrana(duyuruMetni = "") {
   ekranGiris.hidden = false;
   sifirlaAlan.hidden = false;
   gizliGiris.value = "";
+  pinGiris.value = "";          // PIN modeme özel: sonraki modeme taşınmasın
   haneleriBoya();
   duyuru.textContent = duyuruMetni;
   duyuru.hidden = !duyuruMetni;
@@ -433,6 +449,9 @@ function akisiBaslat({ yol, tur, telefon = null, onceEtiket, sonraEtiket, calisi
       : `internet YOK (${o.sure_sn} sn) — SIM durumu: ${o.sim_durumu || "?"}`);
   });
 
+  // Kurulum akışında PIN otomatik denenirse (baştan girilmişse) haber ver.
+  akim.addEventListener("pin_deneniyor", () => akisaYaz("SIM PIN yazılıyor (tek deneme)"));
+
   // Provizyon adımının bitişi (nihai sonuç değil — o `sonuc`). Yalnız
   // başarısızlıkta bilgi taşır: doğrulama neden tamamlanmadı.
   akim.addEventListener("bitti", (e) => {
@@ -479,8 +498,10 @@ function akisiBaslat({ yol, tur, telefon = null, onceEtiket, sonraEtiket, calisi
 baslatBtn.addEventListener("click", () => {
   const telefon = gizliGiris.value;
   if (!gecerliMi(telefon)) return;
+  const pin = pinGiris.value.trim();
   akisiBaslat({
-    yol: `/api/hazirla?telefon=${encodeURIComponent(telefon)}`,
+    yol: `/api/hazirla?telefon=${encodeURIComponent(telefon)}`
+      + (pin ? `&pin=${encodeURIComponent(pin)}` : ""),
     tur: "kurulum",
     telefon,
     onceEtiket: "Kurulum öncesi",
@@ -575,9 +596,72 @@ function bitir(ok, o) {
   if (!ok && o.problems?.length) {
     akisaYaz(o.problems.map((p) => `[${p.kod}] ${p.message}`).join(" "));
   }
+  // İnternet gelmedi VE PIN denenmedi -> operatörü ana ekrana atmadan burada
+  // sor. Provizyon tekrarlanmayacak; yalnızca PIN yazılacak (ayrı iş).
+  const pinGerekli = (o.problems || []).some((p) => p.kod === "PIN_REQUIRED");
+  pinIstek.hidden = !pinGerekli;
+  if (pinGerekli) {
+    pinIstekGiris.value = "";
+    pinDeneBtn.disabled = true;
+    pinIstekGiris.focus();
+  }
+
   onayBtn.hidden = false;
   onayBtn.textContent = ok ? "Onayla ve sıradaki modem" : "Baştan dene";
+  if (!pinGerekli) onayBtn.focus();
+}
+
+// Yerinde PIN denemesi — SADECE PIN yazılır, provizyon tekrarlanmaz.
+pinDeneBtn.addEventListener("click", () => {
+  const p = pinIstekGiris.value.trim();
+  if (!/^\d{4,8}$/.test(p)) return;
+  pinDeneBtn.disabled = true;
+  altBar.removeAttribute("data-hal");
+  altDurum.textContent = "SIM PIN deneniyor…";
+  akisaYaz("PIN denemesi başlatıldı (yalnızca PIN yazılır)");
+  if (akim) { akim.close(); akim = null; }
+  akim = new EventSource(`/api/pin?pin=${encodeURIComponent(p)}`);
+  for (const tur of ["ilerleme", "internet_bekleniyor", "internet", "reboot",
+    "pin_deneniyor", "pin_sonuc", "hata"]) {
+    akim.addEventListener(tur, (e) => pinOlayi(tur, JSON.parse(e.data)));
+  }
+});
+
+function pinOlayi(tur, o) {
+  if (tur === "ilerleme") return akisaYaz(o.mesaj);
+  if (tur === "reboot") return akisaYaz("modem yeniden başlatılıyor");
+  if (tur === "pin_deneniyor") return akisaYaz("SIM PIN yazılıyor (tek deneme)");
+  if (tur === "internet_bekleniyor") {
+    altDurum.textContent = `PIN sonrası internet bekleniyor (${o.gecen_sn}/${o.max_sn} sn)`;
+    return undefined;
+  }
+  if (tur === "internet") {
+    return akisaYaz(o.var ? `internet VAR: ${o.wan_ip} (${o.sure_sn} sn)`
+      : `internet YOK (${o.sure_sn} sn)`);
+  }
+  if (tur === "hata") {
+    if (akim) { akim.close(); akim = null; }
+    altBar.dataset.hal = "hata";
+    altDurum.textContent = `PIN denenemedi — ${o.mesaj}`;
+    pinDeneBtn.disabled = false;
+    return undefined;
+  }
+  // pin_sonuc
+  if (akim) { akim.close(); akim = null; }
+  if (!o.denendi) {
+    akisaYaz(`PIN denenmedi (${o.atlandi})`);
+    altDurum.textContent = `PIN DENENMEDİ — ${o.problems?.[0]?.check || o.atlandi}`;
+    pinDeneBtn.disabled = false;
+    return undefined;
+  }
+  pinIstek.hidden = true;
+  altBar.dataset.hal = o.internet?.var ? "hazir" : "uyari";
+  altDurum.textContent = o.internet?.var
+    ? `PIN KABUL EDİLDİ — internet ${o.internet.wan_ip} (${o.internet.sure_sn} sn)`
+    : `PIN yazıldı ama internet gelmedi (${o.internet?.sure_sn} sn) — kapsama/data paketi?`;
+  onayBtn.hidden = false;
   onayBtn.focus();
+  return undefined;
 }
 
 onayBtn.addEventListener("click", () => anaEkrana());

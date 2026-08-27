@@ -7,6 +7,8 @@ import {
   nextAction, pcPreflight, provisionModem, provisionRecord, simTakiliMi,
 } from "../src/pipeline.js";
 import { problem, isOk } from "../src/problems.js";
+import { applyPin } from "../src/provisioning.js";
+import { stripSecrets } from "../src/report.js";
 
 test("nextAction: saha adresinde + istenen durumda -> zaten_hazir", () => {
   assert.equal(nextAction(false, true, "zaten_istenen_durumda"), "zaten_hazir");
@@ -88,7 +90,7 @@ test("provisionRecord: PURE — sabit sema, telefon normalize edilmis gelir", ()
   assert.deepEqual(Object.keys(k), [
     "zaman", "durum", "ok", "deneme", "profil", "modem_ip", "telefon",
     "lan_mac", "iccid", "imsi", "imei", "operator", "sim_durumu", "wan_ip",
-    "internet_sure_sn",
+    "internet_sure_sn", "pin_denendi",
   ]);
   assert.equal(k.telefon, "5321234567");
   assert.equal(k.imsi, null, "verilmeyen alan null (0 ya da bos degil)");
@@ -143,4 +145,41 @@ test("INTERNET_YOK bir UYARIDIR — sonucu ok:false yapmaz", () => {
   assert.equal(p.severity, "warning");
   assert.match(p.check, /PIN-locked/, "PIN ilk suphe olarak yazili");
   assert.equal(isOk([p]), true, "ayarlar dogru; retry hicbir seyi cozmez");
+});
+
+// --- SIM PIN korumalari (3 yanlis deneme SIM'i PUK'a kilitler) ---
+
+test("applyPin: BOZUK bicim cihaza HIC GITMEDEN reddedilir", async () => {
+  for (const kotu of ["", "12", "123456789", "abcd", "12a4", null, undefined]) {
+    const r = await applyPin({ host: "203.0.113.9", kimlik: { kullanici: "u", sifre: "p" } }, kotu);
+    assert.equal(r.denendi, false, `"${kotu}" denenmemeli`);
+    assert.equal(r.atlandi, "gecersiz_bicim");
+    assert.equal(r.problems[0].kod, "PIN_INVALID");
+  }
+});
+
+test("applyPin: kimliksiz denemez", async () => {
+  const r = await applyPin({ host: "203.0.113.9", kimlik: null }, "1234");
+  assert.equal(r.denendi, false);
+  assert.equal(r.atlandi, "kimlik_yok");
+});
+
+test("PIN_INVALID ve PIN_REQUIRED PUK riskini ACIKCA soyluyor", () => {
+  assert.match(problem("PIN_INVALID").check, /PUK-lock/);
+  assert.match(problem("PIN_REQUIRED").check, /PIN-locked/);
+});
+
+test("provisionRecord: PIN'in KENDISI kayda GIRMEZ, sadece denendi mi", () => {
+  const k = provisionRecord({ sonuc: { pin_denemesi: { denendi: true } } });
+  assert.equal(k.pin_denendi, true);
+  const duz = JSON.stringify(k);
+  assert.ok(!duz.includes("pin_deger") && !/"\d{4,8}"/.test(duz.replace(/"zaman":"[^"]*"/, "")),
+    "kayitta PIN degeri gorunmemeli");
+});
+
+test("stripSecrets: PIN alanlari ciktidan silinir", () => {
+  const temiz = stripSecrets({ m1s1simpin: "1234", pin: "5678", telefon: "5350641858" });
+  assert.equal(temiz.m1s1simpin, undefined);
+  assert.equal(temiz.pin, undefined);
+  assert.equal(temiz.telefon, "5350641858", "telefon sir DEGIL, kalir");
 });

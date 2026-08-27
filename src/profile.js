@@ -15,6 +15,23 @@
 // testte de böyle doğrulandı).
 export const LAN_IP_KEYS = ["lan_ipaddr"];
 
+// SIM1 PIN anahtarı. DİKKAT — bu anahtar diff ile DEĞİL, isimden çıkarıldı
+// (`m1s1simpin`, arayüzdeki Modem/WAN → SIM1 → PIN alanı). Elimizde PIN
+// kilitli SIM olmadığı için diff'lenemedi; çalışan bir SIM'e PIN yazarak
+// deney yapmak da doğru değil.
+//
+// Yanındaki `m1s1simpinpro` ("PIN protection"?) BİLEREK dokunulmuyor: anlamı
+// belirsiz ve SIM üzerinde işlem yapıyor olabilir. Tek seferde tek değişken.
+// PIN yazmak interneti getirmezse denenecek İLK şey o.
+export const SIM_PIN_KEY = "m1s1simpin";
+
+// Telefon numarasının yazıldığı alan (arayüzde Device Name). Değeri profilde
+// SABİT DEĞİL — her modemde farklı, o yüzden çalışma anında ekleniyor
+// (bkz. pipeline.js). Fabrika profilinde default değeri var ki
+// "fabrikaya döndür" bunu da geri alsın.
+export const DEVICE_NAME_KEY = "router_name";
+export const DEVICE_NAME_DEFAULT = "Industrial Cellular Router";
+
 // YAZMA SIRASI — teknisyenin arayuzde izledigi sira: Modem/WAN -> DHCP -> LAN.
 //
 // DURUST NOT: nvram'a yazma teknik olarak SIRASIZ'dir; hicbir deger `nvram
@@ -25,6 +42,12 @@ export const LAN_IP_KEYS = ["lan_ipaddr"];
 //   2) Plan/ilerleme ekrani teknisyenin kafasindaki sirayla akar.
 // Listede olmayan anahtar "Diger" grubuna duser ve LAN'dan ONCE yazilir.
 export const WRITE_GROUPS = [
+  {
+    // Cihaz adı = telefon numarası. En başta: en zararsız yazma, sorun çıkarsa
+    // gerisi hiç denenmemiş olur.
+    ad: "Cihaz",
+    anahtarlar: ["router_name"],
+  },
   {
     ad: "Modem/WAN",
     anahtarlar: [
@@ -136,6 +159,8 @@ export const FACTORY_PROFILE = {
     w1_kponm: "7",             // Keep Alive ICMP+
     // Backup Link default
     w2_wan_proto: "dhcp",      // Automatic Configuration - DHCP
+    // Cihaz adi default — "fabrikaya dondur" telefon numarasini da geri alir.
+    router_name: DEVICE_NAME_DEFAULT,
     // DHCP sunucusu default: acik
     lan_proto: "dhcp",
     // LAN defaults

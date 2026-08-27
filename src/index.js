@@ -24,11 +24,15 @@ import { consoleRecon, consoleNvram } from "./console.js";
 import { problem, isOk } from "./problems.js";
 
 // Provizyon (Faz 3) — çekirdek dışa aktarımı (paket/CLI/endpoint aynı API).
-export { applyProvisioning, planProvisioning, groupPlan } from "./provisioning.js";
-export { FIELD_PROFILE, FACTORY_PROFILE, PROFILES } from "./profile.js";
+export {
+  applyProvisioning, planProvisioning, groupPlan, applyPin,
+} from "./provisioning.js";
+export {
+  FIELD_PROFILE, FACTORY_PROFILE, PROFILES, DEVICE_NAME_KEY, SIM_PIN_KEY,
+} from "./profile.js";
 export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
-  readIdentity, simTakiliMi,
+  readIdentity, simTakiliMi, waitForInternet,
 } from "./pipeline.js";
 export { readSim, normalizePhone } from "./sim.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).

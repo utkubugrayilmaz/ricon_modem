@@ -95,6 +95,11 @@ export const OPERATORS = Object.freeze({
 //   birim   : sayisal degerin birimi
 //   gizli   : degeri ekranda maskele (parola alani)
 export const SETTING_LABELS = Object.freeze({
+  // Cihaz adi = SIM'in telefon numarasi (arayuzde Device Name).
+  router_name: { ad: "Device Name (telefon no)", sayfa: "Cihaz" },
+  // SIM PIN — degeri EKRANDA MASKELENIR, log/deftere hic yazilmaz.
+  m1s1simpin: { ad: "SIM1 PIN", sayfa: "Modem/WAN → Main Link", gizli: true },
+
   w1_wan_proto: { ad: "Connection Type", sayfa: "Modem/WAN → Main Link",
     degerler: { m13gdhcp: "M1-DHCP", m13g: "M1-PPP" } },
   m1simswtch: { ad: "SIM Backup", sayfa: "Modem/WAN → Main Link",

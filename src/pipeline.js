@@ -13,7 +13,8 @@
 
 import { isReachable } from "./scanner.js";
 import { findSourceIp } from "./network.js";
-import { applyProvisioning } from "./provisioning.js";
+import { applyProvisioning, applyPin } from "./provisioning.js";
+import { DEVICE_NAME_KEY } from "./profile.js";
 import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
 import { readSim, normalizePhone } from "./sim.js";
@@ -131,6 +132,9 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
     // PIN kilitli SIM'i yakalayan şey bu (ICCID PIN'li SIM'de de okunabiliyor).
     wan_ip: internet?.wan_ip ?? kimlikBilgi.wan_ip ?? null,
     internet_sure_sn: internet?.sure_sn ?? null,
+    // PIN DENENDİ Mİ — yalnızca boolean. PIN'in KENDİSİ hiçbir zaman deftere,
+    // log'a, olaya ya da rapora yazılmaz.
+    pin_denendi: Boolean(sonuc.pin_denemesi?.denendi),
   };
 }
 
@@ -151,6 +155,9 @@ export async function provisionModem(opts) {
     fabrikaHost = "192.168.1.1", fabrikaKaynak,
     sahaHost = "5.5.5.1", sahaKaynak,
     kimlik, profil, denemeler = 3, telefon,
+    // SIM PIN — OPSIYONEL. Yalnizca internet dogrulamasi BASARISIZ olursa ve
+    // burada bir deger varsa denenir. Kilitli olmayan SIM'e ASLA yazilmaz.
+    pin = null,
     // Internet dogrulamasi ust siniri (sn). 0 = kapat. Varsayilan ACIK:
     // teknisyenin elle yaptigi kaliteyi kaybetmeyelim (PIN kilitli SIM yakalar).
     internetBekle = 150,
@@ -169,7 +176,29 @@ export async function provisionModem(opts) {
   const internetiDogrula = async (konum) => {
     if (!(internetBekle > 0)) return null;
     bildir(opts, "internet dogrulamasi (SIM calisiyor mu)");
-    const sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+    let sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+
+    // İnternet yok + PIN verilmiş -> TEK deneme. PIN'i yalnızca BURADA yazıyoruz:
+    // yani kilitli olmadığı anlaşılan bir SIM'e asla PIN gitmiyor. applyPin
+    // kendi içinde de biçim kontrolü yapıyor ve aynı PIN yazılıysa denemiyor
+    // (bkz. provisioning.js — 3 yanlış deneme SIM'i PUK'a kilitler).
+    if (!sonuc.var && pin) {
+      bildir(opts, "internet yok — SIM PIN denenecek (tek deneme)");
+      const p = await applyPin(
+        { ...konum, kimlik, ilerle: opts.ilerle, olay: opts.olay }, pin,
+      );
+      rapor.pin_denemesi = { denendi: p.denendi, atlandi: p.atlandi };
+      rapor.problems.push(...p.problems);
+      if (p.denendi) {
+        sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+        rapor.pin_denemesi.sonuc = sonuc.var ? "internet_geldi" : "internet_gelmedi";
+      }
+    } else if (!sonuc.var && !pin) {
+      // PIN girilmemiş: ne yapılacağını söyle, kendi başına deneme yapma.
+      rapor.problems.push(problem("PIN_REQUIRED"));
+      rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi" };
+    }
+
     rapor.internet = sonuc;
     if (!sonuc.var) {
       rapor.problems.push(problem("INTERNET_YOK", internetBekle, sonuc.sim_durumu));
@@ -209,6 +238,16 @@ export async function provisionModem(opts) {
     rapor.problems.push(problem(telefon ? "MSISDN_INVALID" : "MSISDN_REQUIRED", telefon || "—"));
     rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
   }
+
+  // ETKİN PROFİL = profil + telefon numarası cihaz adı olarak.
+  // Cihaz adı her modemde farklı olduğu için profilde sabit olamaz; çalışma
+  // anında ekleniyor. Böylece modeme bağlanan herkes hangi hattın takılı
+  // olduğunu Device Name alanında görüyor. Not: bu alan yalnızca PAROLAYLA
+  // girince görünür (kimliksiz sayfada yok) — defter hâlâ tek doğru kaynak.
+  const telefonNorm = normalizePhone(telefon);
+  const etkinProfil = telefonNorm
+    ? { ...profil, nvram: { ...profil.nvram, [DEVICE_NAME_KEY]: `0${telefonNorm}` } }
+    : profil;
 
   // Kimlik bir kez okunur: hem SIM kontrolu hem defter kaydi ayni okumayi
   // kullanir (cihaza iki kez gitmeyiz).
@@ -251,7 +290,7 @@ export async function provisionModem(opts) {
     if (sahaVar) {
       const d = await applyProvisioning(
         { host: sahaHost, kaynakIp: sahaKaynak, kimlik, uygula: false, olay: opts.olay },
-        profil,
+        etkinProfil,
       );
       sahaDry = d.durum;
     }
@@ -283,7 +322,7 @@ export async function provisionModem(opts) {
       kimlik, uygula: true,
       yeniHost: sahaHost, yeniKaynakIp: sahaKaynak,
       ilerle: opts.ilerle, olay: opts.olay,
-    }, profil);
+    }, etkinProfil);
     rapor.deneme = deneme;
     rapor.detay = { durum: r.durum, plan: r.plan?.degisecek_sayisi, dogrulama: r.dogrulama };
 

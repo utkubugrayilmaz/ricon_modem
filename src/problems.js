@@ -77,6 +77,19 @@ const KATALOG = {
       + " no data plan, no coverage in the workshop, or antennas not connected."
       + " Measured baseline: a healthy SIM came online 89s after reboot.",
   }),
+  PIN_INVALID: () => ({
+    message: "The supplied SIM PIN is not 4-8 digits, so it was refused before"
+      + " reaching the device.",
+    check: "A malformed PIN would waste one of the SIM's three attempts. Three"
+      + " wrong attempts PUK-lock the SIM permanently. Re-enter the PIN.",
+  }),
+  PIN_REQUIRED: () => ({
+    message: "The modem has no internet and no SIM PIN was supplied, so nothing"
+      + " further was attempted.",
+    check: "If this SIM is PIN-locked, enter the PIN on the result screen — only"
+      + " the PIN is written, the verified settings are left alone. If the SIM has"
+      + " no PIN, check coverage, antennas and the data plan instead.",
+  }),
   SIM_MISSING: (durum) => ({
     message: `No SIM is readable in the modem (status: ${durum || "unknown"}), so`
       + " provisioning was refused before touching the device.",

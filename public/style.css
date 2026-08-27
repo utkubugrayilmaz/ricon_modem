@@ -440,3 +440,68 @@ body { display: flex; flex-direction: column; }
 /* Ayarlar doğru ama SIM doğrulanamadı: başarı değil, başarısızlık da değil.
    Kendi rengi olmalı — teknisyen aksiyon alacak (PIN? kapsama? paket?). */
 .alt[data-hal="uyari"] { background: #8a5a00; }
+
+/* ---------------- SIM PIN ---------------- */
+/* PIN yıkıcı olabilecek bir girdi (3 yanlış deneme = PUK kilidi), o yüzden
+   telefon numarasının aksine SESSIZ tutuldu: küçük, ikincil, uyarısı yanında.
+   Boş bırakmak normal olan; doldurmak istisna. */
+.pin-alan { margin-top: 26px; }
+.pin-etiket {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gri);
+}
+.pin-etiket span { text-transform: none; letter-spacing: 0; }
+.pin-giris {
+  margin-top: 8px;
+  width: 9ch;
+  font-family: var(--veri);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.18em;
+  text-align: center;
+  padding: 8px 10px;
+  color: var(--murekkep);
+  background: var(--beyaz);
+  border: 2px solid var(--cizgi);
+  border-radius: 8px;
+}
+.pin-giris:focus { border-color: var(--yesil); outline: none; }
+.pin-not {
+  margin: 8px auto 0;
+  max-width: 52ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--gri);
+}
+
+/* Sonuç ekranındaki yerinde PIN isteği — uyarı rengiyle, gözden kaçmasın. */
+.pin-istek {
+  flex: 0 0 auto;
+  padding: 16px 24px;
+  background: #fff6e5;
+  border-top: 2px solid #8a5a00;
+}
+.pin-istek-baslik { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: #6b4600; }
+.pin-istek-not {
+  margin: 0 0 12px;
+  max-width: 80ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #6b4600;
+}
+.pin-istek-satir { display: flex; align-items: center; gap: 12px; }
+.pin-dene {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--beyaz);
+  background: #8a5a00;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 22px;
+  cursor: pointer;
+}
+.pin-dene:disabled { opacity: 0.5; cursor: not-allowed; }

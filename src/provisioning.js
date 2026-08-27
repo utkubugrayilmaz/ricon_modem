@@ -10,7 +10,7 @@
 // alınır (bağlantı kopar). Reboot açık bildirilir.
 
 import { consoleNvram, consoleWrite, runConsole } from "./console.js";
-import { LAN_IP_KEYS, WRITE_GROUPS } from "./profile.js";
+import { LAN_IP_KEYS, WRITE_GROUPS, SIM_PIN_KEY } from "./profile.js";
 import { problem, isOk } from "./problems.js";
 
 const now = () => new Date().toISOString();
@@ -192,6 +192,69 @@ function esle(degisecek) {
   const out = {};
   for (const [k, v] of Object.entries(degisecek)) out[k] = v.hedef;
   return out;
+}
+
+// SIM PIN yazma — KOŞULLU ve TEK SEFERLİK.
+//
+// ⚠ TEHLİKE: bu fonksiyon çağrıldığında cihazda bir PIN denemesi harcanır.
+// ÜÇ yanlış deneme SIM'i PUK kilidine sokar ve PUK olmadan geri dönüşü YOKTUR.
+// Bu yüzden dört ayrı koruma var:
+//   1) Yalnızca internet doğrulaması BAŞARISIZ olduysa çağrılır (pipeline
+//      kararı) — kilitli olmayan SIM'e asla PIN yazılmaz.
+//   2) Biçim kontrolü: 4-8 hane, sadece rakam. Bozuk PIN = garantili boşa
+//      harcanmış deneme, o yüzden cihaza hiç gitmeden reddedilir.
+//   3) nvram'da AYNI PIN yazılıysa TEKRAR YAZILMAZ — zaten denenmiş demektir,
+//      ikinci deneme bedava değil.
+//   4) Çalıştırma başına EN FAZLA BİR deneme. Retry döngüsü YOK.
+//
+// Değer hiçbir yere sızmaz: dönüş nesnesi, log, olay ve defter yalnızca
+// "denendi mi" bilgisini taşır.
+// Doner: { ok, denendi, atlandi, problems }
+export async function applyPin(opts, pin) {
+  const { host, kaynakIp, kimlik, reboot = true } = opts;
+  const rapor = { ok: false, denendi: false, atlandi: null, problems: [] };
+  if (!kimlik) {
+    rapor.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
+    rapor.atlandi = "kimlik_yok";
+    return rapor;
+  }
+  // (2) Biçim
+  if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
+    rapor.problems.push(problem("PIN_INVALID"));
+    rapor.atlandi = "gecersiz_bicim";
+    return rapor;
+  }
+  const kOpts = { host, kaynakIp, kullanici: kimlik.kullanici, sifre: kimlik.sifre };
+
+  // (3) Aynı PIN zaten yazılı mı? Yazılıysa denenmiş; tekrarlamak deneme yakar.
+  bildir(opts, "PIN kontrolu (ayni PIN daha once denenmis mi)");
+  const { degerler, sayi } = await consoleNvram(kOpts);
+  if (sayi === 0) {
+    rapor.problems.push(problem("REQUEST_FAILED", "nvram", "PIN oncesi okuma basarisiz"));
+    rapor.atlandi = "nvram_okunamadi";
+    return rapor;
+  }
+  if (degerler[SIM_PIN_KEY] === String(pin)) {
+    rapor.atlandi = "ayni_pin_zaten_yazili";
+    rapor.ok = true;   // hata değil: yapılacak bir şey yok
+    return rapor;
+  }
+
+  // (4) Tek deneme.
+  bildir(opts, "SIM PIN yaziliyor (TEK deneme)");
+  olayla(opts, { tur: "pin_deneniyor" });
+  const y = await consoleWrite(kOpts, { [SIM_PIN_KEY]: String(pin) });
+  rapor.problems.push(...y.problems);
+  if (!y.ok) { rapor.atlandi = "yazma_hatasi"; return rapor; }
+  rapor.denendi = true;
+
+  if (reboot) {
+    bildir(opts, "reboot (PIN ile SIM yeniden baslatiliyor)");
+    olayla(opts, { tur: "reboot" });
+    await rebootFireForget(kOpts);
+  }
+  rapor.ok = true;
+  return rapor;
 }
 
 // Reboot gönder, cevap bekleme (bağlantı kopar). Hata yutulur.
