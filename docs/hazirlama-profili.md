@@ -141,3 +141,82 @@ Seri (tak → çıkar → sıradaki) akış: `hazirla --dongu` tek modemde çal�
 **birkaç modemin ard arda** hazırlanması sahada denenmedi. İzlenecekler:
 ARP önbelleği tazeliği, kablo çıkınca PC'deki ikincil IP'lerin geri gelmesi,
 "çıkarıldı" tespitinin gecikmesi.
+
+## DHCP Server + LAN ikincil alanlar (2026-08-27 eklendi)
+
+Teknisyen iki eksik ayar bildirdi; ikisi de eklendi.
+
+### DHCP Server → Disabled
+Anahtar **diff ile teyit edildi**: arayüzde yalnızca "DHCP Server: Disabled"
++ Save yapıldı, nvram farkı **tek anahtar** gösterdi:
+
+| Ayar (UI) | nvram | değer |
+|---|---|---|
+| DHCP Server Enabled | `lan_proto` | `dhcp` |
+| DHCP Server **Disabled** | `lan_proto` | **`static`** |
+
+(Diff'te ikinci satır `lan_cclass` çıktı — cihaz onu LAN IP'den kendi türetiyor,
+önceki bulguyu doğruladı. Profile girmiyor.) Bonus: `lan_proto` kimliksiz
+sayfada da görünüyor, yani parolasız doğrulanabilir.
+
+### LAN → ikincil adreslerin tamamı sıfır
+nvram adları arayüz etiketleriyle birebir:
+
+| Arayüz | nvram | hedef |
+|---|---|---|
+| Local IP Address1 / Subnet Mask1 | `lan_ipaddr_ex1` / `lan_netmask_ex1` | `0.0.0.0` |
+| Local IP Address2 / Subnet Mask2 | `lan_ipaddr_ex2` / `lan_netmask_ex2` | `0.0.0.0` |
+| Local IP Address3 / Subnet Mask3 | `lan_ipaddr_ex3` / `lan_netmask_ex3` | `0.0.0.0` |
+
+**DOKUNULMAYANLAR:** `lan_ipaddr` (5.5.5.1), `lan_netmask` (255.255.255.0),
+Local DNS, Loopback IP + Mask — bunlar profile hiç girmiyor.
+
+### Yazma sırası
+`Modem/WAN → DHCP → LAN`, `lan_ipaddr` en sonda (`src/profile.js`
+`WRITE_GROUPS`). **Dürüst not:** nvram yazımı sırasızdır, hiçbir değer
+`commit` + reboot olmadan yürürlüğe girmez — sıra sonucu değiştirmez. Yine de
+uygulanıyor çünkü (a) yazma yarıda kesilirse yönetim adresi en son değiştiği
+için cihaz eski adreste bulunabilir, (b) plan ekranı teknisyenin sırasıyla akar.
+
+Canlı sonuç: **14 ayar** (10 Modem/WAN + 1 DHCP + 3 LAN), doğrulama TAMAM 15 sn.
+
+## SIM yokluğu — sessiz başarısızlık ve çözümü (2026-08-27)
+
+**Gözlem:** SIM takılı OLMAYAN bir modemde provizyon sorunsuz tamamlandı,
+doğrulama "TAMAM" dedi. Ama cihaz şebekeye kaydolamıyordu. 4 dakika izleme:
+
+- WAN IP hiç gelmedi
+- `m1simst`: `Invalid` → `Not Insert`
+- `m1network`: `FDD LTE` → `N-NONE`, `m1bandinfo`: `BAND NONE`
+- Modem ~110 saniyede bir kaydolmayı deneyip düşüyordu
+
+Yani "hazır" denen modem sahada çalışmaz ve deftere **ICCID'siz** satır düşer.
+
+**Çözüm:** `provisionModem` artık cihaz kimliğini **en başta** okuyor; ICCID
+yoksa hiçbir şey yazmadan reddediyor (`durum: "sim_yok"`, `SIM_MISSING`).
+Kural çekirdekte, yani UI/CLI/endpoint devralıyor. 45 saniye harcayıp sonunda
+anlamak yerine ilk saniyede söylüyor.
+
+**İkinci bulgu — reboot şartı:** SIM sonradan takılınca modem kendi kendine
+toparlamıyor; `w1_wan_shortproto` `disabled` kalıyor. PPP oturumu ancak
+**açılışta SIM takılıyken** kuruluyor. Operasyonel kural: **SIM'i tak, sonra
+kurulumu başlat.** (Kurulum akışında zaten reboot var, o yüzden baştan takılı
+SIM'de sorun çıkmıyor.)
+
+## İnternet ne zaman geliyor? (2026-08-27 ölçüldü)
+
+SIM + antenler takılı, provizyonlu cihaz, reboot sonrası:
+
+```
+  0 – 89 sn    internet YOK  (boot + şebekeye kaydolma + PPP)
+ 88.9 sn       internet VAR  178.245.239.236 (gerçek public Turkcell IP)
+ 89 – 259 sn   kesintisiz stabil, tek düşme yok
+```
+
+**Karar: kurulum interneti BEKLEMEZ.** Kurulum 45 sn; interneti beklemek onu
+3 katına çıkarır ve o 89 saniye bizim kontrolümüzde değil (şebeke/anten/
+kapsama). Doğrulama nvram geri-okumasıyla yapılıyor — hızlı ve deterministik.
+İnternet kanıtı isteyen için ayrı/opsiyonel bir kontrol uygun olur.
+
+Ayrıca: antensiz ölçümde sinyal `m1dbm` 81-85 iken antenler takılınca **69**
+oldu; `9999` değeri "okuma yok" demek.
