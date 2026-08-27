@@ -58,6 +58,10 @@ function olcumMetni(r) {
     + `${r.kurulum.basari_orani != null ? ` (%${r.kurulum.basari_orani})` : ""}`
     + ` · ilk denemede ${r.kurulum.ilk_denemede}`
     + ` · ${r.kurulum.farkli_cihaz} farkli cihaz`);
+  if (r.elle_sn?.n) {
+    s.push(`    ELLE surec (medyan)   : ${d(r.elle_sn)}`
+      + `  = ${(r.elle_sn.medyan / 60).toFixed(1)} dk`);
+  }
   s.push(`    arac suresi (medyan)  : ${d(r.arac_sn)}`);
   s.push(`    numara girisi (medyan): ${d(r.giris_sn)}`);
   s.push(`    dongu (giris + arac)  : ${r.dongu_sn ?? "—"} sn`);

@@ -32,6 +32,9 @@ export function dagilim(degerler) {
 export function summarizeMetrics(rows = [], opts = {}) {
   const kurulumlar = rows.filter((r) => r.tur === "kurulum");
   const basarili = kurulumlar.filter((r) => r.ok);
+  // Elle olcumler AYNI dosyada, tur:"elle" ile. Boylece karsilastirma tabani
+  // da kayitli bir OLCUM olur — komut satirinda tasinan bir sayi degil.
+  const elleler = rows.filter((r) => r.tur === "elle");
 
   const ozet = {
     zaman: new Date().toISOString(),
@@ -54,6 +57,7 @@ export function summarizeMetrics(rows = [], opts = {}) {
     // Operatörün numarayı girme süresi = insanın MEŞGUL olduğu tek an.
     giris_sn: dagilim(basarili.map((r) => sayi(r.giris_sn))),
     adimlar: adimOzeti(basarili),
+    elle_sn: dagilim(elleler.map((r) => sayi(r.toplam_sn))),
     problems: [],
   };
 
@@ -61,7 +65,20 @@ export function summarizeMetrics(rows = [], opts = {}) {
   ozet.dongu_sn = ozet.arac_sn.medyan != null && ozet.giris_sn.medyan != null
     ? yuvarla(ozet.arac_sn.medyan + ozet.giris_sn.medyan) : ozet.arac_sn.medyan;
 
-  if (opts.elleSn) ozet.karsilastirma = karsilastir(ozet, opts);
+  // Taban secimi: KAYITLI olcum her zaman kazanir; yoksa disaridan verilen
+  // sayi (beyan) kullanilir. Ozet hangisi oldugunu acikca tasir.
+  const kayitliTaban = ozet.elle_sn.medyan != null;
+  const taban = kayitliTaban ? ozet.elle_sn.medyan : opts.elleSn;
+  if (taban) {
+    ozet.karsilastirma = karsilastir(ozet, {
+      ...opts,
+      elleSn: taban,
+      elleKaynak: kayitliTaban
+        ? `${ozet.elle_sn.n} kayitli olcum (medyan)`
+        : (opts.elleKaynak || "BEYAN — kayitli olcum yok"),
+      elleN: kayitliTaban ? ozet.elle_sn.n : opts.elleN,
+    });
+  }
   ozet.ok = basarili.length > 0;
   if (basarili.length === 0) {
     ozet.problems.push({ kod: "OLCUM_YOK", severity: "warning",

@@ -153,6 +153,33 @@ async function komutuCalistir() {
         yeniKaynakIp: bayrak("--yeni-kaynak"),
       }, profil);
     }
+    case "olcum-elle": {
+      // ELLE surecin kronometre sonucunu kaydeder — otomatik olcumlerle AYNI
+      // dosyaya, tur:"elle" ile. Karsilastirma tabani boylece kayitli bir
+      // olcum olur; komut satirinda tasinan bir sayi degil.
+      const dk = Number(bayrak("--dk"));
+      const snBayrak = Number(bayrak("--sn"));
+      const toplamSn = Number.isFinite(snBayrak) && snBayrak > 0
+        ? snBayrak
+        : (Number.isFinite(dk) && dk > 0 ? Math.round(dk * 60) : null);
+      if (!toplamSn) {
+        return { zaman: new Date().toISOString(), komut: "olcum-elle", ok: false,
+          problems: [{ kod: "ARGS", severity: "error",
+            message: "Manual duration is required.",
+            check: "Give it as --dk 15.5 (minutes) or --sn 930 (seconds)." }] };
+      }
+      const satir = {
+        zaman: new Date().toISOString(),
+        tur: "elle",
+        durum: "elle_kurulum",
+        ok: true,
+        toplam_sn: toplamSn,
+        kim: bayrak("--kim") || null,
+        not: bayrak("--not") || null,
+      };
+      kayitYazici(bayrak("--kayit") || OLCUM_DOSYA, "olcum-elle")(satir);
+      return { ...satir, komut: "olcum-elle", problems: [] };
+    }
     case "olcum": {
       // Kaydedilmis calistirmalardan savunulabilir sayi uretir. Cihaza GITMEZ.
       // --elle-dk: elle surecin suresi (KARSILASTIRMA TABANI). Bu bir olcum ya
@@ -256,7 +283,7 @@ async function komutuCalistir() {
 }
 
 const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
-  "fark", "uygula", "hazirla", "sunucu", "olcum"]);
+  "fark", "uygula", "hazirla", "sunucu", "olcum", "olcum-elle"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {
@@ -278,9 +305,11 @@ async function main() {
       + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
       + "  sunucu                       tarayici arayuzu (UI) — cekirdegi tuketir\n"
       + "         [--port 8080] [--dinle 127.0.0.1] [--profil ad] [--kayit <dosya>]\n"
+      + "  olcum-elle --dk 15.5         ELLE surecin kronometresini kaydet\n"
+      + "         [--kim \"teknisyen A\"] [--not \"...\"]\n"
       + "  olcum                        kaydedilmis surelerden metrik ozeti (cihazsiz)\n"
-      + "         [--elle-dk 15] [--elle-kaynak \"3 olcum, teknisyen A\"] [--elle-n 3]\n"
-      + "         [--modem-sayisi 400] [--kayit data/olcumler.jsonl]\n\n"
+      + "         [--modem-sayisi 400] [--kayit data/olcumler.jsonl]\n"
+      + "         [--elle-dk 15] sadece kayitli elle olcum YOKSA (beyan tabani)\n\n"
       + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n"
       + "       --host <ip> · --kaynak-ip <ip>  (.env'i ezer; modem o an neredeyse)\n",
     );

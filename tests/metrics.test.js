@@ -72,3 +72,28 @@ test("summarizeMetrics: hic basarili kayit yoksa ok:false + OLCUM_YOK", () => {
   assert.equal(o.ok, false);
   assert.equal(o.problems[0].kod, "OLCUM_YOK");
 });
+
+test("summarizeMetrics: KAYITLI elle olcum, komut satiri beyanini EZER", () => {
+  const rows = [
+    satir(), satir(), satir(), satir(), satir(),
+    { tur: "elle", ok: true, toplam_sn: 780 },
+    { tur: "elle", ok: true, toplam_sn: 900 },
+    { tur: "elle", ok: true, toplam_sn: 840 },
+  ];
+  const o = summarizeMetrics(rows, { elleSn: 60, elleKaynak: "beyan" });
+  assert.equal(o.elle_sn.n, 3);
+  assert.equal(o.elle_sn.medyan, 840);
+  assert.equal(o.karsilastirma.elle_sn, 840, "kayitli medyan kullanilir, 60 degil");
+  assert.match(o.karsilastirma.elle_kaynak, /3 kayitli olcum/);
+  assert.equal(o.karsilastirma.uyari_elle, undefined, "n=3 yeterli, uyari yok");
+});
+
+test("summarizeMetrics: kayitli elle olcum yoksa beyan tabani BEYAN diye etiketlenir", () => {
+  const o = summarizeMetrics([satir(), satir()], { elleSn: 900 });
+  assert.match(o.karsilastirma.elle_kaynak, /BEYAN/);
+});
+
+test("summarizeMetrics: elle olcumler kurulum sayilmaz", () => {
+  const o = summarizeMetrics([satir(), { tur: "elle", ok: true, toplam_sn: 900 }]);
+  assert.equal(o.kurulum.denenen, 1);
+});
