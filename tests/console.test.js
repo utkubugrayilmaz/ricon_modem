@@ -80,3 +80,34 @@ test("runConsole: masum yonlendirmeler (2>/dev/null, 2>&1) SERBEST", async () =>
     assert.notEqual(r.problems[0]?.kod, "WRITE_BLOCKED_READONLY", `serbest olmaliydi: ${komut}`);
   }
 });
+
+test("parseNvramShow: COK SATIRLI deger kirpilmaz (devam satirlari eklenir)", () => {
+  // Gercek dert: bazi nvram degerleri satir sonu tasiyor. Eskiden devam
+  // satirlari SESSIZCE atiliyor, deger ilk satirina kirpiliyordu -> diff
+  // "degismedi" diyebiliyordu.
+  const d = parseNvramShow([
+    "lan_ipaddr=5.5.5.1",
+    "kural_listesi=birinci satir",
+    "ikinci satir devam",
+    "ucuncu satir",
+    "sonraki_anahtar=deger",
+  ].join("\n"));
+  assert.equal(d.lan_ipaddr, "5.5.5.1");
+  assert.equal(d.kural_listesi, "birinci satir\nikinci satir devam\nucuncu satir");
+  assert.equal(d.sonraki_anahtar, "deger");
+  assert.equal(Object.keys(d).length, 3, "devam satirlari yeni anahtar URETMEZ");
+});
+
+test("parseNvramShow: bosluk iceren sol taraf anahtar sayilmaz", () => {
+  // "  bir sey = x" gibi bir satir anahtar DEGIL, devam satiridir.
+  const d = parseNvramShow("a=1\n  serbest metin = icinde esittir var\nb=2");
+  assert.equal(d.a, "1\n  serbest metin = icinde esittir var");
+  assert.equal(d.b, "2");
+  assert.equal(Object.keys(d).length, 2);
+});
+
+test("parseNvramShow: bastaki devam satiri anahtarsizsa yutulur (patlamaz)", () => {
+  const d = parseNvramShow("basibos satir\na=1");
+  assert.equal(d.a, "1");
+  assert.equal(Object.keys(d).length, 1);
+});

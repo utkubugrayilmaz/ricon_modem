@@ -220,3 +220,47 @@ kapsama). Doğrulama nvram geri-okumasıyla yapılıyor — hızlı ve determini
 
 Ayrıca: antensiz ölçümde sinyal `m1dbm` 81-85 iken antenler takılınca **69**
 oldu; `9999` değeri "okuma yok" demek.
+
+## SIM PIN — nasıl çalıştığı ÖLÇÜLDÜ (2026-08-27)
+
+PIN kilitli bir SIM takıldı ve arayüzden (Modem/WAN → SIM1 → PIN) PIN girildi.
+Ölçüm sonuçları:
+
+| Gözlem | Sonuç |
+|---|---|
+| `Status of SIM` (kilitliyken) | `Need verification PIN code (PIN: 3/3, PUK: 10/10)` |
+| PIN girildikten sonra | `OK`, IMSI okunabilir oldu, WAN IP geldi |
+| **Reboot sonrası** | **`OK` kaldı**, internet 34.5 sn'de geldi |
+| Reboot sonrası `nvram get m1s1simpin` | **PIN nvram'da DURUYOR** |
+| `m1s1simpinpro` | `"0"` → `""` (anlamı belirsiz, biz DOKUNMUYORUZ) |
+
+**Sonuç:** modem PIN'i nvram'a kaydediyor ve her açılışta SIM'e gönderiyor.
+SIM hâlâ PIN'li ama operatör bir daha uğraşmıyor. Yani `applyPin`in yaptığı
+şey (`nvram set m1s1simpin` + commit + reboot) **arayüzün yaptığının aynısı** —
+mekanizma doğrulandı.
+
+İki yol da geçerli:
+- **PIN'i SIM'den kaldırmak** (telefonla): SIM her cihazda PIN'siz olur. En
+  temiz son durum, CEO kararı da bu.
+- **PIN'i modeme yazmak** (otomatik): telefon gerekmez, tek seferlik. SIM başka
+  cihaza taşınırsa orada yine kilitli olur.
+
+Araç PIN kilidini **~4 saniyede** tespit ettiği için PIN yalnızca gerçekten
+kilitli SIM'lerde soruluyor; PIN'siz SIM'lerde hiç sorulmuyor.
+
+### Açık kalan küçük belirsizlik
+Reboot ÖNCESİ alınan tam nvram dökümünde `m1s1simpin` görünmüyordu, ama
+`nvram get` aynı anda değeri veriyordu. Muhtemel açıklama: web arayüzü değeri
+RAM'e yazıyor, commit reboot/apply anında oluyor. Kesinleştirilmedi; pratikte
+sonucu etkilemiyor (reboot sonrası değer kalıcı).
+
+## Araç kusuru bulundu ve düzeltildi: çok satırlı nvram değerleri
+
+`nvram show` bazı değerleri **satır sonu içerecek şekilde** basıyor. Eski
+ayrıştırıcı `=` içermeyen satırları **sessizce atıyordu**, yani böyle bir
+değer ilk satırına kırpılıyordu — ve diff "değişmedi" diyebilirdi. Faz 2'nin
+tamamı diff yöntemine dayandığı için bu sessiz bir yanlışlama riskiydi.
+
+Kanıt: cihazda `nvram show | wc -l` = **1587**, bizim ayrıştırdığımız **1585**
+anahtar. Düzeltmeden sonra: 1585 anahtar + 2 devam satırı = **1587**, hesap
+tam kapanıyor. Tek çok satırlı değer `pptpd_client_mru` (3 satır).

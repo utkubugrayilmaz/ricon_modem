@@ -58,14 +58,29 @@ export function extractOutput(ham, basla = BASLA, bit = BIT) {
 
 // `nvram show` ciktisini {anahtar: deger} nesnesine cevirir. Ilk '=' ile
 // bolunur (deger '=' icerebilir). Prototip guvenligi icin null-prototip.
+//
+// COK SATIRLI DEGERLER: bazi nvram degerleri icinde SATIR SONU tasir (kural
+// listeleri, sertifika benzeri bloklar). `nvram show` bunlari oldugu gibi
+// basar, yani '=' icermeyen satirlar ONCEKI anahtarin degerinin devamidir.
+// Eskiden bu satirlar SESSIZCE ATILIYORDU: deger ilk satirina kirpiliyor ve
+// diff "degismedi" diyebiliyordu. Bu, tum Faz 2 yontemini (diff ile anahtar
+// bulma) sessizce yanlislayabilecek bir kusurdu.
+//
+// Dogrulama: cihazda `nvram show | wc -l` = 1587 iken biz 1585 anahtar
+// ayristiriyorduk — fark tam olarak bu devam satirlariydi.
 export function parseNvramShow(metin) {
   const cikti = Object.create(null);
+  let sonAnahtar = null;
   for (const satir of (metin || "").split("\n")) {
     const s = satir.replace(/\r$/, "");
-    if (!s) continue;
     const i = s.indexOf("=");
-    if (i === -1) continue;
-    cikti[s.slice(0, i)] = s.slice(i + 1);
+    // Anahtar adi bosluk/= icermez; icermiyorsa bu bir DEVAM satiridir.
+    if (i > 0 && !/[\s=]/.test(s.slice(0, i))) {
+      sonAnahtar = s.slice(0, i);
+      cikti[sonAnahtar] = s.slice(i + 1);
+    } else if (sonAnahtar !== null && s !== "") {
+      cikti[sonAnahtar] += `\n${s}`;
+    }
   }
   return cikti;
 }
