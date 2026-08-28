@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
-  atTamam, atKabukKomutu, atCevabiAyikla,
+  atTamam, atKabukKomutu, atCevabiAyikla, atYazanMi,
 } from "../src/at.js";
 
 test("parseCnum: SIM'e yazili numarayi BIZIM kanonik bicime cevirir", () => {
@@ -93,4 +93,34 @@ test("atCevabiAyikla: kabuk gurultusunu atar, yalniz ATL: satirlarini alir", () 
 test("atCevabiAyikla: bos girdi patlamaz", () => {
   assert.equal(atCevabiAyikla(null), "");
   assert.equal(atCevabiAyikla(""), "");
+});
+
+// --- Yazma filtresi: SORGU ile YAZMA ayrimi ---
+//
+// KUSUR (2026-08-28, canli denemeden ONCE yakalandi): filtre `^AT+CLCK=`
+// diye bakiyordu, ama CLCK'in SORGU formu da `=` iceriyor:
+//   AT+CLCK="SC",2          -> mode 2 = SORGU. PIN harcamaz, bir sey degistirmez.
+//   AT+CLCK="SC",0,"1234"   -> mode 0 = kilidi KAPAT. Parola ister, hak yakar.
+// Sorgu engellenince simPinKaldir'in DOGRULAMA adimi bos cevap aliyor ve
+// kilit gercekten kalksa bile "kaldirilamadi" deniyordu.
+test("atYazanMi: CLCK SORGUSU (mode 2) yazma DEGIL", () => {
+  assert.equal(atYazanMi('AT+CLCK="SC",2'), false);
+  assert.equal(atYazanMi('AT+CLCK="SC",2 '), false);
+});
+
+test("atYazanMi: CLCK kilit acma/kapama (mode 0/1) YAZMA", () => {
+  assert.equal(atYazanMi('AT+CLCK="SC",0,"1234"'), true);
+  assert.equal(atYazanMi('AT+CLCK="SC",1,"1234"'), true);
+});
+
+test("atYazanMi: PIN harcayan ve cihazi degistiren komutlar YAZMA", () => {
+  for (const k of ['AT+CPIN="1234"', "AT+CFUN=1", "AT&W", "ATZ", 'AT+CUSD=1,"*101#"']) {
+    assert.equal(atYazanMi(k), true, k);
+  }
+});
+
+test("atYazanMi: salt okunur sorgular serbest", () => {
+  for (const k of ["AT", "AT+CNUM", "AT+CPIN?", 'AT+QPINC="SC"', "AT+CPINC", "AT+CCID"]) {
+    assert.equal(atYazanMi(k), false, k);
+  }
 });

@@ -60,6 +60,18 @@ export function normalizePhone(ham) {
   return /^5\d{9}$/.test(d) ? d : null;
 }
 
+// Kanonik numarayi EKRANIN bekledigi bicime cevirir: 5xxxxxxxxx -> 05xxxxxxxxx.
+// Gecersizse bos string (alan temiz kalir, "null" yazmaz).
+//
+// NEDEN CEKIRDEKTE: arayuz "basina 0 ekle" kuralini TASIMAMALI. Numaranin
+// nasil gosterilecegi bir karardir; karar cekirdekte, arayuz hazir degeri
+// basar. Ayni sebeple bir tane daha normalize fonksiyonu yazmiyoruz —
+// normalizePhone tek dogru kaynak, bu onun ustunde ince bir katman.
+export function telefonGirdiBicimi(ham) {
+  const n = normalizePhone(ham);
+  return n ? `0${n}` : "";
+}
+
 // SIM/hucresel bilgisini okur. opts: { host, kaynakIp, kimlik, telefon? }
 // Doner: sonuc nesnesi (throw etmez).
 export async function readSim(opts) {

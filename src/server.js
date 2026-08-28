@@ -24,7 +24,8 @@ import { extname, join } from "node:path";
 import {
   provisionModem, applyProvisioning, applyPin, provisionRecord, pcPreflight,
   readIdentity, waitForInternet, normalizePhone, settingLabel, SETTING_LABELS,
-  simPinHedefi,
+  simPinHedefi, assessDevice, telefonGirdiBicimi, simPinKaldir, readSimLock,
+  problemleriTurkcelestir, sorunTr,
 } from "./index.js";
 import { isReachable } from "./scanner.js";
 
@@ -67,6 +68,11 @@ export function planRows(plan) {
 
 // Ayni anda tek provizyon — cihaz tek baglantili, ikinci akis zarar verir.
 let mesgul = false;
+// Degerlendirme de cihaza gider (HTTP + telnet). Provizyondan ayri bir bayrak:
+// "mesgul" provizyon demek ve arayuzde dugmeleri kapatiyor; degerlendirme
+// 5 saniyelik salt-okunur bir istir, onu ayni bayrakla isaretlemek arayuze
+// yanlis sey soylerdi.
+let degerlendiriliyor = false;
 
 export function createServer(opts = {}) {
   const {
@@ -83,13 +89,22 @@ export function createServer(opts = {}) {
     const url = new URL(istek.url, "http://yerel");
     try {
       if (url.pathname === "/api/durum") return await durumVer(yanit);
+      if (url.pathname === "/api/degerlendir") return await degerlendirVer(yanit);
       if (url.pathname === "/api/hazirla") return await hazirlaAkit(url, istek, yanit);
       if (url.pathname === "/api/fabrikaya-dondur") return await sifirlaAkit(istek, yanit);
       if (url.pathname === "/api/pin") return await pinAkit(url, istek, yanit);
+      if (url.pathname === "/api/pin-kaldir") return await pinKaldirAkit(url, istek, yanit);
       if (url.pathname === "/api/olcum") return await olcumAl(istek, yanit);
       return await statikVer(url.pathname, yanit);
     } catch (e) {
-      jsonVer(yanit, 500, { ok: false, hata: `${e.name}: ${e.message}` });
+      // Beklenmeyen istisna: TEKNIK metin gunluge (stderr), ekrana TURKCE.
+      // Tarayiciya `${e.name}: ${e.message}` basmak operatore hicbir sey
+      // anlatmiyor; sunucu gunlugunde ise tam metin gerekli.
+      process.stderr.write(`[sunucu] ${url.pathname} ${e.name}: ${e.message}
+`);
+      jsonVer(yanit, 500, { ok: false,
+        hata: "Araçta beklenmeyen bir hata oluştu",
+        cozum: "Sayfayı yenile ve tekrar dene. Sürerse bilgi işleme haber ver." });
     }
   });
 
@@ -99,12 +114,48 @@ export function createServer(opts = {}) {
     jsonVer(yanit, 200, {
       ok: true,
       pc: { hazir: on.hazir, fabrika_kaynak: on.fabrikaKaynak,
-        saha_kaynak: on.sahaKaynak, problems: on.problems },
+        saha_kaynak: on.sahaKaynak, problems: problemleriTurkcelestir(on.problems) },
       modem: { konum: ad, host: konum?.host ?? null },
       profil: profil?.ad ?? null,
       sifirlanabilir: Boolean(sifirlamaProfil),
       mesgul,
     });
+  }
+
+  // --- GET /api/degerlendir : cihazin O ANKI durumu + ne eksik (salt okunur) ---
+  //
+  // PAHALI (~5 sn): HTTP kimlik okumasi + telnet uzerinden AT+CNUM. /api/durum
+  // gibi surekli yoklanmaz — tuketici modemi ALGILADIGINDA BIR KEZ cagirir.
+  // Cihaz tek baglantili; bu yuzden hem provizyonla (mesgul) hem KENDISIYLE
+  // cakismasi engelleniyor.
+  //
+  // Karar burada URETILMEZ: eksik/baslatilabilir dahil her sey assessDevice'ten
+  // gelir. Tek eklenen sey `telefon.girdi` — kanonik numaranin ekran bicimi,
+  // o da cekirdekteki telefonGirdiBicimi ile.
+  async function degerlendirVer(yanit) {
+    if (mesgul || degerlendiriliyor) {
+      return jsonVer(yanit, 409, { ok: false, hata: "Cihazla baska bir islem surüyor." });
+    }
+    degerlendiriliyor = true;
+    try {
+      const r = await assessDevice({ fabrikaHost, sahaHost, kimlik });
+      jsonVer(yanit, 200, {
+        ok: r.ok,
+        modem: r.modem,
+        sim: r.sim,
+        telefon: { ...r.telefon, girdi: telefonGirdiBicimi(r.telefon.numara) },
+        at_port: r.at_port ?? null,
+        // Kilit kaldirmaya uygun mu (PIN girilmeden once bilinir). Yalnizca
+        // kilitli SIM'de dolu; karar cekirdekten geliyor, burada uretilmiyor.
+        pin_kaldirilabilir: r.pin_kaldirilabilir ?? null,
+        internet: r.internet,
+        eksik: r.eksik,
+        baslatilabilir: r.baslatilabilir,
+        problems: problemleriTurkcelestir(r.problems),
+      });
+    } finally {
+      degerlendiriliyor = false;
+    }
   }
 
   // --- POST /api/olcum : bir calistirmanin sure olcumunu kalici kaydet ---
@@ -190,8 +241,9 @@ export function createServer(opts = {}) {
       gonder("ilerleme", { mesaj: "modem araniyor" });
       const { konum, ad, on } = await modemiBul();
       if (!on.hazir) {
-        gonder("hata", { kod: "PC_HAZIR_DEGIL", mesaj: on.problems[0]?.message,
-          cozum: on.problems[0]?.check });
+        // Ekrana TURKCE gider; message/check gunluge/gelistiriciye ait.
+        const t = sorunTr(on.problems[0]?.kod);
+        gonder("hata", { kod: "PC_HAZIR_DEGIL", mesaj: t.baslik, cozum: t.neYap });
         return bitir();
       }
       if (!konum) {
@@ -225,7 +277,7 @@ export function createServer(opts = {}) {
       });
       if (typeof kayit === "function") { try { kayit(satir); } catch { /* akisi bozmaz */ } }
       gonder("sonuc", { durum: satir.durum, ok: r.ok, deneme: null,
-        kayit: satir, problems: r.problems });
+        kayit: satir, problems: problemleriTurkcelestir(r.problems) });
     } finally {
       mesgul = false;
       bitir();
@@ -241,6 +293,65 @@ export function createServer(opts = {}) {
   //
   // ⚠ TEK DENEME: applyPin bicim kontrolu yapar, ayni PIN yaziliysa denemez
   // (3 yanlis deneme SIM'i PUK'a kilitler).
+  // --- GET /api/pin-kaldir : SIM PIN kilidini KALICI kaldir (SSE) ---
+  //
+  // /api/pin'in ALTERNATIFI DEGIL, TERSI. /api/pin PIN'i cihaza yazar; SIM
+  // PIN'li kalir, parola sahadaki cihazda duz metin durur ve numara hicbir
+  // zaman okunamaz. Bu uc PIN'i SIM'in KENDISINDEN kaldirir: saklanacak sir
+  // kalmaz, SIM her cihazda acik gelir ve numara okunabilir hale gelir —
+  // akisin tam otomatik olmasinin sarti bu.
+  //
+  // TEHLIKE: yanlis PIN bir deneme yakar, uc yanlis -> PUK. Korumalarin
+  // TAMAMI cekirdekte (simPinKaldir): bicim kontrolu, kalan hak <= 1 ise
+  // zorlama olmadan DENEMEZ, TEK deneme, yanlissa TEKRAR DENEMEZ. Burada
+  // yeni bir karar URETILMIYOR; PIN yalnizca gecip gidiyor, hicbir yere
+  // (log, olay, defter) yazilmiyor.
+  async function pinKaldirAkit(url, istek, yanit) {
+    const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
+    if (mesgul || degerlendiriliyor) {
+      gonder("hata", { kod: "MESGUL", mesaj: "Cihazla baska bir islem surüyor." });
+      return bitir();
+    }
+    const pin = url.searchParams.get("pin");
+    mesgul = true;
+    try {
+      const { konum, on } = await modemiBul();
+      if (!on.hazir || !konum) {
+        gonder("hata", { kod: "MODEM_YOK",
+          mesaj: "Modem bulunamadi; PIN denenmedi.",
+          cozum: "Kablonun takili oldugundan emin ol." });
+        return;
+      }
+      const atOpts = { ...konum, kimlik,
+        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); } };
+
+      // Kalan hakki ONCE bildir: operator ne riske girdigini denemeden gorsun.
+      gonder("ilerleme", { mesaj: "SIM kilidi modulden okunuyor (kalan hak)" });
+      const kilit = await readSimLock(atOpts);
+      gonder("sim_kilit", { durum: kilit.durum, kilit: kilit.kilit,
+        pin_kalan: kilit.pin_kalan, puk_kalan: kilit.puk_kalan });
+      if (!kilit.at_port) {
+        const t = sorunTr("AT_PORT_YOK");
+        gonder("hata", { kod: "AT_PORT_YOK", mesaj: t.baslik, cozum: t.neYap });
+        return;
+      }
+
+      // Bulunmus portu GECIRIYORUZ: cekirdek kendi icinde durumu yeniden
+      // okuyacak (kararini taze veriye dayandirmali), ama port TARAMASINI
+      // bir daha yapmasin — cihaz tek baglantili, her tur pahali.
+      gonder("ilerleme", { mesaj: "PIN kilidi kaldiriliyor (TEK deneme)" });
+      const r = await simPinKaldir({ ...atOpts, atPort: kilit.at_port }, pin);
+      gonder("pin_kaldir_sonuc", {
+        ok: r.ok, acildi: r.acildi, kilit_kaldirildi: r.kilit_kaldirildi,
+        durum: r.durum, pin_kalan: r.pin_kalan,
+        problems: problemleriTurkcelestir(r.problems),
+      });
+    } finally {
+      mesgul = false;
+      if (!kopukMu()) yanit.end();
+    }
+  }
+
   async function pinAkit(url, istek, yanit) {
     const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
     if (mesgul) {
@@ -265,7 +376,8 @@ export function createServer(opts = {}) {
       const { hedef, problems } = simPinHedefi(kimlikBilgi.sim, pin, { elleOnay: true });
       if (typeof hedef !== "string" || hedef === "") {
         gonder("pin_sonuc", { denendi: false,
-          atlandi: problems[0]?.kod ?? "karar_yok", problems });
+          atlandi: problems[0]?.kod ?? "karar_yok",
+          problems: problemleriTurkcelestir(problems) });
         return;
       }
       const p = await applyPin({ ...konum, kimlik,
@@ -274,7 +386,7 @@ export function createServer(opts = {}) {
 
       if (!p.denendi) {
         gonder("pin_sonuc", { denendi: false, atlandi: p.atlandi,
-          problems: p.problems });
+          problems: problemleriTurkcelestir(p.problems) });
         return;
       }
       // PIN yazildi + reboot edildi: cihaz yeni bastan gelecek, interneti bekle.
@@ -282,7 +394,8 @@ export function createServer(opts = {}) {
         ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
         olay: (o) => gonder(o.tur, o),
       });
-      gonder("pin_sonuc", { denendi: true, internet: net, problems: p.problems });
+      gonder("pin_sonuc", { denendi: true, internet: net,
+        problems: problemleriTurkcelestir(p.problems) });
     } finally {
       mesgul = false;
       if (!kopukMu()) yanit.end();
@@ -311,8 +424,9 @@ export function createServer(opts = {}) {
       // Kurulum ONCESI kimlik: sol panel modemin o anki halini gostersin.
       const { konum, on } = await modemiBul();
       if (!on.hazir) {
-        gonder("hata", { kod: "PC_HAZIR_DEGIL", mesaj: on.problems[0]?.message,
-          cozum: on.problems[0]?.check });
+        // Ekrana TURKCE gider; message/check gunluge/gelistiriciye ait.
+        const t = sorunTr(on.problems[0]?.kod);
+        gonder("hata", { kod: "PC_HAZIR_DEGIL", mesaj: t.baslik, cozum: t.neYap });
         return;
       }
       // Kimligi BURADA okuyoruz (sol panel + SIM durumu). Ayni okumayi
@@ -341,7 +455,7 @@ export function createServer(opts = {}) {
         },
       });
       gonder("sonuc", { durum: r.durum, ok: r.ok, deneme: r.deneme ?? null,
-        kayit: r.kayit, problems: r.problems });
+        kayit: r.kayit, problems: problemleriTurkcelestir(r.problems) });
     } finally {
       mesgul = false;
       if (!kopukMu()) yanit.end();

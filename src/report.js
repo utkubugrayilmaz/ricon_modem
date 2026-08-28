@@ -215,3 +215,111 @@ export function summaryText(rapor) {
   }
   return s.join("\n");
 }
+
+// --- SORUN METINLERI: kod -> OPERATORE gosterilecek TURKCE ---
+//
+// problems[].message / .check GELISTIRICI metnidir ve INGILIZCE'dir (log'a,
+// hata ayiklamaya gider; icinde Node/uretici Ingilizce metni gomulu olabilir).
+// Ekrana onlar BASILMAZ. Tezgahtaki teknisyene "New-NetIPAddress
+// -InterfaceAlias Ethernet ..." yazmak yardim degil, gurultu.
+//
+// Sozlesme buydu ve problems.js'in basinda yazili: "Turkce isteyen taraf sabit
+// `kod` uzerinden anahtarlar." Iste o sozluk burasi — TEK yer. CLI, HTTP ucu ve
+// arayuz ayni metni gosterir; ceviri tuketicilerde tekrarlanmaz.
+//
+// Bicim: { baslik, neYap }
+//   baslik : NE oldu — tek satir, teknik terim yok
+//   neYap  : SIRADA NE YAPACAK — elle yapilabilir tek bir eylem
+const SORUN_TR = {
+  // --- Ag / erisim ---
+  NO_SOURCE_IP: { baslik: "Modeme giden ağ yok",
+    neYap: "Modemin LAN kablosunu bilgisayara tak ve modemi aç. Kablo takılıysa ve bu yazı duruyorsa bilgisayarın modem ağındaki ikincil IP'si tanımlı değil — bilgi işleme haber ver." },
+  DEVICE_UNREACHABLE: { baslik: "Modem cevap vermiyor",
+    neYap: "Kablo LAN portunda mı? Modemin ışıkları yanıyor mu? Bu modem ping'e cevap vermez, bu normal." },
+  DEVICE_BUSY: { baslik: "Modem şu an meşgul",
+    neYap: "Süren okuma bitene kadar bekle. Modem aynı anda tek bağlantı kabul ediyor." },
+  REQUEST_FAILED: { baslik: "Modemle bağlantı yarıda kaldı",
+    neYap: "Araç kendi kendine tekrar deniyor. Sürerse kabloyu kontrol et." },
+  // --- Kimlik ---
+  AUTH_REQUIRED: { baslik: "Modem parolası gerekiyor",
+    neYap: "Bu ekranda yapılacak bir şey yok — kurulum parolası tanımlı değil, bilgi işleme haber ver." },
+  AUTH_REJECTED: { baslik: "Modem parolası kabul edilmedi",
+    neYap: "Modem fabrika parolasında olmayabilir. Bilgi işleme haber ver; üst üste deneme yapma." },
+  CONSOLE_KIMLIK_YOK: { baslik: "Modem parolası tanımlı değil",
+    neYap: "Bu ekranda yapılacak bir şey yok — bilgi işleme haber ver." },
+  HTTP_ERROR: { baslik: "Modem beklenmeyen bir cevap verdi",
+    neYap: "Modemi kapat-aç ve tekrar dene. Sürerse bilgi işleme haber ver." },
+  EMPTY_BODY: { baslik: "Modem boş cevap verdi",
+    neYap: "Bilgi amaçlı; akışı durdurmaz." },
+  PARSE_EMPTY: { baslik: "Modemden okunan sayfa boş geldi",
+    neYap: "Bilgi amaçlı; akışı durdurmaz." },
+  NVRAM_BAD_HEADER: { baslik: "Yedek dosyası tanınmadı",
+    neYap: "Bu ekranda yapılacak bir şey yok — bilgi işleme haber ver." },
+  WRITE_BLOCKED_READONLY: { baslik: "Yazma izni yok, işlem yapılmadı",
+    neYap: "Bu bir koruma: araç izinsiz yazmaz. Modemde hiçbir şey değişmedi." },
+  // --- SIM ---
+  SIM_MISSING: { baslik: "SIM takılı değil",
+    neYap: "Modemi kapat, SIM'i yerine tam oturtup tak, aç. Numara kendiliğinden gelecek." },
+  SIM_PIN_LOCKED: { baslik: "SIM PIN kilitli",
+    neYap: "PIN'i aşağıya yaz ve kilidi kaldır. Kilit kalkınca numara kendiliğinden okunur." },
+  SIM_PUK_LOCKED: { baslik: "SIM PUK kilitli",
+    neYap: "Bu SIM'e PIN yazmak işe yaramaz. SIM'i telefona tak, PUK ile aç, sonra geri tak." },
+  INTERNET_YOK: { baslik: "İnternet gelmedi",
+    neYap: "Ayarlar yazıldı ama SIM şebekeye bağlanmadı. SIM'in hattı açık mı, kotası var mı kontrol et." },
+  AT_PORT_YOK: { baslik: "Modemin SIM birimine ulaşılamadı",
+    neYap: "Modemi kapat-aç ve tekrar dene. Sürerse bilgi işleme haber ver." },
+  // --- Telefon numarasi ---
+  MSISDN_REQUIRED: { baslik: "Telefon numarası gerekiyor",
+    neYap: "Numara SIM'den okunamadı; 11 haneli olarak elle gir (05xxxxxxxxx)." },
+  MSISDN_INVALID: { baslik: "Telefon numarası geçersiz",
+    neYap: "11 hane ve 05 ile başlamalı. Kontrol edip tekrar gir." },
+  MSISDN_CIHAZDA_YOK: { baslik: "Numara SIM'e yazılı değil",
+    neYap: "Bu SIM numarasını taşımıyor. Numarayı elle gir (05xxxxxxxxx)." },
+  MSISDN_UYUSMAZLIK: { baslik: "Girilen numara SIM'dekinden farklı",
+    neYap: "Hangisi doğru? SIM'in kendi numarası daha güvenilir. Emin değilsen hattın numarasını kontrol et." },
+  // --- PIN kararlari ---
+  PIN_INVALID: { baslik: "PIN biçimi hatalı",
+    neYap: "PIN 4-8 hane olmalı, sadece rakam. Modeme hiçbir şey gönderilmedi." },
+  PIN_REQUIRED: { baslik: "SIM PIN istiyor",
+    neYap: "Ayarlar doğru yazıldı; SIM'in kilidi kalınca internet gelecek. PIN'i gir." },
+  PIN_REJECTED: { baslik: "PIN kabul edilmedi",
+    neYap: "Bir deneme hakkı yandı. Araç bu SIM'de tekrar denemeyecek. PIN'i operatör kaydından doğrula." },
+  PIN_LAST_ATTEMPT: { baslik: "SON deneme hakkı — araç denemedi",
+    neYap: "Yanlış PIN bu SIM'i PUK'a kilitler. Araç riske girmiyor: SIM'i telefona takıp orada aç." },
+  PIN_HAK_YANMIS: { baslik: "Bu SIM'de daha önce bir hak yanmış",
+    neYap: "PIN'den %100 emin olmadan deneme — yanlış PIN bir hak daha yakar. PIN'i operatör kaydından doğrula." },
+  PIN_KALAN_BILINMIYOR: { baslik: "Kalan PIN hakkı okunamadı",
+    neYap: "Araç kaç hak kaldığını göremiyor. PIN'den emin ol; şüphedeysen deneme." },
+  PIN_ALREADY_TRIED: { baslik: "PIN bu modemde zaten denendi",
+    neYap: "Araç aynı PIN'i ikinci kez göndermez. Farklı bir PIN gerekiyorsa operatör kaydından doğrula." },
+  PIN_STORED_WRONG: { baslik: "Modemde saklı PIN bu SIM'e uymuyor",
+    neYap: "Araç saklı PIN'i temizledi, PUK'a gidilmedi. Doğru PIN'i gir." },
+  PIN_STALE_CLEARED: { baslik: "Modemde kalan eski PIN silindi",
+    neYap: "Bilgi amaçlı: önceki SIM'in PIN'i temizlendi, yeni SIM'in hakları korundu." },
+  PIN_LOCK_NOT_ENABLED: { baslik: "PIN kilidi açılamadı",
+    neYap: "Bu yol yalnızca test amaçlı. Tekrar dene; olmuyorsa PIN'i telefondan etkinleştir." },
+  PIN_LOCK_NOT_DISABLED: { baslik: "PIN kilidi kalıcı kaldırılamadı",
+    neYap: "SIM açık ama her açılışta PIN soracak. Kurulum devam edebilir; kilidi sonra kaldırmayı dene." },
+};
+
+// Bir sorunun OPERATORE gosterilecek Turkce halini verir.
+//
+// Bilinmeyen kod PATLAMAZ ve ham Ingilizce metni SIZDIRMAZ: kodu gosterip
+// ne yapilacagini soyler. Yeni bir kod ceviri almadan eklenirse test yakalar
+// (bkz. tests/sorun-metni.test.js) — ama uretimde ekran yine anlamli kalir.
+export function sorunTr(kod) {
+  const t = SORUN_TR[kod];
+  if (t) return { kod, ...t };
+  return { kod,
+    baslik: "Beklenmeyen bir sorun oluştu",
+    neYap: `Bilgi işleme şu kodu bildir: ${kod ?? "bilinmiyor"}` };
+}
+
+// problems[] dizisine Turkce karsiligini EKLER (message/check korunur — onlar
+// gelistirici/günlük tarafi). Tuketiciye giden tek yer burasi olsun diye var:
+// sunucu bunu cagirir, arayuz `tr` alanini basar, ham metne hic dokunmaz.
+export function problemleriTurkcelestir(problems = []) {
+  return problems.map((p) => ({ ...p, tr: sorunTr(p.kod) }));
+}
+
+export { SORUN_TR };

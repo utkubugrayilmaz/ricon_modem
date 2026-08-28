@@ -51,6 +51,16 @@ node --env-file=.env ricon.js konsol --nvram   # telnet root: tam nvram
 node --env-file=.env ricon.js sim              # SIM/hücresel özet
 node --env-file=.env ricon.js sim --telefon 05xxxxxxxxx   # MSISDN'i dışarıdan ver
 node --env-file=.env ricon.js izle --sure 60   # fark tabanlı canlı alan tespiti
+
+# TEK İŞ YAPAN komutlar — aracın tamamına girmeden tek bilgi
+node --env-file=.env ricon.js degerlendir      # durum + NE EKSİK (numara dahil, ~5 sn)
+node --env-file=.env ricon.js numara           # SADECE telefon numarası (AT+CNUM, ~3 sn)
+node --env-file=.env ricon.js sim-kilit        # SADECE kilit + KALAN HAK (hak harcamaz)
+
+# SIM PIN kilidini KALICI kaldır — nvram'a PIN yazmanın yerine geçen yol.
+# Varsayılan KURU: ne yapılacağını söyler, hiçbir şey denemez.
+node --env-file=.env ricon.js sim-pin-kaldir --pin 1234
+node --env-file=.env ricon.js sim-pin-kaldir --pin 1234 --uygula   # TEK deneme
 node --env-file=.env ricon.js fark A.json B.json   # iki nvram anlık görüntüsü diff
 
 # Provizyon (yazma) — varsayılan KURU (dry-run); gerçek yazma --uygula ister
@@ -140,9 +150,27 @@ telefon/ICCID/IMEI abonelik verisidir, commit edilmez.
 redbox-device kalıbı: çekirdek `src/index.js`'te importlanabilir fonksiyonlar
 (`readDevice`, `checkDevice`, `discoverDevice`, `applyProvisioning`,
 `provisionModem`...) — hepsi `opts` alır, `process.env`/argv OKUMAZ, throw
-etmez (sonuç + `problems[]`). Aynı çekirdek: **terminal** (ince CLI, .env
-okur), **npm paketi** (`import { readDevice } from "ricon-modem"`), ya da
-ileride **HTTP endpoint** ile tüketilir.
+etmez (sonuç + `problems[]`). Aynı çekirdek üç ayrı tüketiciye bakar:
+**terminal** (ince CLI, .env okur), **npm paketi**
+(`import { readMsisdn } from "ricon-modem"`), **HTTP endpoint** (`src/server.js`).
+Arayüz dördüncü tüketici ve `examples/` altında — üründe değil.
+
+**Kural:** bir yetenek eklendiğinde çekirdeğe eklenir ve **her üç tüketiciden
+de** erişilebilir olur. Yalnız endpoint'ten ya da yalnız arayüzden ulaşılan bir
+yetenek, çekirdeğin bir parçası değil o katmanın gizli mantığıdır.
+
+Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
+
+| Sadece şunu istiyorum | Çağrı | CLI |
+|---|---|---|
+| Telefon numarası | `readMsisdn(opts)` | `ricon.js numara` |
+| SIM kilidi + kalan hak | `readSimLock(opts)` | `ricon.js sim-kilit` |
+| PIN kilidini kalıcı kaldır | `simPinKaldir(opts, pin)` | `ricon.js sim-pin-kaldir --uygula` |
+| Ne eksik, başlanabilir mi | `assessDevice(opts)` | `ricon.js degerlendir` |
+| "Ne eksik" kararı (SAF, cihazsız) | `provisionEksikleri({...})` | — |
+| Kendi kabuk komutum | `runConsole(opts, ["uname -a"])` | `ricon.js konsol` |
+
+Çalışan örnek: `examples/paket-kullanimi.js`.
 
 ## Mimari
 

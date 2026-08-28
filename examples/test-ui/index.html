@@ -32,22 +32,37 @@
 <main class="ekran" id="ekranGiris">
   <div class="giris">
     <h1 class="giris-baslik">SIM kartın telefon numarası</h1>
-    <p class="giris-alt">Kurulum bu numara olmadan başlamaz. Numara modemden
-      okunamıyor — kayıt için tek kaynak sensin.</p>
+    <p class="giris-alt">Kurulum bu numara olmadan başlamaz.
+      Modem takılınca numara SIM'den okunur; okunamazsa sen girersin.</p>
 
     <div class="haneler" id="haneler" role="group" aria-label="Telefon numarası"></div>
     <input class="gizli" id="gizliGiris" type="text" inputmode="numeric"
            autocomplete="off" spellcheck="false" maxlength="11"
            aria-label="Telefon numarası, 11 hane">
 
+    <!-- Numara CIHAZDAN geldiğinde: nereden geldiğini söyle ve kilidi
+         açacak tek kapıyı göster. Elle girişte gizli kalır. -->
+    <p class="kaynak" id="kaynak" hidden>
+      <span class="kaynak-metin" id="kaynakMetin">SIM'den okundu</span>
+      <button class="kaynak-degistir" id="degistirBtn" type="button">Değiştir</button>
+    </p>
+
     <p class="uyari" id="uyari" role="status">&nbsp;</p>
 
-    <div class="pin-alan">
-      <label class="pin-etiket" for="pinGiris">SIM PIN <span>— biliyorsan yaz, boş da bırakabilirsin</span></label>
-      <input class="pin-giris" id="pinGiris" type="text" inputmode="numeric"
-             autocomplete="off" maxlength="8" placeholder="••••">
-      <p class="pin-not">Sadece internet gelmezse denenir. Kilitli olmayan SIM'e
+    <div class="pin-alan" id="pinAlan">
+      <label class="pin-etiket" for="pinGiris">SIM PIN <span id="pinEtiketNot">— biliyorsan yaz, boş da bırakabilirsin</span></label>
+      <div class="pin-satir">
+        <input class="pin-giris" id="pinGiris" type="text" inputmode="numeric"
+               autocomplete="off" maxlength="8" placeholder="••••">
+        <!-- Yalnızca SIM KİLİTLİ okunduğunda görünür: kilidi SIM'in
+             kendisinden kaldırır, sonra numara okunabilir hale gelir. -->
+        <button class="pin-kaldir-btn" id="pinKaldirBtn" type="button" hidden disabled>
+          Kilidi kaldır ve numarayı oku
+        </button>
+      </div>
+      <p class="pin-not" id="pinNot">Sadece internet gelmezse denenir. Kilitli olmayan SIM'e
         <strong>yazılmaz</strong> — 3 yanlış deneme SIM'i PUK'a kilitler.</p>
+      <p class="pin-akis" id="pinAkis" role="status" hidden></p>
     </div>
 
     <button class="baslat" id="baslatBtn" type="button" disabled>Kurulumu başlat</button>

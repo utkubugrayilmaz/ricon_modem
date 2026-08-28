@@ -7,6 +7,7 @@
   "exports": { ".": "./src/index.js" },
   "bin": { "ricon": "./ricon.js" },
   "engines": { "node": ">=24" },
+  "files": ["src", "ricon.js", "README.md"],
   "scripts": {
     "test": "node --test",
     "dogrula": "node ricon.js dogrula",

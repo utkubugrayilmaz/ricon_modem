@@ -19,7 +19,7 @@ import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
 import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 import { problem, isOk } from "./problems.js";
-import { readMsisdn } from "./at.js";
+import { readMsisdn, readSimLock, simKilidiUygunMu } from "./at.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
@@ -404,6 +404,28 @@ export async function assessDevice(opts) {
     }
   }
   if (!konum) rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
+
+  // SIM PIN KILITLI: kalan hakki MODULDEN oku. Web sayfasi bu sayiyi her zaman
+  // vermiyor (2026-08-28: `pin_kalan: null` geldi), AT tarafi veriyor
+  // (`+QPINC: "SC",3,10`). Bu sayi bir GUVENLIK kararinin girdisi — "daha once
+  // hak yanmis mi?" — o yuzden tahmine birakilmaz, ~3 sn'ye deger. Yalnizca
+  // KILITLI durumda okunuyor: acik SIM'de gereksiz bir tur olurdu.
+  if (konum && kimlik && rapor.sim?.kilit === "pin") {
+    bildir(opts, "SIM kilidi modulden okunuyor (kalan hak)");
+    const k = await readSimLock({ ...konum, kimlik });
+    rapor.at_port = k.at_port;
+    if (k.at_port) {
+      rapor.sim = { ...rapor.sim,
+        durum_modul: k.durum,
+        pin_kalan: k.pin_kalan ?? rapor.sim.pin_kalan,
+        puk_kalan: k.puk_kalan ?? rapor.sim.puk_kalan };
+    }
+    // Kilit kaldirmaya UYGUN MU? Karar cekirdekte (simKilidiUygunMu); tuketici
+    // yalnizca gosterir. Arayuz dugmeyi buna gore acar, CLI ayni cevaba bakar.
+    const u = simKilidiUygunMu(rapor.sim);
+    rapor.pin_kaldirilabilir = { uygun: u.uygun, sebep: u.sebep };
+    rapor.problems.push(...u.problems.filter((p) => p.severity === "warning"));
+  }
 
   // TELEFON NUMARASINI CIHAZDAN OKU — artik elle girmeye gerek yok.
   // Yalnizca SIM HAZIRSA denenir: kilitli SIM abone verisini (EF_MSISDN)

@@ -12,6 +12,7 @@
 import {
   checkDevice, readIdentity, applyProvisioning, planProvisioning,
   parseSimStatus, FIELD_PROFILE, settingLabel,
+  readMsisdn, readSimLock, assessDevice, provisionEksikleri, runConsole,
 } from "../src/index.js";
 
 const [host = "5.5.5.1", kaynakIp = "5.5.5.100", kullanici, sifre] = process.argv.slice(2);
@@ -52,5 +53,34 @@ for (const [anahtar, v] of Object.entries(kuru.plan?.degisecek ?? {})) {
 const saf = planProvisioning({ lan_ipaddr: "192.168.1.1" }, { nvram: { lan_ipaddr: "5.5.5.1" } });
 console.log("\nsaf plan (cihazsiz):", Object.keys(saf.degisecek));
 
+// 5) TEK İŞ YAPAN çağrılar. Aracın tamamını değil, sadece istediğiniz parçayı
+//    kullanabilirsiniz — provizyon motoruna, sunucuya, arayüze hiç girmeden.
+
+// 5a) "Bana sadece SIM'in telefon numarasını ver." (AT+CNUM, ~3 sn)
+const numara = await readMsisdn(opts);
+console.log("\ntelefon      :", numara.telefon ?? `okunamadi (${numara.yontem})`);
+
+// 5b) "Bana sadece SIM kilidini ve KALAN HAKKI ver." Hiçbir hak harcamaz.
+const kilit = await readSimLock(opts);
+console.log("kilit durumu :", kilit.durum, `· kalan PIN hakki: ${kilit.pin_kalan ?? "?"}`);
+
+// 5c) "Cihaz kurulmaya hazır mı, değilse NE eksik?" Tek çağrı, tek cevap.
+//     UI ve HTTP endpoint de tam olarak bunu çağırıyor — üçü aynı karara bakar.
+const durumRaporu = await assessDevice({ ...opts, fabrikaHost: host });
+console.log("eksik        :", durumRaporu.eksik.length ? durumRaporu.eksik.join(", ") : "yok");
+console.log("baslatilabilir:", durumRaporu.baslatilabilir);
+
+// 5d) provisionEksikleri TAMAMEN SAF: cihaz olmadan da karar verir.
+console.log("saf karar    :", provisionEksikleri({
+  modemVar: true, simTakili: true, simKilit: { kilit: "pin" }, telefon: null, pin: null,
+}));
+
+// 5e) "Kendi komutumu çalıştırmak istiyorum." Konsol katmanı da dışa açık;
+//     yazan komutlar yazmaIzni olmadan reddedilir (salt-okunur varsayılan).
+const kabuk = await runConsole(opts, ["uname -a"]);
+console.log("uname        :", (kabuk.ciktilar?.["uname -a"] ?? "").trim() || "okunamadi");
+
 // GERÇEK yazma için: applyProvisioning({ ...opts, uygula: true, ... })
+// SIM PIN kilidini KALICI kaldırmak için: simPinKaldir(opts, "1234")
+//   ⚠ yanlış PIN bir deneme yakar; korumalar fonksiyonun içinde.
 // Tam akış (SIM kontrolu + telefon zorunlulugu + defter) için: provisionModem()

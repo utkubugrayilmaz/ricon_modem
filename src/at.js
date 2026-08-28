@@ -40,7 +40,22 @@ export const AT_PORT = "/dev/ttyUSB0";
 // SIM/modul uzerinde DEGISIKLIK yapan AT komutlari. Salt-okunur modda
 // reddedilir — nvram tarafindaki yazma kapisinin AT karsiligi.
 // AT+CPIN= ve AT+CLCK= PIN denemesi harcar (3 yanlis -> PUK), o yuzden burada.
+//
+// CLCK ISTISNASI: bu komutun SORGU formu da `=` iceriyor ama masum —
+//   AT+CLCK="SC",2         mode 2 = SORGU: "kilit acik mi?" Hicbir sey harcamaz.
+//   AT+CLCK="SC",0,"1234"  mode 0 = kilidi KAPAT: parola ister, hak yakar.
+// Ayrimi yapmayinca simPinKaldir'in DOGRULAMA adimi kendi kapisina takiliyor,
+// bos cevap aliyor ve kilit gercekten kalksa bile "kaldirilamadi" diyordu.
+const AT_CLCK_SORGU = /^AT\+CLCK=\s*"?[A-Z]+"?\s*,\s*2\s*$/i;
 const AT_YAZAN = /^AT\+(CPIN|CLCK|CPWD|CFUN|CGDCONT|CMGS|CMGW)=|^AT&W|^ATZ|^AT\+CUSD=/i;
+
+// Bu komut cihazda bir sey DEGISTIRIR mi (ya da PIN hakki harcar mi)?
+// PURE: cihaz gerektirmez, test edilebilir.
+export function atYazanMi(komut) {
+  const k = String(komut ?? "").trim();
+  if (AT_CLCK_SORGU.test(k)) return false;
+  return AT_YAZAN.test(k);
+}
 
 // --- Saf ayristiricilar (cihaz GEREKTIRMEZ, test edilebilir) ---
 
@@ -120,7 +135,7 @@ export function atCevabiAyikla(ham) {
 // gecmiyor.
 export async function atKomut(opts, komut, { okumaSn = 3, yazmaIzni = false,
   denemeler, zamanAsimiMs } = {}) {
-  if (!yazmaIzni && AT_YAZAN.test(komut)) {
+  if (!yazmaIzni && atYazanMi(komut)) {
     return { ok: false, cevap: "", problems: [problem("WRITE_BLOCKED_READONLY", `AT: ${komut}`)] };
   }
   const port = opts.atPort || AT_PORT;
@@ -178,6 +193,60 @@ export async function readMsisdn(opts) {
   };
 }
 
+// GSM'de PIN deneme sayaci 3'te baslar. Modul toplami bildirirse o kullanilir;
+// bildirmezse bu varsayilan. Sabit burada, karar fonksiyonunda gomulu degil.
+export const PIN_TOPLAM_VARSAYILAN = 3;
+
+// PURE KARAR: bu SIM'de PIN kilidini kaldirmaya IZIN VAR MI?
+//
+// Neden cihazdan AYRI: bu, bir SIM'in PUK'a kilitlenmesini onleyen son kapi.
+// Cihazla konusan koda gomulu olsa test edilemezdi. CLI, HTTP ucu ve arayuz
+// AYNI karari kullanir — arayuzde dugmeyi gizlemek koruma degil, gorgudur.
+//
+// Kurallar (siralari onemli):
+//   1) PIN bicimi bozuksa cihaza HIC gidilmez — garantili bosa harcanmis hak.
+//   2) PUK kilidi insan mudahalesi ister; PIN yazmak ise yaramaz.
+//   3) SIM yok / durum okunamadi -> dokunulmaz.
+//   4) KALAN < TOPLAM ise DENENMEZ (kullanici kurali): birileri daha once
+//      yanlis PIN girmis. Emin olmadan devam etmek ikinci hakki da yakar.
+//      `zorla` bu kurali gecer — insan kalan hakki gorup bilincli onaylar.
+//   5) SON HAK asla otomatik yakilmaz; `zorla` bile gecemez.
+// Kalan sayaci OKUNAMADIYSA (null) is durdurulmaz — sayaci bildirmeyen bir
+// modul yuzunden her SIM'i kilitlemek yanlis olurdu — ama uyari tasinir.
+//
+// Doner: { izin, sebep: kod|null, problems: [] }
+export function simKilitKaldirmaKarari(kilit = {}, pin, { zorla = false } = {}) {
+  // Bicim TEK basina PIN'e bagli kural; gerisi SIM'in halidir.
+  if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
+    return { izin: false, sebep: "PIN_INVALID", problems: [problem("PIN_INVALID")] };
+  }
+  const u = simKilidiUygunMu(kilit, { zorla });
+  return { izin: u.uygun, sebep: u.sebep, problems: u.problems };
+}
+
+// PURE: SIM'in HALI kilit kaldirmaya uygun mu? PIN'i BILMEDEN sorulabilir.
+//
+// Neden ayri: arayuz "dugmeyi gosterelim mi?" sorusunu PIN girilmeden once
+// sormak zorunda. Ayni kurallari orada tekrar yazmak, kurali iki yerde
+// tutmak olurdu — kaciniyoruz. Kural burada, iki cagiran da buraya soruyor.
+//
+// Doner: { uygun, sebep: kod|null, problems: [] }
+export function simKilidiUygunMu(kilit = {}, { zorla = false } = {}) {
+  const red = (kod, ...args) => ({ uygun: false, sebep: kod, problems: [problem(kod, ...args)] });
+  if (kilit.kilit === "puk") return red("SIM_PUK_LOCKED", kilit.puk_kalan);
+  if (kilit.kilit !== "pin" && !kilit.hazir) return red("SIM_MISSING", kilit.durum);
+
+  const kalan = kilit.pin_kalan;
+  if (kalan === null || kalan === undefined) {
+    return { uygun: true, sebep: null, problems: [problem("PIN_KALAN_BILINMIYOR")] };
+  }
+  // Son hak: zorla bile gecemez. Yanlis PIN burada PUK demek.
+  if (kalan <= 1) return red("PIN_LAST_ATTEMPT", kalan);
+  const toplam = kilit.pin_toplam ?? PIN_TOPLAM_VARSAYILAN;
+  if (kalan < toplam && !zorla) return red("PIN_HAK_YANMIS", kalan, toplam);
+  return { uygun: true, sebep: null, problems: [] };
+}
+
 // SIM PIN KILIDINI KALICI OLARAK KALDIRIR — projenin hedefi tam bu.
 //
 // NEDEN NVRAM'A PIN YAZMAKTAN IYI: nvram yolu SIM'i PIN'li BIRAKIR ve parolayi
@@ -196,7 +265,7 @@ export async function readMsisdn(opts) {
 export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = true } = {}) {
   const rapor = { ok: false, acildi: false, kilit_kaldirildi: false,
     durum: null, pin_kalan: null, problems: [] };
-  // (1) Bicim — bozuk PIN garantili bosa harcanmis deneme.
+  // (1) Bicim — bozuk PIN garantili bosa harcanmis deneme. Cihaza HIC gitmez.
   if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
     rapor.problems.push(problem("PIN_INVALID"));
     return rapor;
@@ -206,25 +275,34 @@ export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = tru
   rapor.pin_kalan = kilit.pin_kalan;
   const atOpts = { ...opts, atPort: kilit.at_port };
 
+  // (2) SIM ZATEN ACIK: kilit gercekten hala acikta mi? Bunu SORGUYLA
+  // ogreniyoruz (AT+CLCK="SC",2 — parola istemez, hak harcamaz). Kilit
+  // zaten kapaliysa YAPILACAK IS YOK: PIN'i hic gondermiyoruz. Onceki hal
+  // her cagriyi bir parola sunumuna ceviriyordu; PIN'siz SIM'de bu bedava
+  // bir risk ve gereksiz bir tur.
   if (kilit.hazir) {
-    // SIM zaten acik. Kilit HALA acikta olabilir (her acilista PIN sorulur);
-    // kaliciKapat istendiyse kilidi kapatmayi deneyebiliriz.
     rapor.ok = true;
     rapor.acildi = true;
     if (!kaliciKapat) return rapor;
-  } else if (kilit.kilit === "puk") {
-    rapor.problems.push(problem("SIM_PUK_LOCKED", kilit.puk_kalan));
-    return rapor;
-  } else if (kilit.kilit !== "pin") {
-    rapor.problems.push(problem("SIM_MISSING", kilit.durum));
-    return rapor;
-  } else {
-    // (2) Kalan hak
-    if (kilit.pin_kalan !== null && kilit.pin_kalan <= 1 && !zorla) {
-      rapor.problems.push(problem("PIN_LAST_ATTEMPT", kilit.pin_kalan));
+    const acikMi = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap);
+    if (acikMi === false) {
+      rapor.kilit_kaldirildi = true;   // istenen durum: kilit kapali
       return rapor;
     }
-    // (3) TEK deneme
+  }
+
+  // (3) KARAR — PURE, test edilmis, tek yer (bkz. simKilitKaldirmaKarari):
+  // PUK / SIM yok / yanmis hak / son hak burada reddedilir. Arayuz de CLI de
+  // ayni cevaba bakar; burasi gecilmeden cihazda PIN denenmez.
+  const karar = simKilitKaldirmaKarari(kilit, pin, { zorla });
+  if (!karar.izin) {
+    rapor.problems.push(...karar.problems);
+    return rapor;
+  }
+  rapor.problems.push(...karar.problems);   // izin verildi; varsa UYARI tasinir
+
+  // (4) TEK deneme — SIM kilitliyse ac.
+  if (!kilit.hazir) {
     await atKomut(atOpts, "AT+CMEE=2", { yazmaIzni: true });   // hatalar metin gelsin
     const r = await atKomut(atOpts, `AT+CPIN="${pin}"`, { yazmaIzni: true, okumaSn: 5 });
     if (!atTamam(r.cevap)) {
@@ -237,7 +315,7 @@ export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = tru
 
   if (!kaliciKapat) return rapor;
 
-  // Kilidi KALICI kapat + dogrula. Bu adim basarisiz olsa da SIM acik kaldi.
+  // (5) Kilidi KALICI kapat + dogrula. Bu adim basarisiz olsa da SIM acik kaldi.
   const kapat = await atKomut(atOpts, `AT+CLCK="SC",0,"${pin}"`, { yazmaIzni: true, okumaSn: 5 });
   if (!atTamam(kapat.cevap)) {
     rapor.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
@@ -246,6 +324,66 @@ export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = tru
   const dogrula = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap);
   rapor.kilit_kaldirildi = dogrula === false;
   if (!rapor.kilit_kaldirildi) rapor.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
+  return rapor;
+}
+
+// SIM PIN KILIDINI ACAR (kurar) — simPinKaldir'in TERSI.
+//
+// NEDEN VAR: uretimde istenen sey PIN'siz SIM. Bu fonksiyon urunun akisinda
+// KULLANILMAZ; kilit KALDIRMA yolunu gercek bir kilitli SIM'de sinamak icin
+// var. Elimizdeki SIM'ler PIN'siz geliyor, yani test durumunu kendimiz
+// uretmek zorundayiz.
+//
+// ⚠ AYNI RISK: AT+CLCK="SC",1,"<pin>" PIN'i DOGRULAR. Yanlis PIN bir deneme
+// yakar, uc yanlis PUK demek. Bu yuzden korumalar birebir ayni ve AYNI PURE
+// karardan geliyor (simKilidiUygunMu): son hak yakilmaz, daha once hak
+// yanmissa zorla olmadan denenmez.
+//
+// NOT: kilit SONRAKI ACILISTA sorulur. Etkisini gormek icin modem kapat-ac.
+// Doner: { ok, kilit_acik, zaten, durum, pin_kalan, problems }
+export async function simPinKilitle(opts, pin, { zorla = false } = {}) {
+  const rapor = { ok: false, kilit_acik: false, zaten: false,
+    durum: null, pin_kalan: null, problems: [] };
+  if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
+    rapor.problems.push(problem("PIN_INVALID"));
+    return rapor;
+  }
+  const kilit = await readSimLock(opts);
+  rapor.durum = kilit.durum;
+  rapor.pin_kalan = kilit.pin_kalan;
+  const atOpts = { ...opts, atPort: kilit.at_port };
+
+  // SIM su an KILITLI ise kilit zaten kurulu — yapacak is yok, PIN gonderilmez.
+  if (kilit.kilit === "pin") {
+    rapor.ok = true;
+    rapor.kilit_acik = true;
+    rapor.zaten = true;
+    return rapor;
+  }
+  // Acik SIM: kilit sorgusu ZATEN 1 mi? (sorgu hak harcamaz)
+  if (kilit.hazir) {
+    const acikMi = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap);
+    if (acikMi === true) {
+      rapor.ok = true;
+      rapor.kilit_acik = true;
+      rapor.zaten = true;
+      return rapor;
+    }
+  }
+
+  const karar = simKilidiUygunMu(kilit, { zorla });
+  rapor.problems.push(...karar.problems);
+  if (!karar.uygun) return rapor;
+
+  await atKomut(atOpts, "AT+CMEE=2", { yazmaIzni: true });
+  const ac = await atKomut(atOpts, `AT+CLCK="SC",1,"${pin}"`, { yazmaIzni: true, okumaSn: 5 });
+  if (!atTamam(ac.cevap)) {
+    rapor.problems.push(problem("PIN_REJECTED", kilit.pin_kalan));
+    return rapor;   // TEKRAR DENEMEZ
+  }
+  rapor.ok = true;
+  rapor.kilit_acik = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap) === true;
+  if (!rapor.kilit_acik) rapor.problems.push(problem("PIN_LOCK_NOT_ENABLED"));
   return rapor;
 }
 

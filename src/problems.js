@@ -11,11 +11,21 @@
 const KATALOG = {
   // --- Ag / erisim ---
   NO_SOURCE_IP: (ip) => ({
-    message: `The source IP ${ip} is not usable on this machine, so requests`
-      + " cannot leave from the modem's subnet.",
-    check: "Add a secondary IP in the modem subnet, e.g. (admin PowerShell):"
-      + " New-NetIPAddress -InterfaceAlias Ethernet -IPAddress 192.168.1.50"
-      + " -PrefixLength 24 ; then set MODEM_KAYNAK_IP to it.",
+    message: `No usable local address was found in ${ip}'s subnet right now,`
+      + " so requests cannot leave from the modem's subnet.",
+    // SIRA BILINCLI: gunluk kullanimda bunun sebebi neredeyse her zaman kablo,
+    // yapilandirma degil. Kablo cikinca Windows adresi "Deprecated" yapar ve
+    // adaptor Node'un arayuz listesinde HIC gorunmez (2026-08-28 olculdu) —
+    // yani arac iki durumu ayirt edemez. Once ucuz ve olasi olani soyluyoruz;
+    // "IP ekle" tavsiyesi kablo takiliyken hala hata varsa gecerli.
+    check: "First check the cable and power: is the modem's LAN cable plugged"
+      + " in and the modem switched on? With the cable out, Windows marks the"
+      + " secondary IP 'Deprecated' and the adapter disappears from the"
+      + " interface list, which looks exactly like a missing IP. If the cable"
+      + " IS in and this persists, the address may genuinely not be configured"
+      + " — add it (admin PowerShell): New-NetIPAddress -InterfaceAlias"
+      + " Ethernet -IPAddress 192.168.1.50 -PrefixLength 24 ; then set"
+      + " MODEM_KAYNAK_IP to it.",
   }),
   DEVICE_UNREACHABLE: (host) => ({
     message: `No TCP port answered on ${host}; the modem looks unreachable.`,
@@ -31,6 +41,29 @@ const KATALOG = {
   }),
 
   // --- HTTP / kimlik ---
+  PIN_HAK_YANMIS: (kalan, toplam) => ({
+    message: `This SIM has ${kalan} of ${toplam} PIN attempts left, so an`
+      + " attempt was already burned before the tool saw it; the unlock was"
+      + " NOT attempted.",
+    check: "Someone entered a wrong PIN on this SIM earlier. Do not guess:"
+      + " confirm the PIN from the carrier's paperwork first. Once confirmed,"
+      + " pass zorla/--zorla to override this refusal. The last attempt is"
+      + " never burned automatically, override or not.",
+  }),
+  PIN_KALAN_BILINMIYOR: () => ({
+    message: "The module did not report the remaining PIN attempt counter,"
+      + " so the tool cannot tell whether an attempt was already burned.",
+    check: "The unlock still proceeds — a module that hides the counter should"
+      + " not block every SIM. But be sure of the PIN: an unknown counter"
+      + " could already be at 2.",
+  }),
+  PIN_LOCK_NOT_ENABLED: () => ({
+    message: "The module accepted the PIN but the SC lock still reads as"
+      + " disabled, so the PIN prompt was not switched on.",
+    check: "This path exists only to build a locked SIM for testing. Re-run"
+      + " the command; if it keeps reading disabled, enable the PIN from a"
+      + " phone instead.",
+  }),
   CONSOLE_KIMLIK_YOK: (host) => ({
     message: `No console credentials were supplied for ${host}, so the telnet`
       + " login could not even be attempted.",
@@ -208,6 +241,7 @@ const KATALOG = {
 // Internetin gelmemesi ayri bir sorun (PIN/kapsama/paket) ve retry cozmez —
 // sonucu ok:false yapmak yanlis alarm ve gereksiz tekrar uretir.
 const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
+  "PIN_KALAN_BILINMIYOR",
   "INTERNET_YOK", "SIM_PIN_LOCKED", "SIM_PUK_LOCKED", "PIN_LAST_ATTEMPT",
   // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
   // bilinmemesi bizim hatamiz degil ve tekrar denemek cozmez. Error yapmak

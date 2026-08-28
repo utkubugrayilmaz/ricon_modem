@@ -35,14 +35,22 @@ export {
   readIdentity, simTakiliMi, waitForInternet, simPinHedefi,
   assessDevice, provisionEksikleri,
 } from "./pipeline.js";
-export { readSim, normalizePhone, parseSimStatus } from "./sim.js";
+export { readSim, normalizePhone, telefonGirdiBicimi, parseSimStatus } from "./sim.js";
 // AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
 export {
-  readMsisdn, readSimLock, simPinKaldir, atPortBul, atKomut,
+  readMsisdn, readSimLock, simPinKaldir, simPinKilitle,
+  simKilitKaldirmaKarari, simKilidiUygunMu,
+  atPortBul, atKomut, atYazanMi, AT_PORT, PIN_TOPLAM_VARSAYILAN,
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
 } from "./at.js";
+// Konsol katmani — telnet root shell. Kendi komutunu calistirmak isteyen
+// tuketici icin acik: runConsole(opts, ["uname -a"]).
+export {
+  runConsole, consoleNvram, consoleRecon, konsolKimligi, parseNvramShow,
+} from "./console.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
-export { settingLabel } from "./report.js";
+export { settingLabel, sorunTr, problemleriTurkcelestir, SORUN_TR } from "./report.js";
+export { PROBLEM_CODES } from "./problems.js";
 // Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.
 export { summarizeMetrics, dagilim } from "./metrics.js";
 export { SETTING_LABELS };

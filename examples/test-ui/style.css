@@ -163,6 +163,31 @@ body { display: flex; flex-direction: column; }
 .hane.bosluk { margin-right: 20px; }
 .haneler.hatali .hane { border-color: var(--kirmizi); }
 
+/* KILITLI: numara SIM'den okundu. Doluluk yesili duruyor (deger dogru), ama
+   zemin soluk ve imlec yok — "buraya yazmiyorsun" demek. */
+.haneler.kilitli { cursor: default; }
+.haneler.kilitli .hane.dolu { background: #f2f6f3; border-color: var(--yesil-acik); }
+
+.kaynak {
+  margin: 12px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--gri);
+}
+.kaynak-degistir {
+  font: inherit;
+  color: var(--yesil);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  padding: 0;
+  cursor: pointer;
+}
+.kaynak-degistir:hover { color: var(--yesil-koyu); }
+
 .gizli {
   position: absolute;
   opacity: 0;
@@ -469,6 +494,41 @@ body { display: flex; flex-direction: column; }
   border-radius: 8px;
 }
 .pin-giris:focus { border-color: var(--yesil); outline: none; }
+
+.pin-satir {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+/* SIM kilitliyken cikan tek eylem. Kilit kaldirmak SIM'de kalici bir
+   degisiklik ve bir deneme hakki riski tasir — bu yuzden uyari rengiyle,
+   "yanlislikla basilan" bir dugme gibi durmuyor. */
+.pin-kaldir-btn {
+  margin-top: 8px;
+  font: inherit;
+  font-size: 15px;
+  padding: 10px 16px;
+  color: var(--beyaz);
+  background: #8a5a00;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.pin-kaldir-btn:hover:not(:disabled) { background: #6d4700; }
+.pin-kaldir-btn:disabled { background: var(--cizgi); color: var(--gri); cursor: default; }
+
+.pin-akis {
+  margin: 10px auto 0;
+  max-width: 52ch;
+  font-family: var(--veri);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--gri);
+  white-space: pre-line;
+}
+.pin-akis[data-hal="hata"] { color: var(--kirmizi); }
+.pin-akis[data-hal="tamam"] { color: var(--yesil); }
 .pin-not {
   margin: 8px auto 0;
   max-width: 52ch;

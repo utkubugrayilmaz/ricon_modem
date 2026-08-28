@@ -34,9 +34,11 @@ import { findSourceIp } from "./src/network.js";
 import {
   checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
-  normalizePhone, summarizeMetrics,
+  normalizePhone, summarizeMetrics, assessDevice, readMsisdn, readSimLock, simPinKaldir,
+  simPinKilitle,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report.js";
+import { isOk } from "./src/problems.js";
 
 const argv = process.argv.slice(2);
 const komut = argv[0];
@@ -112,6 +114,16 @@ function telefonSor(sira) {
   })();
 }
 
+// Cekirdek cagrisinin sonucuna `ok`'u PROBLEMLERDEN turetir. Bazi salt-okuma
+// fonksiyonlari (readMsisdn/readSimLock) `ok` alani DONDURMUYOR: kismi sonuc
+// da gecerli bir sonuc. Ama CLI sozlesmesi "cikis kodu ok'tan" diyor, yani
+// burada hesaplanmali. Sabit `ok: true` yazmak, erisilemeyen bir modemde
+// kabuga 0 dondurup betikleri yaniltiyordu.
+async function sonucOk(vaat) {
+  const r = await vaat;
+  return { ...r, ok: r.ok ?? isOk(r.problems ?? []) };
+}
+
 // nvram JSON dosyasindan nvram nesnesini alir ({nvram:{...}} ya da ham {...}).
 function farkNvramAl(dosya) {
   const j = JSON.parse(readFileSync(dosya, "utf8"));
@@ -131,6 +143,64 @@ async function komutuCalistir() {
     });
     case "konsol": return readConsole({ ...opts, nvram: argv.includes("--nvram") });
     case "sim": return readSim({ ...opts, telefon: bayrak("--telefon") });
+    // Cihazin O ANKI durumu + ne eksik. Sunucudaki /api/degerlendir ile AYNI
+    // cekirdek cagrisi — endpoint bir tuketici, burasi digeri.
+    case "degerlendir": return assessDevice({
+      ...opts,
+      fabrikaHost: bayrak("--host") || undefined,
+      sahaHost: bayrak("--saha-host") || undefined,
+      telefon: bayrak("--telefon") || null,
+      pin: bayrak("--pin") || null,
+    });
+    // SADECE telefon numarasi. "Bu araci sadece numara okumak icin kullanmak
+    // istiyorum" diyen icin tek komut; provizyon/degerlendirme gerekmez.
+    case "numara": return { zaman: new Date().toISOString(), komut: "numara",
+      modem_ip: opts.host, ...(await sonucOk(readMsisdn(opts))) };
+    // SADECE SIM kilidi (salt okunur): durum + KALAN HAK. Hicbir sey harcamaz.
+    case "sim-kilit": return { zaman: new Date().toISOString(), komut: "sim-kilit",
+      modem_ip: opts.host, ...(await sonucOk(readSimLock(opts))) };
+    // SIM PIN kilidini KALICI kaldir. `uygula` ile ayni sozlesme: bayraksiz
+    // KURU calisir (yalniz durumu bildirir), gercek deneme --uygula ister.
+    // Sebep: yanlis PIN bir hak yakar, uc yanlis PUK demek.
+    case "sim-pin-kaldir": {
+      const pin = bayrak("--pin");
+      const gercek = argv.includes("--uygula");
+      if (!gercek) {
+        const k = await sonucOk(readSimLock(opts));
+        return { zaman: new Date().toISOString(), komut: "sim-pin-kaldir",
+          kuru: true, modem_ip: opts.host, ...k,
+          yapilacak: k.kilit === "pin"
+            ? "PIN kilidi kaldirilacak (TEK deneme) — onaylamak icin --uygula ekle"
+            : k.hazir ? "SIM zaten acik; --uygula kilit sorgusunu KALICI kapatir"
+              : `kilit durumu: ${k.durum} — mudahale edilmez`,
+        };
+      }
+      // --zorla: "bu SIM'de daha once bir hak yanmis ama PIN'den eminim".
+      // SON hakki zorla bile yakamaz (karar cekirdekte).
+      return { zaman: new Date().toISOString(), komut: "sim-pin-kaldir",
+        kuru: false, modem_ip: opts.host,
+        ...(await simPinKaldir(opts, pin, { zorla: argv.includes("--zorla") })) };
+    }
+    // SADECE TEST ICIN: PIN kilidini ACAR. Uretim akisinda yeri yok — kilit
+    // KALDIRMA yolunu gercek bir kilitli SIM'de sinamak icin var. Ayni
+    // sozlesme: bayraksiz KURU, gercek deneme --uygula ister.
+    case "sim-pin-kilitle": {
+      const pin = bayrak("--pin");
+      if (!argv.includes("--uygula")) {
+        const k = await sonucOk(readSimLock(opts));
+        return { zaman: new Date().toISOString(), komut: "sim-pin-kilitle",
+          kuru: true, modem_ip: opts.host, ...k,
+          yapilacak: k.kilit === "pin"
+            ? "SIM zaten kilitli — yapilacak is yok"
+            : k.hazir ? "PIN kilidi ACILACAK (TEK deneme). Etkisi SONRAKI ACILISTA:"
+              + " modemi kapat-ac, SIM PIN soracak. Onaylamak icin --uygula ekle"
+              : `kilit durumu: ${k.durum} — mudahale edilmez`,
+        };
+      }
+      return { zaman: new Date().toISOString(), komut: "sim-pin-kilitle",
+        kuru: false, modem_ip: opts.host,
+        ...(await simPinKilitle(opts, pin, { zorla: argv.includes("--zorla") })) };
+    }
     case "fark": {
       const [, once, sonra] = argv;
       if (!once || !sonra) {
@@ -298,6 +368,7 @@ async function komutuCalistir() {
 }
 
 const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
+  "degerlendir", "numara", "sim-kilit", "sim-pin-kaldir", "sim-pin-kilitle",
   "fark", "uygula", "hazirla", "sunucu", "olcum", "olcum-elle"]);
 
 async function main() {
@@ -310,6 +381,14 @@ async function main() {
       + "  izle --sure <sn>             fark tabanli canli alan tespiti\n"
       + "  konsol [--nvram]             telnet root shell / tam nvram\n"
       + "  sim [--telefon 05xxxxxxxxx]  SIM/hucresel ozet (+MSISDN girisi)\n"
+      + "  degerlendir                  cihaz durumu + NE EKSIK (numara dahil, ~5 sn)\n"
+      + "  numara                       SADECE SIM telefon numarasi (AT+CNUM)\n"
+      + "  sim-kilit                    SADECE kilit durumu + KALAN HAK (hak harcamaz)\n"
+      + "  sim-pin-kaldir --pin 1234    SIM PIN kilidini KALICI kaldir\n"
+      + "         [--uygula]            bayraksiz KURU: yalniz durumu bildirir\n"
+      + "         [--zorla]             hak yanmis SIM'de yine dene (PIN'den eminsen)\n"
+      + "  sim-pin-kilitle --pin 1234   SADECE TEST: PIN kilidini AC (kilitli SIM uret)\n"
+      + "         [--uygula]            bayraksiz KURU; etkisi sonraki acilista\n"
       + "  fark <A.json> <B.json>       iki nvram anlik goruntusu diff\n"
       + "  uygula [--uygula]            provizyon (bayraksiz KURU/dry-run)\n"
       + "         [--profil saha|fabrika] [--yeni-host ip] [--yeni-kaynak ip]\n"
