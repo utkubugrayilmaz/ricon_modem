@@ -20,6 +20,7 @@ import { parsePairs } from "./ddwrt.js";
 import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 import { problem, isOk } from "./problems.js";
 import { readMsisdn, readSimLock, simKilidiUygunMu } from "./at.js";
+import { pinDenemesiUygunMu, hakYakilmisMi } from "./pin-karar.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
@@ -182,27 +183,18 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
 export function simPinHedefi(simKilit, pin, { elleOnay = false } = {}) {
   const problems = [];
   if (!simKilit?.kilit) return { hedef: undefined, problems };          // 1, 2
+
   if (simKilit.kilit === "pin" && pin) {
-    const { pin_kalan: kalan, pin_toplam: toplam } = simKilit;
-    // OTOMATIK YOLDA TEK DENEME: bir hak yakılmışsa araç BİR DAHA DENEMEZ.
-    // Sebep: ilk deneme yanlışsa ikinci denemeyi otomatik yapmak SIM'i PUK'a
-    // bir adım daha yaklaştırır. İnsan gözüyle onaylanmış bir deneme (sonuç
-    // ekranındaki "PIN'i dene") ayrı iştir — orada kalan hak gösterilerek
-    // bilinçli karar veriliyor.
-    const hakYakilmis = kalan !== null && toplam !== null && kalan < toplam;
-    if (!/^\d{4,8}$/.test(String(pin))) {
-      problems.push(problem("PIN_INVALID"));                            // 4
-    } else if (kalan !== null && kalan <= 1) {
-      problems.push(problem("PIN_LAST_ATTEMPT", kalan));                // 5
-    } else if (hakYakilmis && !elleOnay) {
-      problems.push(problem("PIN_ALREADY_TRIED", kalan, toplam));       // 5c
-    } else {
-      return { hedef: String(pin), problems };                          // 3
-    }
+    // DENEME KARARI PAYLASILAN MODULDE (pin-karar.js): bicim, son hak, yanmis
+    // hak. AT yolu ve internet-sonrasi deneme yolu da ayni yere soruyor.
+    const k = pinDenemesiUygunMu(simKilit, pin, { elleOnay });
+    if (k.uygun) return { hedef: String(pin), problems: k.problems };   // 3
+    problems.push(...k.problems);                                       // 4, 5, 5c
   }
-  const hakYakilmis = simKilit.pin_kalan !== null && simKilit.pin_toplam !== null
-    && simKilit.pin_kalan < simKilit.pin_toplam;
-  if (hakYakilmis || simKilit.kilit === "puk") {
+
+  // Denenmeyecek. Saklanan PIN bu SIM'e ait DEGILSE temizlenir: yoksa modem
+  // her acilista yanlis PIN gonderip hak yakar.
+  if (hakYakilmisMi(simKilit) || simKilit.kilit === "puk") {
     problems.push(problem("PIN_STALE_CLEARED", simKilit.pin_kalan));
     return { hedef: "", problems };                                     // 6, 7
   }
@@ -217,16 +209,16 @@ export function simPinHedefi(simKilit, pin, { elleOnay = false } = {}) {
 // karar insana bırakılır.
 async function pinDene({ konum, kimlik, pin, rapor, opts, simDurum }) {
   const kalan = simDurum?.pin_kalan ?? null;
-  if (!pin) {
-    rapor.problems.push(problem("PIN_REQUIRED"));
-    rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi", pin_kalan: kalan };
+  // KARAR PAYLASILAN MODULDE. Burada eskiden yalniz "son hak" kontrolu vardi;
+  // "daha once hak yanmis" korumasi YOKTU — nvram yolunda vardi, burada
+  // yoktu (2026-08-28 denetimi). Ayni yere sorunca fark kapandi.
+  const k = pinDenemesiUygunMu(simDurum ?? {}, pin);
+  if (!k.uygun) {
+    rapor.problems.push(...k.problems);
+    rapor.pin_denemesi = { denendi: false, atlandi: k.sebep, pin_kalan: kalan };
     return;
   }
-  if (kalan !== null && kalan <= 1) {
-    rapor.problems.push(problem("PIN_LAST_ATTEMPT", kalan));
-    rapor.pin_denemesi = { denendi: false, atlandi: "son_hak_korumasi", pin_kalan: kalan };
-    return;
-  }
+  rapor.problems.push(...k.problems);   // izin verildi; varsa UYARI tasinir
   bildir(opts, `SIM PIN denenecek (kalan hak: ${kalan ?? "?"})`);
   const p = await applyPin(
     { ...konum, kimlik, ilerle: opts.ilerle, olay: opts.olay }, pin,

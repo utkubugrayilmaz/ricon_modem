@@ -36,11 +36,16 @@ export {
   assessDevice, provisionEksikleri,
 } from "./pipeline.js";
 export { readSim, normalizePhone, telefonGirdiBicimi, parseSimStatus } from "./sim.js";
+// PIN denemesi kararlari — PURE, TEK YER. nvram yolu, AT yolu ve
+// internet-sonrasi deneme yolu ucu de buraya soruyor.
+export {
+  pinDenemesiUygunMu, hakDurumu, hakYakilmisMi, PIN_TOPLAM_VARSAYILAN,
+} from "./pin-karar.js";
 // AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
 export {
   readMsisdn, readSimLock, simPinKaldir, simPinKilitle,
   simKilitKaldirmaKarari, simKilidiUygunMu,
-  atPortBul, atKomut, atYazanMi, AT_PORT, PIN_TOPLAM_VARSAYILAN,
+  atPortBul, atKomut, atYazanMi, AT_PORT,
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
 } from "./at.js";
 // Konsol katmani — telnet root shell. Kendi komutunu calistirmak isteyen

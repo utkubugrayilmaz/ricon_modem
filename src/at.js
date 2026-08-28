@@ -25,6 +25,9 @@
 import { runConsole } from "./console.js";
 import { normalizePhone } from "./sim.js";
 import { problem } from "./problems.js";
+import { pinDenemesiUygunMu, hakDurumu, PIN_TOPLAM_VARSAYILAN } from "./pin-karar.js";
+
+export { PIN_TOPLAM_VARSAYILAN };
 
 // AT portu. OLCULDU (2026-08-27 canli, Ricon S9922M44 + Quectel Q200AF):
 // /dev/ttyUSB0 AT komutlarina OK donuyor ve numara 3 saniyede geliyor.
@@ -193,58 +196,35 @@ export async function readMsisdn(opts) {
   };
 }
 
-// GSM'de PIN deneme sayaci 3'te baslar. Modul toplami bildirirse o kullanilir;
-// bildirmezse bu varsayilan. Sabit burada, karar fonksiyonunda gomulu degil.
-export const PIN_TOPLAM_VARSAYILAN = 3;
-
-// PURE KARAR: bu SIM'de PIN kilidini kaldirmaya IZIN VAR MI?
-//
-// Neden cihazdan AYRI: bu, bir SIM'in PUK'a kilitlenmesini onleyen son kapi.
-// Cihazla konusan koda gomulu olsa test edilemezdi. CLI, HTTP ucu ve arayuz
-// AYNI karari kullanir — arayuzde dugmeyi gizlemek koruma degil, gorgudur.
-//
-// Kurallar (siralari onemli):
-//   1) PIN bicimi bozuksa cihaza HIC gidilmez — garantili bosa harcanmis hak.
-//   2) PUK kilidi insan mudahalesi ister; PIN yazmak ise yaramaz.
-//   3) SIM yok / durum okunamadi -> dokunulmaz.
-//   4) KALAN < TOPLAM ise DENENMEZ (kullanici kurali): birileri daha once
-//      yanlis PIN girmis. Emin olmadan devam etmek ikinci hakki da yakar.
-//      `zorla` bu kurali gecer — insan kalan hakki gorup bilincli onaylar.
-//   5) SON HAK asla otomatik yakilmaz; `zorla` bile gecemez.
-// Kalan sayaci OKUNAMADIYSA (null) is durdurulmaz — sayaci bildirmeyen bir
-// modul yuzunden her SIM'i kilitlemek yanlis olurdu — ama uyari tasinir.
+// PURE: bu SIM'de PIN kilidi kaldirmaya izin var mi? Kural PAYLASILAN
+// modulde (pin-karar.js) — nvram yolu ve internet-sonrasi deneme yolu da
+// ayni yere soruyor. Burada yalniz YOLA OZGU kapi var: SIM takili mi.
 //
 // Doner: { izin, sebep: kod|null, problems: [] }
 export function simKilitKaldirmaKarari(kilit = {}, pin, { zorla = false } = {}) {
-  // Bicim TEK basina PIN'e bagli kural; gerisi SIM'in halidir.
-  if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
-    return { izin: false, sebep: "PIN_INVALID", problems: [problem("PIN_INVALID")] };
-  }
-  const u = simKilidiUygunMu(kilit, { zorla });
-  return { izin: u.uygun, sebep: u.sebep, problems: u.problems };
+  const yol = simYoluAcik(kilit);
+  if (yol) return { izin: false, sebep: yol.sebep, problems: yol.problems };
+  const k = pinDenemesiUygunMu(kilit, pin, { elleOnay: zorla });
+  return { izin: k.uygun, sebep: k.sebep, problems: k.problems };
 }
 
-// PURE: SIM'in HALI kilit kaldirmaya uygun mu? PIN'i BILMEDEN sorulabilir.
-//
-// Neden ayri: arayuz "dugmeyi gosterelim mi?" sorusunu PIN girilmeden once
-// sormak zorunda. Ayni kurallari orada tekrar yazmak, kurali iki yerde
-// tutmak olurdu — kaciniyoruz. Kural burada, iki cagiran da buraya soruyor.
-//
-// Doner: { uygun, sebep: kod|null, problems: [] }
+// PURE: PIN'i BILMEDEN "bu SIM uygun mu?" — arayuz dugmeyi buna gore acar.
 export function simKilidiUygunMu(kilit = {}, { zorla = false } = {}) {
-  const red = (kod, ...args) => ({ uygun: false, sebep: kod, problems: [problem(kod, ...args)] });
-  if (kilit.kilit === "puk") return red("SIM_PUK_LOCKED", kilit.puk_kalan);
-  if (kilit.kilit !== "pin" && !kilit.hazir) return red("SIM_MISSING", kilit.durum);
+  return simYoluAcik(kilit) ?? hakDurumu(kilit, { elleOnay: zorla });
+}
 
-  const kalan = kilit.pin_kalan;
-  if (kalan === null || kalan === undefined) {
-    return { uygun: true, sebep: null, problems: [problem("PIN_KALAN_BILINMIYOR")] };
+// YOLA OZGU kapi: AT ile kilide dokunmak icin SIM ya kilitli ya hazir olmali.
+// Uygunsa null doner (kapi acik), degilse red nesnesi.
+function simYoluAcik(kilit) {
+  if (kilit.kilit === "puk") {
+    return { uygun: false, sebep: "SIM_PUK_LOCKED",
+      problems: [problem("SIM_PUK_LOCKED", kilit.puk_kalan)] };
   }
-  // Son hak: zorla bile gecemez. Yanlis PIN burada PUK demek.
-  if (kalan <= 1) return red("PIN_LAST_ATTEMPT", kalan);
-  const toplam = kilit.pin_toplam ?? PIN_TOPLAM_VARSAYILAN;
-  if (kalan < toplam && !zorla) return red("PIN_HAK_YANMIS", kalan, toplam);
-  return { uygun: true, sebep: null, problems: [] };
+  if (kilit.kilit !== "pin" && !kilit.hazir) {
+    return { uygun: false, sebep: "SIM_MISSING",
+      problems: [problem("SIM_MISSING", kilit.durum)] };
+  }
+  return null;
 }
 
 // SIM PIN KILIDINI KALICI OLARAK KALDIRIR — projenin hedefi tam bu.

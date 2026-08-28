@@ -182,7 +182,8 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 | `src/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |
 | `src/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
 | `src/sim.js` | SIM/hücresel okuma (HTTP) + `Status of SIM` çözümleyici |
-| `src/at.js` | ⭐ AT komut katmanı — telefon numarası (`AT+CNUM`), SIM kilidi, PIN kaldırma |
+| `src/at.js` | ⭐ AT komut katmanı — telefon numarası (`AT+CNUM`), SIM kilidi, PIN kaldırma/açma |
+| `src/pin-karar.js` | ⭐ PIN denemesi kararları — **PURE, TEK YER**. Üç yol (nvram / AT / internet sonrası) da buraya sorar |
 | `src/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + diff |
 | `src/network.js` | Arayüz/kaynak IP, ARP + IPv6 komşu |
 | `src/scanner.js` | Paralel TCP port taraması |
@@ -196,6 +197,7 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 | `src/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
 | `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez. `staticDir` verilmezse SALT API |
 | `examples/` | **ÖRNEKLER — ürün değil:** test arayüzü, paket/endpoint kullanımı |
+| `arsiv/` | Repoda değil (gitignore): eski yakalamalar, ekran görüntüleri, ham dökümler |
 
 ## Değişmeyen kurallar
 

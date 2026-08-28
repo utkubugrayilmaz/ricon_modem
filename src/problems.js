@@ -41,14 +41,15 @@ const KATALOG = {
   }),
 
   // --- HTTP / kimlik ---
+  // Eskiden PIN_ALREADY_TRIED diye IKINCI bir kod vardi ve kosulu birebir
+  // ayniydi (kalan < toplam). Iki ad tek durumu anlatiyordu; birlestirildi.
   PIN_HAK_YANMIS: (kalan, toplam) => ({
     message: `This SIM has ${kalan} of ${toplam} PIN attempts left, so an`
-      + " attempt was already burned before the tool saw it; the unlock was"
-      + " NOT attempted.",
-    check: "Someone entered a wrong PIN on this SIM earlier. Do not guess:"
-      + " confirm the PIN from the carrier's paperwork first. Once confirmed,"
-      + " pass zorla/--zorla to override this refusal. The last attempt is"
-      + " never burned automatically, override or not.",
+      + " attempt was already burned; no further attempt was made.",
+    check: "By design the tool spends a PIN attempt AT MOST ONCE. A second"
+      + " automatic try would only push the SIM closer to a PUK lock. Confirm"
+      + " the PIN from the carrier's paperwork, then override with"
+      + " zorla/--zorla. The last attempt is never burned, override or not.",
   }),
   PIN_KALAN_BILINMIYOR: () => ({
     message: "The module did not report the remaining PIN attempt counter,"
@@ -137,14 +138,6 @@ const KATALOG = {
     check: "A wrong PIN here would PUK-lock the SIM. This is left to a human on"
       + " purpose: read the PIN off the card holder and verify it, or simply turn"
       + " the PIN off from a phone.",
-  }),
-  PIN_ALREADY_TRIED: (kalan, toplam) => ({
-    message: `A PIN attempt has already been used on this SIM (${kalan}/${toplam}`
-      + " left), so no further attempt was made automatically.",
-    check: "By design the tool tries a PIN AT MOST ONCE. If the first attempt"
-      + " failed, a second automatic try would only push the SIM closer to a PUK"
-      + " lock. Verify the PIN on the card holder and confirm it by hand on the"
-      + " result screen, or turn the PIN off from a phone.",
   }),
   PIN_STALE_CLEARED: (kalan) => ({
     message: "A stored SIM PIN was found while the SIM was still locked"
@@ -246,7 +239,7 @@ const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
   // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
   // bilinmemesi bizim hatamiz degil ve tekrar denemek cozmez. Error yapmak
   // durum ("hazir") ile problems'i celiskiye dusuruyordu.
-  "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED", "PIN_ALREADY_TRIED",
+  "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED", "PIN_HAK_YANMIS",
   // Numara SIM'de yazili degilse bu bir ARIZA degil: operator elle girer.
   "MSISDN_CIHAZDA_YOK", "PIN_LOCK_NOT_DISABLED", "MSISDN_UYUSMAZLIK"]);
 

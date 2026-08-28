@@ -271,7 +271,6 @@ const SORUN_TR = {
   PIN_HAK_YANMIS: { baslik: "Daha önce bir hak yanmış",
     neYap: "PIN'den emin olmadan deneme. Operatör kaydından doğrula." },
   PIN_KALAN_BILINMIYOR: { baslik: "Kalan hak okunamadı", neYap: "PIN'den emin ol." },
-  PIN_ALREADY_TRIED: { baslik: "PIN bu modemde denendi", neYap: "Aynı PIN ikinci kez gönderilmez." },
   PIN_STORED_WRONG: { baslik: "Saklı PIN bu SIM'e uymuyor",
     neYap: "Saklı PIN temizlendi. Doğru PIN'i gir." },
   PIN_STALE_CLEARED: { baslik: "Eski PIN silindi", neYap: "Bilgi amaçlı." },

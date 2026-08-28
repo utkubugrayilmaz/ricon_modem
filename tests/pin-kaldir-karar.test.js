@@ -70,10 +70,20 @@ test("SIM ZATEN ACIK: kilit sorgusunu kapatmak da PIN ister -> ayni hak kurali",
 });
 
 test("gecersiz PIN bicimi -> cihaza HIC gitmez", () => {
-  for (const p of [null, "", "123", "123456789", "12a4"]) {
+  for (const p of ["123", "123456789", "12a4"]) {
     const k = simKilitKaldirmaKarari(kilitli(3), p);
     assert.equal(k.izin, false, `pin: ${p}`);
     assert.equal(k.sebep, "PIN_INVALID");
+  }
+});
+
+// PIN VERILMEMIS olmak, bicimi BOZUK olmaktan farkli bir durum: ekranda biri
+// "PIN'i gir", digeri "4-8 hane" demeli. Eskiden ikisi de PIN_INVALID'di.
+test("PIN hic verilmemis -> PIN_REQUIRED (bicim hatasi degil)", () => {
+  for (const p of [null, undefined, ""]) {
+    const k = simKilitKaldirmaKarari(kilitli(3), p);
+    assert.equal(k.izin, false, `pin: ${p}`);
+    assert.equal(k.sebep, "PIN_REQUIRED");
   }
 });
 

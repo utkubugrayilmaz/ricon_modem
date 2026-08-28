@@ -78,7 +78,8 @@ test("sayac bilgisi YOKSA (eski firmware) kanit da yok -> DOKUNMA", () => {
 test("5c) hak YAKILMIS + otomatik yol -> IKINCI DENEME YOK", () => {
   const r = simPinHedefi(kilit({ pin_kalan: 2 }), "0270");
   assert.notEqual(r.hedef, "0270", "otomatik ikinci deneme yapilmaz");
-  assert.ok(kodlar(r).includes("PIN_ALREADY_TRIED"));
+  assert.ok(kodlar(r).includes("PIN_HAK_YANMIS"),
+    "ayni kosul tek kod: PIN_ALREADY_TRIED ile birlestirildi");
   // Ayrica sakli yanlis PIN temizlenir: kanama devam etmesin.
   assert.equal(r.hedef, "");
 });
