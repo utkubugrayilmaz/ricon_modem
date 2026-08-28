@@ -23,11 +23,11 @@ import { problem, isOk } from "./problems.js";
 // Not: modem TEK BAGLANTILI ve her ornek 2 GET (aralarinda bekleme) demek;
 // bu yuzden 5 sn'nin altinda aralik pratikte anlamsiz.
 export async function watchDevice(options) {
-  const { host, sourceIp, credentials, durationSec = 60, intervalSec = 5 } = options;
-  const c = new Client({ host, sourceIp, credentials });
+  const { host, sourceIp, kimlik, durationSec = 60, aralikSn = 5 } = options;
+  const c = new Client({ host, sourceIp, kimlik });
   const baslangic = Date.now();
   const bitis = baslangic + Math.min(durationSec * 1000, 3600000);
-  const aralik = Math.max(intervalSec, 1) * 1000;
+  const aralik = Math.max(aralikSn, 1) * 1000;
 
   const ornekle = async () => {
     const a = await c.get("/asp/status/Info.live.htm");
@@ -69,7 +69,7 @@ export async function watchDevice(options) {
 
   return {
     timestamp: now(), command: "izle", modemIp: host,
-    durationSec: durationSec, aralik_sn: intervalSec,
+    durationSec: durationSec, aralik_sn: aralikSn,
     ornek_sayisi: samples.length,
     outages: findOutages(samples),
     samples,

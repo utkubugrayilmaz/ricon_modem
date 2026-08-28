@@ -25,13 +25,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // NOT: cihazın ETİKET seri numarası ne HTTP'de ne nvram'da YOK (2026-08-27
 // arandı; BULGULAR'daki S/N fiziksel etiketten okundu). Bu yüzden kalıcı
 // kimlik: LAN MAC (cihaza ait, kimliksiz okunur) + IMEI (modül) + ICCID (SIM).
-export async function readIdentity({ host, sourceIp, credentials }) {
+export async function readIdentity({ host, sourceIp, kimlik }) {
   const result = { lanMac: null, iccid: null, imsi: null, imei: null,
     operator: null, simStatus: null, wanIp: null };
-  const c = new Client({ host, sourceIp, credentials });
+  const c = new Client({ host, sourceIp, kimlik });
   const bilgi = await c.get("/asp/status/Info.live.htm");
   result.lanMac = parsePairs(bilgi.body || "").lanMac || null;
-  const s = await readSim({ host, sourceIp, credentials });
+  const s = await readSim({ host, sourceIp, kimlik });
   const s1 = s.sim1 || {};
   result.iccid = s1.iccidClean || s1.iccid || null;
   result.imsi = s1.imsi || null;
@@ -77,7 +77,7 @@ export function isSimPresent(identity = {}) {
 // olabilir ama atölyede kapsama olmayabilir, SIM'in data paketi bitmiş olabilir.
 // Bu yüzden AYRI bir sonuç alanı olarak taşınır; operatör kararı verir.
 // Doner: { var, sure_sn, wanIp, simStatus }
-export async function waitForInternet({ host, sourceIp, credentials }, maxSec = 150, options = {}) {
+export async function waitForInternet({ host, sourceIp, kimlik }, maxSec = 150, options = {}) {
   const baslangic = Date.now();
   const elapsed = () => Math.round((Date.now() - baslangic) / 100) / 10;
   // Yoklamada readIdentity DEĞİL readSim kullanıyoruz: readIdentity ayrıca
@@ -85,7 +85,7 @@ export async function waitForInternet({ host, sourceIp, credentials }, maxSec = 
   // ihtiyaç yok. Tek uç = yoklama başına ~2 sn tasarruf, tek bağlantılı
   // cihazda da yarı yük.
   const bak = async () => {
-    const s = await readSim({ host, sourceIp, credentials });
+    const s = await readSim({ host, sourceIp, kimlik });
     const s1 = s.sim1 || {};
     const wan = (s1.wanIp || "").trim();
     return { wanIp: wan && wan !== "0.0.0.0" ? wan : null,

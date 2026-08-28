@@ -36,7 +36,7 @@ test("pcPreflight: kaynak IP yoksa NO_SOURCE_IP problemi", () => {
 });
 
 test("provisionModem: kimliksiz -> kimlik_yok (cihaza gitmez)", async () => {
-  const r = await provisionModem({ credentials: null, profile: { nvram: {} } });
+  const r = await provisionModem({ kimlik: null, profile: { nvram: {} } });
   assert.equal(r.ok, false);
   assert.equal(r.status, "noCredentials");
   assert.equal(r.problems[0].code, "AUTH_REQUIRED");
@@ -53,7 +53,7 @@ test("provisionModem: kimliksiz -> kimlik_yok (cihaza gitmez)", async () => {
 // bildirilir: o alt aga bu makineden cikilamiyor.
 test("provisionModem: kaynak IP turetilemezse KOR YOKLAMA yapmaz", async () => {
   const r = await provisionModem({
-    credentials: { username: "u", password: "p" }, profile: { name: "field", nvram: {} },
+    kimlik: { username: "u", password: "p" }, profile: { name: "field", nvram: {} },
     factoryHost: "192.0.2.1", fieldHost: "192.0.2.2", attempts: 1,
   });
   assert.equal(r.ok, false);
@@ -67,7 +67,7 @@ test("provisionModem: kaynak IP turetilemezse KOR YOKLAMA yapmaz", async () => {
 test("provisionModem: gecersiz telefon -> MSISDN_INVALID, CIHAZA GITMEZ", async () => {
   const t = Date.now();
   const r = await provisionModem({
-    credentials: { username: "u", password: "p" }, profile: { name: "field", nvram: {} },
+    kimlik: { username: "u", password: "p" }, profile: { name: "field", nvram: {} },
     phone: "1234",
   });
   assert.equal(r.status, "noPhone");
@@ -78,7 +78,7 @@ test("provisionModem: gecersiz telefon -> MSISDN_INVALID, CIHAZA GITMEZ", async 
 test("provisionModem: basarisiz cikista da KAYIT uretilir ve bildirilir", async () => {
   const writtenKeys = [];
   const r = await provisionModem({
-    credentials: null, profile: { name: "field", nvram: {} },
+    kimlik: null, profile: { name: "field", nvram: {} },
     record: (line) => writtenKeys.push(line),
   });
   assert.equal(writtenKeys.length, 1, "kayit callback tam 1 kez cagrilir");
@@ -90,7 +90,7 @@ test("provisionModem: basarisiz cikista da KAYIT uretilir ve bildirilir", async 
 
 test("provisionModem: kayit callback patlarsa akis bozulmaz", async () => {
   const r = await provisionModem({
-    credentials: null, profile: { name: "field", nvram: {} },
+    kimlik: null, profile: { name: "field", nvram: {} },
     record: () => { throw new Error("disk dolu"); },
   });
   assert.equal(r.status, "noCredentials");   // throw yutuldu, sonuc yine dondu
@@ -122,7 +122,7 @@ test("simTakiliMi: ICCID varsa present, yoksa degil", () => {
 test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
   const writtenKeys = [];
   const r = await provisionModem({
-    credentials: { username: "u", password: "p" }, profile: { name: "field", nvram: {} },
+    kimlik: { username: "u", password: "p" }, profile: { name: "field", nvram: {} },
     phone: "05350641858",
     identity: { iccid: null, simStatus: "Not Insert", imei: "867", lanMac: "aa" },
     record: (line) => writtenKeys.push(line),
@@ -167,7 +167,7 @@ test("INTERNET_DOWN bir UYARIDIR — sonucu ok:false yapmaz", () => {
 
 test("applyPin: BOZUK bicim cihaza HIC GITMEDEN reddedilir", async () => {
   for (const kotu of ["", "12", "123456789", "abcd", "12a4", null, undefined]) {
-    const r = await applyPin({ host: "203.0.113.9", credentials: { username: "u", password: "p" } }, kotu);
+    const r = await applyPin({ host: "203.0.113.9", kimlik: { username: "u", password: "p" } }, kotu);
     assert.equal(r.attempted, false, `"${kotu}" denenmemeli`);
     assert.equal(r.skipped, "invalidFormat");
     assert.equal(r.problems[0].code, "PIN_INVALID");
@@ -175,7 +175,7 @@ test("applyPin: BOZUK bicim cihaza HIC GITMEDEN reddedilir", async () => {
 });
 
 test("applyPin: kimliksiz denemez", async () => {
-  const r = await applyPin({ host: "203.0.113.9", credentials: null }, "1234");
+  const r = await applyPin({ host: "203.0.113.9", kimlik: null }, "1234");
   assert.equal(r.attempted, false);
   assert.equal(r.skipped, "noCredentials");
 });

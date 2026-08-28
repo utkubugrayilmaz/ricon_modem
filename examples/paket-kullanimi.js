@@ -16,14 +16,14 @@ import {
 } from "../src/index.js";
 
 const [host = "5.5.5.1", sourceIp = "5.5.5.100", username, password] = process.argv.slice(2);
-const credentials = username ? { username, password } : null;
-const options = { host, sourceIp, credentials };
+const kimlik = username ? { username, password } : null;
+const options = { host, sourceIp, kimlik };
 
 // 1) Erişim teşhisi. Throw etmez; sorun varsa problems[] içinde çözümüyle gelir.
 const teshis = await checkDevice(options);
 console.log("erisilebilir :", teshis.erisilebilir);
 for (const p of teshis.problems) console.log(`  [${p.code}] ${p.message}`);
-if (!teshis.erisilebilir || !credentials) {
+if (!teshis.erisilebilir || !kimlik) {
   console.log("\n(cihaz/kimlik yok — kalan adimlar atlandi)");
   process.exit(0);
 }

@@ -81,16 +81,16 @@ const changesManagementAddress = (pairs) =>
 //         yeniHost, yeniKaynakIp, ilerle }
 // uygula=false (varsayılan): DRY-RUN — sadece plan döner, cihaza YAZMAZ.
 export async function applyProvisioning(options, profile) {
-  const { host, sourceIp, credentials, apply = false, reboot = true } = options;
+  const { host, sourceIp, kimlik, apply = false, reboot = true } = options;
   const report = { timestamp: now(), command: "uygula", modemIp: host, profile: profile.name,
     apply, problems: [] };
 
-  if (!credentials) {
+  if (!kimlik) {
     report.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
     report.ok = false;
     return report;
   }
-  const consoleOptions = { host, sourceIp, username: credentials.username, password: credentials.password };
+  const consoleOptions = { host, sourceIp, username: kimlik.username, password: kimlik.password };
 
   // 1) Oku
   notify(options, "nvram okunuyor");
@@ -171,7 +171,7 @@ export async function applyProvisioning(options, profile) {
   if (options.newHost || !lanAddressChanges) {
     notify(options, `dogrulama: ${verifyHost} bekleniyor`);
     const dog = await verify(
-      { host: verifyHost, sourceIp: verifySource, credentials }, profile, options,
+      { host: verifyHost, sourceIp: verifySource, kimlik }, profile, options,
     );
     report.verification = dog;
     report.status = dog.tamam ? "success" : "dogrulama_bekliyor";
@@ -211,9 +211,9 @@ function esle(willChange) {
 // "denendi mi" bilgisini taşır.
 // Doner: { ok, denendi, atlandi, problems }
 export async function applyPin(options, pin) {
-  const { host, sourceIp, credentials, reboot = true } = options;
+  const { host, sourceIp, kimlik, reboot = true } = options;
   const report = { ok: false, attempted: false, skipped: null, problems: [] };
-  if (!credentials) {
+  if (!kimlik) {
     report.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
     report.skipped = "noCredentials";
     return report;
@@ -224,7 +224,7 @@ export async function applyPin(options, pin) {
     report.skipped = "invalidFormat";
     return report;
   }
-  const consoleOptions = { host, sourceIp, username: credentials.username, password: credentials.password };
+  const consoleOptions = { host, sourceIp, username: kimlik.username, password: kimlik.password };
 
   // (3) Aynı PIN zaten yazılı mı? Yazılıysa denenmiş; tekrarlamak deneme yakar.
   notify(options, "PIN kontrolu (ayni PIN daha once denenmis mi)");
@@ -276,7 +276,7 @@ async function rebootFireForget(consoleOptions) {
 // Doner: { tamam, kalan_degisecek, bekleme_sn, sebep }
 async function verify(options, profile, anaOpts) {
   const consoleOptions = { host: options.host, sourceIp: options.sourceIp,
-    username: options.credentials.username, password: options.credentials.password };
+    username: options.kimlik.username, password: options.kimlik.password };
   const maxAttempts = 20;      // ~100 sn: reboot suresinden rahat uzun
   const KARARLI_SINIR = 3;   // ayni eksik kac kez ust uste = oturmus
   let oncekiImza = null;

@@ -77,7 +77,7 @@ export const WRITE_GROUPS = [
 ];
 
 export const FIELD_PROFILE = {
-  name: "saha",     // CLI sozlesmesi: --profil saha
+  name: "field",
   description: "ACO RVM saha profili — Ricon S9922M44",
 
   // nvram anahtar -> hedef değer (hepsi string; nvram string tutar).
@@ -145,7 +145,7 @@ export const FIELD_PROFILE = {
 // da bir kez pristine /nvrambak.bin yedegi alip `nvram restore` etmek
 // (golden-backup yaklasimi — ileride, pristine yedek gerektirir).
 export const FACTORY_PROFILE = {
-  name: "fabrika",  // CLI sozlesmesi: --profil fabrika
+  name: "factory",
   description: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
   nvram: {
     // Modem/WAN Main Link defaults

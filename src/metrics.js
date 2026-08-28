@@ -34,7 +34,7 @@ export function distribution(values) {
 // lanMac/deneme ve tur degeri "kurulum"/"manual"/"sifirlama"). O satirlar
 // metrik iddiasinin TABANI — silmedik, ikisini de okuyoruz. Yeni ad once.
 const KIND_TR = { kurulum: "run", elle: "manual", sifirlama: "reset" };
-const field = (row, current, legacy) => row[current] ?? row[legacy] ?? null;
+const alan = (row, yeni, eski) => row[yeni] ?? row[eski] ?? null;
 const kindOf = (row) => {
   const k = row.kind ?? row.tur ?? null;
   return KIND_TR[k] ?? k;
@@ -43,7 +43,7 @@ const kindOf = (row) => {
 export function summarizeMetrics(rows = [], options = {}) {
   const runs = rows.filter((r) => kindOf(r) === "run");
   const succeeded = runs.filter((r) => r.ok);
-  // Elle olcumler AYNI dosyada, tur:"manual" ile. Boylece comparison tabani
+  // Elle olcumler AYNI dosyada, tur:"manual" ile. Boylece karsilastirma tabani
   // da kayitli bir OLCUM olur — komut satirinda tasinan bir sayi degil.
   const manualRows = rows.filter((r) => kindOf(r) === "manual");
 
@@ -57,18 +57,18 @@ export function summarizeMetrics(rows = [], options = {}) {
       successRate: runs.length
         ? round1((succeeded.length / runs.length) * 100) : null,
       // İlk denemede biten kurulum oranı — retry'a ne sıklıkla düştüğümüz.
-      onFirstAttempt: succeeded.filter((r) => (field(r, "attempt", "deneme") ?? 1) === 1).length,
-      differentDevice: new Set(succeeded.map((r) => field(r, "lanMac", "lan_mac")).filter(Boolean)).size,
+      onFirstAttempt: succeeded.filter((r) => (alan(r, "attempt", "deneme") ?? 1) === 1).length,
+      differentDevice: new Set(succeeded.map((r) => alan(r, "lanMac", "lanMac")).filter(Boolean)).size,
     },
     reset: {
       attempted: rows.filter((r) => r.kind === "sifirlama").length,
     },
     // Araç süresi: "başlat"a bastıktan bitişe kadar (cihaz işi).
-    toolSec: distribution(succeeded.map((r) => count(field(r, "totalSec", "toplam_sn")))),
+    toolSec: distribution(succeeded.map((r) => count(alan(r, "totalSec", "toplam_sn")))),
     // Operatörün numarayı girme süresi = insanın MEŞGUL olduğu tek an.
-    entrySec: distribution(succeeded.map((r) => count(field(r, "entrySec", "giris_sn")))),
+    entrySec: distribution(succeeded.map((r) => count(alan(r, "entrySec", "giris_sn")))),
     steps: stepSummary(succeeded),
-    manualSec: distribution(manualRows.map((r) => count(field(r, "totalSec", "toplam_sn")))),
+    manualSec: distribution(manualRows.map((r) => count(alan(r, "totalSec", "toplam_sn")))),
     problems: [],
   };
 
@@ -91,7 +91,7 @@ export function summarizeMetrics(rows = [], options = {}) {
     return `${summary.manualSec.n} ${label}${kim ? ` · ${kim}` : ""}`;
   };
   if (baseline) {
-    summary.comparison = karsilastir(summary, {
+    summary.karsilastirma = karsilastir(summary, {
       ...options,
       manualSec: baseline,
       manualSource: sourceText(),
@@ -124,7 +124,7 @@ function stepSummary(lines) {
 }
 
 // Elle sürece göre kazanç. İki AYRI iddia üretir, çünkü ikisi farklı şey:
-//   cycle  = toplam geçen süre (modem başına)
+//   dongu  = toplam geçen süre (modem başına)
 //   mesgul = insanın ekranda/klavyede olduğu süre
 // İkincisi asıl kazanç: kalan süre gözetimsiz geçiyor.
 function karsilastir(summary, options) {
@@ -138,13 +138,13 @@ function karsilastir(summary, options) {
     manualSec: manual,
     manualSource: options.manualSource || "belirtilmedi",
     manualCount: options.manualCount ?? null,
-    cycle: ratio(summary.cycleSec),
+    dongu: ratio(summary.cycleSec),
     humanBusy: ratio(summary.humanBusySec),
   };
-  if (options.modemCount && k.cycle) {
-    k.scale = {
+  if (options.modemCount && k.dongu) {
+    k.olcek = {
       modem: options.modemCount,
-      savedHours: round1((k.cycle.savedSec * options.modemCount) / 3600),
+      kazanilan_saat: round1((k.dongu.savedSec * options.modemCount) / 3600),
     };
   }
   // Küçük örneklemde "%94 azalttık" demek abartı olur; eşiği açıkça söyle.

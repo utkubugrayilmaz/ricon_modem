@@ -66,7 +66,7 @@ function metricLines(r) {
   }
   s.push(`    arac suresi (medyan)  : ${d(r.toolSec)}`);
   s.push(`    numara girisi (medyan): ${d(r.entrySec)}`);
-  s.push(`    cycle (giris + arac)  : ${r.cycleSec ?? "—"} sn`);
+  s.push(`    dongu (giris + arac)  : ${r.cycleSec ?? "—"} sn`);
 
   if (r.steps?.length) {
     s.push("\n    Adim kirilimi (medyan):");
@@ -76,20 +76,20 @@ function metricLines(r) {
     }
   }
 
-  const k = r.comparison;
+  const k = r.karsilastirma;
   if (k) {
     s.push(`\n    ELLE SUREC: ${k.manualSec} sn (${(k.manualSec / 60).toFixed(1)} dk)`
       + ` · kaynak: ${k.manualSource}${k.manualCount ? ` (n=${k.manualCount})` : ""}`);
-    if (k.cycle) {
-      s.push(`      cycle suresi      : %${k.cycle.reductionPct} azalma`
-        + ` · ${k.cycle.speedup}x hizli · modem basina ${k.cycle.savedSec} sn kazanc`);
+    if (k.dongu) {
+      s.push(`      dongu suresi      : %${k.dongu.reductionPct} azalma`
+        + ` · ${k.dongu.speedup}x hizli · modem basina ${k.dongu.savedSec} sn kazanc`);
     }
     if (k.humanBusy) {
       s.push(`      insan mesgul suresi: %${k.humanBusy.reductionPct} azalma`
         + ` · ${k.humanBusy.speedup}x · gerisi GOZETIMSIZ geciyor`);
     }
-    if (k.scale) {
-      s.push(`      ${k.scale.modem} modemde toplam kazanc: ${k.scale.savedHours} saat`);
+    if (k.olcek) {
+      s.push(`      ${k.olcek.modem} modemde toplam kazanc: ${k.olcek.kazanilan_saat} saat`);
     }
     if (k.uyari) s.push(`      ! ${k.uyari}`);
     if (k.manualWarning) s.push(`      ! ${k.manualWarning}`);
@@ -106,9 +106,9 @@ export function summaryText(report) {
   // `modem.host` icinde tasiyor. Ikisine de bak, yoksa "?" yaz.
   s.push(`Ricon modem — ${report.modemIp || report.modem?.host || "?"}`
     + `  (${report.timestamp || ""})`);
-  if (report.system) {
+  if (report.sistem) {
     s.push("\n  Sistem:");
-    for (const [k, v] of Object.entries(report.system)) s.push(`    ${k.padEnd(16)}: ${g(v)}`);
+    for (const [k, v] of Object.entries(report.sistem)) s.push(`    ${k.padEnd(16)}: ${g(v)}`);
   }
   for (const label of ["sim1", "sim2"]) {
     const sim = report[label];
@@ -144,7 +144,7 @@ export function summaryText(report) {
     s.push(`    ${"msisdn".padEnd(14)}: ${g(report.msisdn)}${report.msisdnSource ? " (" + report.msisdnSource + ")" : ""}`);
     if (report.msisdn_not) s.push(`    -> ${report.msisdn_not}`);
   }
-  if (report.command === "hazirla" || report.command === "hazirla-cycle") {
+  if (report.command === "hazirla" || report.command === "hazirla-dongu") {
     s.push(`
   Hazirla — durum: ${g(report.status)}${report.attempt ? " (deneme " + report.attempt + ")" : ""}`);
     if (report.lastAction) s.push(`  Eylem: ${report.lastAction}`);

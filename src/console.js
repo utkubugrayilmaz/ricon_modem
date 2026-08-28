@@ -97,8 +97,8 @@ export function parseNvramShow(text) {
 // saglam: bir sonraki cagiran da yanlis sekli verse calisir.
 export function consoleCredentials(options = {}) {
   return {
-    username: options.username ?? options.credentials?.username ?? null,
-    password: options.password ?? options.credentials?.password ?? "",
+    username: options.username ?? options.kimlik?.username ?? null,
+    password: options.password ?? options.kimlik?.password ?? "",
   };
 }
 

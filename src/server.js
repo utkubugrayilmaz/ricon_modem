@@ -87,7 +87,7 @@ let assessing = false;
 export function createServer(options = {}) {
   const {
     factoryHost = "192.168.1.1", fieldHost = "5.5.5.1",
-    credentials, profile, resetProfile, record, metricRecord, onProgress,
+    kimlik, profile, resetProfile, record, metricRecord, onProgress,
     // Internet dogrulamasi ust siniri (sn) — 0 kapatir.
     internetWaitSec = 150,
     // Arayuz dizini. VERILMEZSE sunucu SALT API olur; arayuz urunun parcasi
@@ -148,7 +148,7 @@ export function createServer(options = {}) {
     }
     assessing = true;
     try {
-      const r = await assessDevice({ factoryHost, fieldHost, credentials });
+      const r = await assessDevice({ factoryHost, fieldHost, kimlik });
       sendJson(response, 200, {
         ok: r.ok,
         // TEKRAR KARARI CEKIRDEKTEN. Arayuz "ne zaman yeniden bakayim?"
@@ -182,10 +182,10 @@ export function createServer(options = {}) {
       return sendJson(response, 200, { ok: true, written: false, not: "olcum kaydi kapali" });
     }
     const parcalar = [];
-    let bytes = 0;
+    let boyut = 0;
     for await (const p of request) {
-      bytes += p.length;
-      if (bytes > 64 * 1024) return sendJson(response, 413, { ok: false, error: "govde cok buyuk" });
+      boyut += p.length;
+      if (boyut > 64 * 1024) return sendJson(response, 413, { ok: false, error: "govde cok buyuk" });
       parcalar.push(p);
     }
     let gelen;
@@ -263,10 +263,10 @@ export function createServer(options = {}) {
         return finish();
       }
       send("detected", { kind: "detected", action: `sifirlama_${name}`, location: location.host });
-      send("identityBefore", await readIdentity({ ...location, credentials }));
+      send("identityBefore", await readIdentity({ ...location, kimlik }));
 
       const r = await applyProvisioning({
-        ...location, credentials, apply: true,
+        ...location, kimlik, apply: true,
         newHost: factoryHost, newSourceIp: on.factorySource,
         onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); },
         event: (o) => {
@@ -279,7 +279,7 @@ export function createServer(options = {}) {
       // fabrikada olur, kayit YALAN SOYLER.
       const newLocation = r.status === "success"
         ? { host: factoryHost, sourceIp: on.factorySource } : location;
-      const identity = credentials ? await readIdentity({ ...newLocation, credentials }) : {};
+      const identity = kimlik ? await readIdentity({ ...newLocation, kimlik }) : {};
       const line = provisionRecord({
         result: { ...r, status: r.ok ? "fabrikaya_dondu" : `sifirlama_${r.status}` },
         phone: null, identity,
@@ -330,7 +330,7 @@ export function createServer(options = {}) {
         sendError(send, "DEVICE_UNREACHABLE");
         return;
       }
-      const atOptions = { ...location, credentials,
+      const atOptions = { ...location, kimlik,
         onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); } };
 
       // Kalan hakki ONCE bildir: operator ne riske girdigini denemeden gorsun.
@@ -381,7 +381,7 @@ export function createServer(options = {}) {
       // yalnizca elleOnay:true — insan kalan hakki gorup bilincli onayladi.
       // Son hakki elle onay bile yakamaz (bkz. simPinHedefi).
       send("progress", { message: "SIM durumu okunuyor (kalan hak)" });
-      const identity = await readIdentity({ ...location, credentials });
+      const identity = await readIdentity({ ...location, kimlik });
       const { target, problems } = simPinTarget(identity.sim, pin, { humanApproved: true });
       if (typeof target !== "string" || target === "") {
         send("pinResult", { attempted: false,
@@ -389,7 +389,7 @@ export function createServer(options = {}) {
           problems: withProblemText(problems) });
         return;
       }
-      const p = await applyPin({ ...location, credentials,
+      const p = await applyPin({ ...location, kimlik,
         onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); },
         event: (o) => send(o.kind, o) }, target);
 
@@ -399,7 +399,7 @@ export function createServer(options = {}) {
         return;
       }
       // PIN yazildi + reboot edildi: cihaz yeni bastan gelecek, interneti bekle.
-      const net = await waitForInternet({ ...location, credentials }, internetWaitSec, {
+      const net = await waitForInternet({ ...location, kimlik }, internetWaitSec, {
         onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); },
         event: (o) => send(o.kind, o),
       });
@@ -440,16 +440,16 @@ export function createServer(options = {}) {
       // cekirdege GECIYORUZ ki cihaza iki kez gidilmesin — tek baglantili
       // cihazda bu ~4 sn demek.
       let identity = null;
-      if (location && credentials) {
+      if (location && kimlik) {
         send("progress", { message: `modem ${location.host} — kimlik/SIM okunuyor` });
-        identity = await readIdentity({ ...location, credentials });
+        identity = await readIdentity({ ...location, kimlik });
         send("identityBefore", identity);
       }
 
       const r = await provisionModem({
         factoryHost, factorySource: on.factorySource,
         fieldHost, fieldSource: on.fieldSource,
-        credentials, profile, phone: n, record, identity,
+        kimlik, profile, phone: n, record, identity,
         internetWaitSec,
         // PIN OPSIYONEL: yalnizca internet gelmezse denenir (cekirdek karari).
         pin: url.searchParams.get("pin") || null,

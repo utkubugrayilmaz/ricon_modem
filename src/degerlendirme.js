@@ -50,14 +50,14 @@ export function provisioningGaps({ modemPresent, simPresent, simLock, phone, pin
 export async function assessDevice(options) {
   const {
     factoryHost = "192.168.1.1", fieldHost = "5.5.5.1",
-    credentials, phone = null, pin = null,
+    kimlik, phone = null, pin = null,
   } = options;
   const on = pcPreflight(subnetPrefix(factoryHost), subnetPrefix(fieldHost));
   const report = {
     timestamp: now(), command: "degerlendir",
     pc: { ready: on.ready, problems: on.problems },
     modem: { location: null, host: null },
-    credentials: null, sim: null,
+    kimlik: null, sim: null,
     phone: { number: normalizePhone(phone), source: phone ? "input" : "none" },
     internet: null,
     problems: [...on.problems],
@@ -76,11 +76,11 @@ export async function assessDevice(options) {
     : fieldReachable ? { host: fieldHost, sourceIp: on.fieldSource, name: "field" } : null;
   report.modem = { location: location?.name ?? null, host: location?.host ?? null };
 
-  if (location && credentials) {
+  if (location && kimlik) {
     let k = null;
-    try { k = await readIdentity({ ...location, credentials }); } catch { /* kismi sonuc gecerli */ }
+    try { k = await readIdentity({ ...location, kimlik }); } catch { /* kismi sonuc gecerli */ }
     if (k) {
-      report.identity = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
+      report.kimlik = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
         lanMac: k.lanMac, operator: k.operator };
       report.sim = { present: isSimPresent(k), ...k.sim };
       report.internet = { online: Boolean(k.wanIp), wanIp: k.wanIp };
@@ -96,9 +96,9 @@ export async function assessDevice(options) {
   // (`+QPINC: "SC",3,10`). Bu sayi bir GUVENLIK kararinin girdisi — "daha once
   // hak yanmis mi?" — o yuzden tahmine birakilmaz, ~3 sn'ye deger. Yalnizca
   // KILITLI durumda okunuyor: acik SIM'de gereksiz bir tur olurdu.
-  if (location && credentials && report.sim?.lock === "pin") {
+  if (location && kimlik && report.sim?.lock === "pin") {
     notify(options, "SIM kilidi modulden okunuyor (kalan hak)");
-    const k = await readSimLock({ ...location, credentials });
+    const k = await readSimLock({ ...location, kimlik });
     report.atPort = k.atPort;
     if (k.atPort) {
       report.sim = { ...report.sim,
@@ -122,9 +122,9 @@ export async function assessDevice(options) {
   // TELEFON NUMARASINI CIHAZDAN OKU — artik elle girmeye gerek yok.
   // Yalnizca SIM HAZIRSA denenir: kilitli SIM abone verisini (EF_MSISDN)
   // acmiyor, canli olculdu (2026-08-27). Kilitliyse once PIN, sonra numara.
-  if (location && credentials && report.sim?.ready) {
+  if (location && kimlik && report.sim?.ready) {
     notify(options, "telefon numarasi cihazdan okunuyor (AT+CNUM)");
-    const n = await readMsisdn({ ...location, credentials });
+    const n = await readMsisdn({ ...location, kimlik });
     report.atPort = n.atPort;
     if (n.phone) {
       const manual = normalizePhone(phone);
@@ -207,7 +207,7 @@ export function retryDecision(report = {}) {
 //
 // opts: assessDevice opts + { olay(rapor), dur() }
 //   olay : her degerlendirme sonucunda cagrilir (tuketici ekrani gunceller)
-//   dur  : true donerse cycle biter (tuketici iptal edebilir)
+//   dur  : true donerse dongu biter (tuketici iptal edebilir)
 // Doner: son rapor.
 export async function watchAssessment(options = {}) {
   const enFazla = options.enFazlaTur ?? Infinity;

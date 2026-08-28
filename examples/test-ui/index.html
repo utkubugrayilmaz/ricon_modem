@@ -8,110 +8,110 @@
 </head>
 <body>
 
-<header class="top">
-  <img class="top-logo" src="aco-logo.png" alt="ACO Recycling">
-  <span class="top-name">Modem kurulum</span>
-  <span class="top-status" id="topStatus" data-state="waiting">modem aranıyor</span>
+<header class="ust">
+  <img class="ust-logo" src="aco-logo.png" alt="ACO Recycling">
+  <span class="ust-ad">Modem kurulum</span>
+  <span class="ust-durum" id="ustDurum" data-state="waiting">modem aranıyor</span>
 
-  <div class="reset-area">
-    <button class="reset-btn" id="resetBtn" type="button">Fabrikaya döndür</button>
-    <div class="confirm-popover" id="confirmPopover" hidden role="dialog"
-         aria-labelledby="confirmQuestion">
-      <p class="confirm-question" id="confirmQuestion">Modemi fabrika ayarlarına döndür?</p>
-      <p class="confirm-note">12 ayar default'a döner, modem <code>192.168.1.1</code>'e geçer.</p>
-      <div class="confirm-buttons">
-        <button class="confirm-yes" id="resetYes" type="button">Evet, sıfırla</button>
-        <button class="confirm-no" id="resetNo" type="button">Hayır</button>
+  <div class="sifirla-alan">
+    <button class="sifirla-btn" id="sifirlaBtn" type="button">Fabrikaya döndür</button>
+    <div class="onay-balon" id="onayBalon" hidden role="dialog"
+         aria-labelledby="onaySoru">
+      <p class="onay-soru" id="onaySoru">Modemi fabrika ayarlarına döndür?</p>
+      <p class="onay-not">12 ayar default'a döner, modem <code>192.168.1.1</code>'e geçer.</p>
+      <div class="onay-dugmeler">
+        <button class="onay-evet" id="sifirlaEvet" type="button">Evet, sıfırla</button>
+        <button class="onay-hayir" id="sifirlaHayir" type="button">Hayır</button>
       </div>
     </div>
   </div>
 </header>
 
 <!-- ================= EKRAN 1: telefon numarası ================= -->
-<main class="screen" id="entryScreen">
-  <div class="entry">
-    <h1 class="entry-title">SIM telefon numarası</h1>
+<main class="ekran" id="ekranGiris">
+  <div class="giris">
+    <h1 class="giris-baslik">SIM telefon numarası</h1>
 
     <!-- Numara SALT GORUNTU. Duzenleme tek kapidan acilir: "Degistir".
          Hanelere tiklayarak yazmak KAPALI — cihazdan okunan numarayi
          yanlislikla bozmanin yolu kalmasin. -->
-    <div class="digit-row" id="digitRow" role="group" aria-label="Telefon numarası"></div>
-    <input class="offscreen" id="hiddenInput" type="text" inputmode="numeric"
+    <div class="haneler" id="haneler" role="group" aria-label="Telefon numarası"></div>
+    <input class="gizli" id="gizliGiris" type="text" inputmode="numeric"
            autocomplete="off" spellcheck="false" maxlength="11"
            aria-label="Telefon numarası, 11 hane">
 
-    <p class="source" id="sourceRow">
-      <span class="source-text" id="sourceText"></span>
-      <button class="source-edit" id="editBtn" type="button" hidden>Değiştir</button>
+    <p class="kaynak" id="kaynak">
+      <span class="kaynak-metin" id="kaynakMetin"></span>
+      <button class="kaynak-degistir" id="degistirBtn" type="button" hidden>Değiştir</button>
     </p>
 
-    <p class="hint" id="hint" role="status">&nbsp;</p>
+    <p class="uyari" id="uyari" role="status">&nbsp;</p>
 
     <!-- PIN alani VARSAYILAN OLARAK YOK. Yalnizca degerlendirme "kilitli"
          derse aciliyor: PIN'siz SIM'de operatore sorulacak bir sey yok. -->
-    <div class="pin-area" id="pinArea" hidden>
-      <label class="pin-label" for="pinInput">SIM PIN <span id="pinLabelNote"></span></label>
-      <div class="pin-row">
-        <input class="pin-input" id="pinInput" type="text" inputmode="numeric"
+    <div class="pin-alan" id="pinAlan" hidden>
+      <label class="pin-etiket" for="pinGiris">SIM PIN <span id="pinEtiketNot"></span></label>
+      <div class="pin-satir">
+        <input class="pin-giris" id="pinGiris" type="text" inputmode="numeric"
                autocomplete="off" maxlength="8" placeholder="••••">
-        <button class="pin-disable-btn" id="pinDisableBtn" type="button" disabled>
+        <button class="pin-kaldir-btn" id="pinKaldirBtn" type="button" disabled>
           Kilidi kaldır
         </button>
       </div>
-      <p class="pin-note" id="pinNote"></p>
-      <p class="pin-stream" id="pinStream" role="status" hidden></p>
+      <p class="pin-not" id="pinNot"></p>
+      <p class="pin-akis" id="pinAkis" role="status" hidden></p>
     </div>
 
-    <button class="start" id="startBtn" type="button" disabled>Kurulumu başlat</button>
+    <button class="baslat" id="baslatBtn" type="button" disabled>Kurulumu başlat</button>
 
-    <p class="notice" id="notice" role="status" hidden></p>
-    <p class="tip" id="tip"></p>
+    <p class="duyuru" id="duyuru" role="status" hidden></p>
+    <p class="ipucu" id="ipucu"></p>
   </div>
 </main>
 
 <!-- ================= EKRAN 2: öncesi / sonrası ================= -->
-<main class="screen run" id="runScreen" hidden>
-  <div class="run-header">
-    <div class="rh-cell">
-      <span class="rh-label" id="labelBefore">Kurulum öncesi</span>
-      <span class="rh-place" id="locationBefore">—</span>
+<main class="ekran kurulum" id="ekranKurulum" hidden>
+  <div class="kurulum-baslik">
+    <div class="kb-hucre">
+      <span class="kb-etiket" id="etiketOnce">Kurulum öncesi</span>
+      <span class="kb-yer" id="konumOnce">—</span>
     </div>
-    <div class="rh-cell rh-after">
-      <span class="rh-label" id="labelAfter">Kurulum sonrası</span>
-      <span class="rh-place" id="locationAfter">—</span>
-    </div>
-  </div>
-
-  <div class="identity-strip">
-    <div class="is-cell" id="identityBefore"></div>
-    <div class="is-cell is-after">
-      <p class="stream" id="stream">hazırlanıyor…</p>
+    <div class="kb-hucre kb-sonra">
+      <span class="kb-etiket" id="etiketSonra">Kurulum sonrası</span>
+      <span class="kb-yer" id="konumSonra">—</span>
     </div>
   </div>
 
-  <div class="grid" id="grid"></div>
+  <div class="kimlik-serit">
+    <div class="ks-hucre" id="kimlikOnce"></div>
+    <div class="ks-hucre ks-sonra">
+      <p class="akis" id="akis">hazırlanıyor…</p>
+    </div>
+  </div>
 
-  <section class="metric" id="metricSection" hidden>
-    <span class="metric-label">süre ölçümü · test</span>
-    <div class="metric-table" id="metricTable"></div>
+  <div class="izgara" id="izgara"></div>
+
+  <section class="olcum" id="olcumBolum" hidden>
+    <span class="olcum-etiket">süre ölçümü · test</span>
+    <div class="olcum-tablo" id="olcumTablo"></div>
   </section>
 
   <!-- İnternet gelmedi + PIN girilmemiş: operatörü ana ekrana atmadan,
        YERİNDE PIN sor. Provizyon tekrarlanmaz, sadece PIN yazılır. -->
-  <section class="pin-request" id="pinRequest" hidden>
-    <p class="pin-request-title">İnternet gelmedi — SIM PIN kilitli olabilir</p>
-    <p class="pin-request-note">Tek deneme. Emin değilsen boş bırak.</p>
-    <div class="pin-request-row">
-      <input class="pin-input" id="pinRequestInput" type="text" inputmode="numeric"
+  <section class="pin-istek" id="pinIstek" hidden>
+    <p class="pin-istek-baslik">İnternet gelmedi — SIM PIN kilitli olabilir</p>
+    <p class="pin-istek-not">Tek deneme. Emin değilsen boş bırak.</p>
+    <div class="pin-istek-satir">
+      <input class="pin-giris" id="pinIstekGiris" type="text" inputmode="numeric"
              autocomplete="off" maxlength="8" placeholder="PIN (4-8 hane)">
-      <button class="pin-try" id="pinTryBtn" type="button">PIN'i dene</button>
+      <button class="pin-dene" id="pinDeneBtn" type="button">PIN'i dene</button>
     </div>
   </section>
 
-  <footer class="footer" id="footer">
-    <span class="footer-timer" id="footerTimer">0.0 sn</span>
-    <span class="footer-status" id="footerStatus">Kurulum sürüyor…</span>
-    <button class="confirm" id="confirmBtn" type="button" hidden>Onayla ve sıradaki modem</button>
+  <footer class="alt" id="alt">
+    <span class="alt-sure" id="altSure">0.0 sn</span>
+    <span class="alt-durum" id="altDurum">Kurulum sürüyor…</span>
+    <button class="onay" id="onayBtn" type="button" hidden>Onayla ve sıradaki modem</button>
   </footer>
 </main>
 

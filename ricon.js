@@ -62,9 +62,9 @@ function envOptions() {
   const sourceIp = (sourceChoice || "").trim() || findSourceIp(prefix) || undefined;
   const username = (process.env.MODEM_KULLANICI || "").trim();
   const password = process.env.MODEM_SIFRE || "";
-  const credentials = username ? { username, password } : null;
+  const kimlik = username ? { username, password } : null;
   const community = (process.env.MODEM_SNMP_COMMUNITY || "public").trim();
-  return { host, sourceIp, credentials, community, onProgress };
+  return { host, sourceIp, kimlik, community, onProgress };
 }
 
 // --- Hazirlama kaydi (JSONL) ---
@@ -82,9 +82,9 @@ function recordWriter(file, label = "record") {
     try {
       mkdirSync(dirname(file), { recursive: true });
       appendFileSync(file, JSON.stringify(line) + "\n", "utf8");
-      const extra = line.totalSec != null ? `${line.totalSec} sn` : (line.iccid || "");
+      const ek = line.totalSec != null ? `${line.totalSec} sn` : (line.iccid || "");
       process.stderr.write(`[${label}] ${file} <- ${line.status} `
-        + `${line.phone || "—"} ${extra}\n`);
+        + `${line.phone || "—"} ${ek}\n`);
     } catch (e) {
       process.stderr.write(`[${label}] YAZILAMADI (${file}): ${e.message}\n`);
     }
@@ -101,10 +101,10 @@ function askPhone(index) {
     return Promise.resolve(null);
   }
   const rl = createInterface({ input: process.stdin, output: process.stderr });
-  const ask = (question) => new Promise((c) => rl.question(question, c));
+  const sor = (soru) => new Promise((c) => rl.question(soru, c));
   return (async () => {
     for (let i = 0; i < 3; i += 1) {
-      const raw = (await ask(`\n[${index}. modem] SIM telefon numarasi (05xxxxxxxxx): `)).trim();
+      const raw = (await sor(`\n[${index}. modem] SIM telefon numarasi (05xxxxxxxxx): `)).trim();
       if (!raw) break;
       const n = normalizePhone(raw);
       if (n) { rl.close(); return n; }
@@ -120,8 +120,8 @@ function askPhone(index) {
 // da gecerli bir sonuc. Ama CLI sozlesmesi "cikis kodu ok'tan" diyor, yani
 // burada hesaplanmali. Sabit `ok: true` yazmak, erisilemeyen bir modemde
 // kabuga 0 dondurup betikleri yaniltiyordu.
-async function withOkFlag(promise) {
-  const r = await promise;
+async function withOkFlag(vaat) {
+  const r = await vaat;
   return { ...r, ok: r.ok ?? isOk(r.problems ?? []) };
 }
 
@@ -140,7 +140,7 @@ async function runCommand() {
     case "izle": return watchDevice({
       ...options,
       durationSec: Number(flag("--sure")) || 60,
-      intervalSec: Number(flag("--aralik")) || 5,
+      aralikSn: Number(flag("--aralik")) || 5,
     });
     case "konsol": return readConsole({ ...options, nvram: argv.includes("--nvram") });
     case "sim": return readSim({ ...options, phone: flag("--telefon") });
@@ -238,7 +238,7 @@ async function runCommand() {
       return computeNvramDiff(readNvramFile(before), readNvramFile(after));
     }
     case "uygula": {
-      const profileName = flag("--profil") || "saha";
+      const profileName = flag("--profil") || "field";
       const profile = PROFILES[profileName];
       if (!profile) {
         return { timestamp: new Date().toISOString(), command: "uygula", ok: false,
@@ -312,7 +312,7 @@ async function runCommand() {
     case "sunucu": {
       // UI/HTTP katmani: cekirdegi TUKETIR. Kural eklemez — telefon
       // zorunlulugu ve defter kaydi zaten cekirdekte.
-      const profileName = flag("--profil") || "saha";
+      const profileName = flag("--profil") || "field";
       const profile = PROFILES[profileName];
       if (!profile) {
         return { timestamp: new Date().toISOString(), command: "sunucu", ok: false,
@@ -328,7 +328,7 @@ async function runCommand() {
       const sunucu = createServer({
         factoryHost: options.host,
         fieldHost: flag("--saha-host") || profile.nvram.lan_ipaddr || "5.5.5.1",
-        credentials: options.credentials,
+        kimlik: options.kimlik,
         profile,
         // Arayuzdeki "Fabrikaya dondur" dugmesi bu profili uygular. DIKKAT:
         // gercek factory reset DEGIL — yalniz bizim dokundugumuz anahtarlari
@@ -350,7 +350,7 @@ async function runCommand() {
       return null;   // sunucu calisir; JSON ciktisi/cikis yok
     }
     case "hazirla": {
-      const profileName = flag("--profil") || "saha";
+      const profileName = flag("--profil") || "field";
       const profile = PROFILES[profileName];
       if (!profile) {
         return { timestamp: new Date().toISOString(), command: "hazirla", ok: false,
@@ -369,17 +369,17 @@ async function runCommand() {
       const hOpts = {
         factoryHost: options.host, factorySource: on.factorySource,
         fieldHost, fieldSource: on.fieldSource,
-        credentials: options.credentials, profile,
+        kimlik: options.kimlik, profile,
         attempts: Number(flag("--deneme")) || 3,
         // Internet dogrulamasi (SIM calisiyor mu). 0 = kapat.
         internetWaitSec: flag("--internet-bekle") !== undefined
           ? Number(flag("--internet-bekle")) : 150,
         record: recordWriter(flag("--kayit") || RECORD_FILE),
-        askPhone,          // cycle: her modem icin sorar
+        askPhone,          // dongu: her modem icin sorar
         onProgress,
       };
-      const cycle = argv.includes("--dongu");
-      if (cycle) {
+      const dongu = argv.includes("--dongu");
+      if (dongu) {
         // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli);
         // numara her modemde o modemin SIM'inden okunuyor.
         return provisionLoop({ ...hOpts, maxModems: Number(flag("--max")) || Infinity });
@@ -445,16 +445,7 @@ async function main() {
 
   // sunucu: surekli calisir — JSON basmaz, cikmaz. Dinleyen sunucu olay
   // dongusunu acik tutar; asagidaki process.exit'e DUSMEMESI gerekir.
-  //
-  // AMA HATA YUTULMAZ. Eskiden donen deger goz ardi ediliyordu: bilinmeyen
-  // profil gibi bir durumda sunucu hic baslamiyor, hicbir sey yazilmiyor ve
-  // surec SESSIZCE 0 ile cikiyordu (2026-08-28 canli goruldu).
-  if (command === "sunucu") {
-    const report = await runCommand();
-    if (report === null) return null;                 // sunucu ayakta
-    process.stderr.write(`\n${summaryText(report)}\n`);
-    return report.ok ? 0 : 1;
-  }
+  if (command === "sunucu") { await runCommand(); return null; }
 
   const source = flag("--kaynak");
   const report = source

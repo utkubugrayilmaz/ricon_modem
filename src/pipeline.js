@@ -116,7 +116,7 @@ export function simPinTarget(simLock, pin, { humanApproved = false } = {}) {
 // söylüyor ("PIN: 3/3"); 1 hak kalmışsa yanlış bir PIN SIM'i PUK'a kilitler ve
 // bunu bir otomasyonun kendi başına riske atması kabul edilemez. O durumda
 // karar insana bırakılır.
-async function tryPin({ location, credentials, pin, report, options, simState }) {
+async function tryPin({ location, kimlik, pin, report, options, simState }) {
   const remaining = simState?.pinRemaining ?? null;
   // KARAR PAYLASILAN MODULDE. Burada eskiden yalniz "son hak" kontrolu vardi;
   // "daha once hak yanmis" korumasi YOKTU — nvram yolunda vardi, burada
@@ -130,7 +130,7 @@ async function tryPin({ location, credentials, pin, report, options, simState })
   report.problems.push(...k.problems);   // izin verildi; varsa UYARI tasinir
   notify(options, `SIM PIN denenecek (kalan hak: ${remaining ?? "?"})`);
   const p = await applyPin(
-    { ...location, credentials, onProgress: options.onProgress, event: options.event }, pin,
+    { ...location, kimlik, onProgress: options.onProgress, event: options.event }, pin,
   );
   report.pinAttempt = { attempted: p.attempted, skipped: p.skipped, pinRemaining: remaining };
   report.problems.push(...p.problems);
@@ -142,7 +142,7 @@ async function tryPin({ location, credentials, pin, report, options, simState })
 //
 // Sıra önemli: önce internet beklenir. Gelirse PIN'e HİÇ dokunulmaz — kilitli
 // olmayan SIM'e PIN yazmak 3 denemeden birini yakmak demek (bkz. applyPin).
-async function verifyInternetThenPin({ location, credentials, pin, internetWaitSec, report, options,
+async function verifyInternetThenPin({ location, kimlik, pin, internetWaitSec, report, options,
   simState = null, pinPlanned = false }) {
   if (!(internetWaitSec > 0)) return null;
 
@@ -168,7 +168,7 @@ async function verifyInternetThenPin({ location, credentials, pin, internetWaitS
     // gerçek durumu internet kontrolü söyleyecek.
     if (pinPlanned) {
       notify(options, "PIN ana yazma pasinda gonderildi — internet kontrol ediliyor");
-      const next = await waitForInternet({ ...location, credentials }, internetWaitSec, options);
+      const next = await waitForInternet({ ...location, kimlik }, internetWaitSec, options);
       report.internet = next;
       if (!next.online) report.problems.push(problem("INTERNET_DOWN", internetWaitSec, next.simStatus));
       return next;
@@ -176,11 +176,11 @@ async function verifyInternetThenPin({ location, credentials, pin, internetWaitS
     // PIN verilmediyse burada PIN_REQUIRED EKLEMİYORUZ: SIM_PIN_LOCKED zaten
     // durumu ve doğru çözümü söylüyor. İkinci bir mesaj hem tekrar hem de ters
     // yönü ("PIN gir") öneriyor olurdu.
-    if (pin) await tryPin({ location, credentials, pin, report, options, simState });
+    if (pin) await tryPin({ location, kimlik, pin, report, options, simState });
     else report.pinAttempt = { attempted: false, skipped: "noPin",
       pinRemaining: simState.pinRemaining };
     if (report.pinAttempt?.attempted) {
-      const next = await waitForInternet({ ...location, credentials }, internetWaitSec, options);
+      const next = await waitForInternet({ ...location, kimlik }, internetWaitSec, options);
       report.pinAttempt.result = next.online ? "internet_geldi" : "internet_gelmedi";
       report.internet = next;
       if (!next.online) report.problems.push(problem("INTERNET_DOWN", internetWaitSec, next.simStatus));
@@ -191,15 +191,15 @@ async function verifyInternetThenPin({ location, credentials, pin, internetWaitS
   }
 
   notify(options, "internet dogrulamasi (SIM calisiyor mu)");
-  let result = await waitForInternet({ ...location, credentials }, internetWaitSec, options);
+  let result = await waitForInternet({ ...location, kimlik }, internetWaitSec, options);
 
   if (!result.online) {
     // İnternet gelmedi ama cihaz PIN kilidi de DEMEDİ. Yine de PIN verilmişse
     // deneriz (kilit metni her firmwarede aynı olmayabilir); son hak koruması
     // pinDene içinde.
-    await tryPin({ location, credentials, pin, report, options, simState });
+    await tryPin({ location, kimlik, pin, report, options, simState });
     if (report.pinAttempt?.attempted) {
-      result = await waitForInternet({ ...location, credentials }, internetWaitSec, options);
+      result = await waitForInternet({ ...location, kimlik }, internetWaitSec, options);
       report.pinAttempt.result = result.online ? "internet_geldi" : "internet_gelmedi";
     }
   }
@@ -213,17 +213,17 @@ async function verifyInternetThenPin({ location, credentials, pin, internetWaitS
 
 // Her çıkışta çalışır: kimliği tamamla, kalıcı kayıt satırını üret, dışarıya
 // bildir. Çekirdek DOSYAYA YAZMAZ — nereye yazılacağı tüketicinin kararı.
-async function finishRecord({ report, location, knownIdentity, credentials, phone,
+async function finishRecord({ report, location, knownIdentity, kimlik, phone,
   profile, internet, options }) {
   let identity = knownIdentity || {};
-  if (!knownIdentity && location && credentials) {
+  if (!knownIdentity && location && kimlik) {
     try {
       notify(options, "cihaz kimligi okunuyor (kayit icin)");
-      identity = await readIdentity({ ...location, credentials });
+      identity = await readIdentity({ ...location, kimlik });
     } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
   }
-  report.identityInfo = identity;
-  if (location && credentials) emit(options, { kind: "kimlik", identityInfo: identity });
+  report.kimlik_bilgi = identity;
+  if (location && kimlik) emit(options, { kind: "kimlik", kimlik_bilgi: identity });
   report.record = provisionRecord({
     result: report, phone: normalizePhone(phone), identity,
     profileName: profile?.name, host: location?.host ?? null, internet,
@@ -252,7 +252,7 @@ export async function provisionModem(options) {
   const {
     factoryHost = "192.168.1.1", factorySource,
     fieldHost = "5.5.5.1", fieldSource,
-    credentials, profile, attempts = 3, phone,
+    kimlik, profile, attempts = 3, phone,
     // SIM PIN — OPSIYONEL. Yalnizca internet dogrulamasi BASARISIZ olursa ve
     // burada bir deger varsa denenir. Kilitli olmayan SIM'e ASLA yazilmaz.
     pin = null,
@@ -273,18 +273,18 @@ export async function provisionModem(options) {
   // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
   // kaydiTamamla). Cagri yerleri degismedi.
   const verifyInternet = (location, simState, pinPlanned) =>
-    verifyInternetThenPin({ location, credentials, pin, internetWaitSec, report, options,
+    verifyInternetThenPin({ location, kimlik, pin, internetWaitSec, report, options,
       simState, pinPlanned });
 
 
   const finish = (location, knownIdentity = null, internet = null) => {
     report.phone = { number: phoneNormalized, source: phoneSource };
-    return finishRecord({ report, location, knownIdentity, credentials,
+    return finishRecord({ report, location, knownIdentity, kimlik,
       phone: phoneNormalized, profile, internet, options });
   };
 
 
-  if (!credentials) {
+  if (!kimlik) {
     report.problems.push(problem("AUTH_REQUIRED", "modem"));
     report.status = "noCredentials"; report.ok = false; return finish(null);
   }
@@ -323,11 +323,11 @@ export async function provisionModem(options) {
   //     not: bu alan yalnızca parolayla girince okunur, defter hâlâ tek kaynak)
   //   · SIM PIN — YALNIZCA kilit varsa ve güvenlik kapıları geçilirse
   const buildEffectiveProfile = (pinTarget) => {
-    const extra = {};
-    if (phoneNormalized) extra[DEVICE_NAME_KEY] = `0${phoneNormalized}`;
-    if (pinTarget !== undefined) extra[SIM_PIN_KEY] = pinTarget;
-    return Object.keys(extra).length
-      ? { ...profile, nvram: { ...profile.nvram, ...extra } } : profile;
+    const ek = {};
+    if (phoneNormalized) ek[DEVICE_NAME_KEY] = `0${phoneNormalized}`;
+    if (pinTarget !== undefined) ek[SIM_PIN_KEY] = pinTarget;
+    return Object.keys(ek).length
+      ? { ...profile, nvram: { ...profile.nvram, ...ek } } : profile;
   };
 
   // PIN'İ AYNI YAZMA PASINA KOYMA KARARI — tek reboot için.
@@ -372,7 +372,7 @@ export async function provisionModem(options) {
     if (location && !identityBefore) {
       notify(options, `kimlik/SIM kontrolu (${location.host})`);
       try {
-        identityBefore = await readIdentity({ ...location, credentials });
+        identityBefore = await readIdentity({ ...location, kimlik });
       } catch { identityBefore = null; }
     }
     if (location && identityBefore && !isSimPresent(identityBefore)) {
@@ -389,7 +389,7 @@ export async function provisionModem(options) {
     // baska bir Node projesi de otomatik numara aliyor.
     if (location && !phoneNormalized && identityBefore?.sim?.ready) {
       notify(options, "telefon numarasi SIM'den okunuyor (AT+CNUM)");
-      const n = await readMsisdn({ ...location, credentials });
+      const n = await readMsisdn({ ...location, kimlik });
       if (n.phone) {
         phoneNormalized = n.phone;
         phoneSource = "device";
@@ -430,7 +430,7 @@ export async function provisionModem(options) {
     let fieldDryRun = null;
     if (fieldReachable) {
       const d = await applyProvisioning(
-        { host: fieldHost, sourceIp: fieldSrc, credentials, apply: false, event: options.event },
+        { host: fieldHost, sourceIp: fieldSrc, kimlik, apply: false, event: options.event },
         effectiveProfile,
       );
       fieldDryRun = d.status;
@@ -461,7 +461,7 @@ export async function provisionModem(options) {
     const r = await applyProvisioning({
       host: atFactory ? factoryHost : fieldHost,
       sourceIp: atFactory ? factorySrc : fieldSrc,
-      credentials, apply: true,
+      kimlik, apply: true,
       newHost: fieldHost, newSourceIp: fieldSrc,
       onProgress: options.onProgress, event: options.event,
     }, effectiveProfile);
@@ -511,7 +511,7 @@ export async function provisionLoop(options) {
     (options.factoryHost || "192.168.1.1").split(".").slice(0, 3).join(".") + ".",
     (options.fieldHost || "5.5.5.1").split(".").slice(0, 3).join(".") + ".",
   );
-  const result = { timestamp: now(), command: "hazirla-cycle", prepared: [], problems: [] };
+  const result = { timestamp: now(), command: "hazirla-dongu", prepared: [], problems: [] };
   if (!on.ready) {
     result.problems.push(...on.problems);
     result.ok = false;

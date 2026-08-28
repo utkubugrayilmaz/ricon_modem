@@ -38,7 +38,7 @@ export class Client {
     this.host = options.host;
     this.port = options.port || 80;
     this.sourceIp = options.sourceIp || undefined;
-    this.credentials = options.credentials || null;
+    this.kimlik = options.kimlik || null;
     this.saltOkunur = options.saltOkunur !== false; // varsayilan true
     this.istekArasiMs = verifyMs(options.istekArasiMs, REQUEST_GAP_MS);
     this.timeoutMs = verifyMs(options.timeoutMs, REQUEST_TIMEOUT_MS);
@@ -103,9 +103,9 @@ export class Client {
   _istek(metot, path, ekstra) {
     return new Promise((resolve) => {
       const basliklar = { Connection: "close" };
-      if (this.credentials) {
+      if (this.kimlik) {
         const t = Buffer.from(
-          `${this.credentials.username}:${this.credentials.password}`,
+          `${this.kimlik.username}:${this.kimlik.password}`,
         ).toString("base64");
         basliklar.Authorization = `Basic ${t}`;
       }
@@ -151,7 +151,7 @@ export class Client {
     const body = r.body ? r.body.toString("latin1") : "";
     const problems = [];
     if (r.code === 401) {
-      problems.push(problem(this.credentials ? "AUTH_REJECTED" : "AUTH_REQUIRED", path));
+      problems.push(problem(this.kimlik ? "AUTH_REJECTED" : "AUTH_REQUIRED", path));
     } else if (r.code >= 400) {
       problems.push(problem("HTTP_ERROR", path, r.code));
     } else if (r.code >= 200 && r.code < 300 && body.length === 0) {

@@ -16,21 +16,21 @@ test("index: computeNvramDiff saf calisir", () => {
 });
 
 test("index: readConsole kimliksiz AUTH_REQUIRED (I/O yok)", async () => {
-  const r = await readConsole({ host: "127.0.0.1", credentials: null });
+  const r = await readConsole({ host: "127.0.0.1", kimlik: null });
   assert.equal(r.ok, false);
   assert.equal(r.problems[0].code, "AUTH_REQUIRED");
 });
 
 test("index: checkDevice erisilemez cihazda sonuc nesnesi doner (throw yok)", async () => {
   // kapali port -> erisilemez; hizli.
-  const r = await checkDevice({ host: "127.0.0.1", sourceIp: undefined, credentials: null });
+  const r = await checkDevice({ host: "127.0.0.1", sourceIp: undefined, kimlik: null });
   assert.equal(r.command, "dogrula");
   assert.equal(typeof r.ok, "boolean");
   assert.ok(Array.isArray(r.problems));
 });
 
 test("index: readDevice process.env okumadan opts ile calisir (erisilemez)", async () => {
-  const r = await readDevice({ host: "127.0.0.1", sourceIp: undefined, credentials: null });
+  const r = await readDevice({ host: "127.0.0.1", sourceIp: undefined, kimlik: null });
   assert.equal(r.command, "oku");
   assert.ok(Array.isArray(r.problems));
 });
