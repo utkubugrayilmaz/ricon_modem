@@ -66,6 +66,15 @@ export function planRows(plan) {
   });
 }
 
+// SSE "hata" olayi — metin KATALOGDAN gelir, sunucu kendi cumlesini YAZMAZ.
+// Eskiden burada 5 uydurma kod ve 9 ayri elle yazilmis Turkce cumle vardi
+// (MESGUL/MODEM_YOK/MSISDN/PC_HAZIR_DEGIL/PROFIL_YOK). Dordunun katalogda
+// zaten karsiligi vardi; ayni durumun metni iki yerde durunca biri eskiyor.
+const hataYolla = (gonder, kod) => {
+  const t = sorunTr(kod);
+  gonder("hata", { kod, mesaj: t.baslik, cozum: t.neYap });
+};
+
 // Ayni anda tek provizyon — cihaz tek baglantili, ikinci akis zarar verir.
 let mesgul = false;
 // Degerlendirme de cihaza gider (HTTP + telnet). Provizyondan ayri bir bayrak:
@@ -229,11 +238,11 @@ export function createServer(opts = {}) {
   async function sifirlaAkit(istek, yanit) {
     const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
     if (mesgul) {
-      gonder("hata", { kod: "MESGUL", mesaj: "Baska bir islem surüyor. Bitmesini bekle." });
+      hataYolla(gonder, "DEVICE_BUSY");
       return bitir();
     }
     if (!sifirlamaProfil) {
-      gonder("hata", { kod: "PROFIL_YOK", mesaj: "Sifirlama profili tanimli degil." });
+      hataYolla(gonder, "PROFIL_YOK");
       return bitir();
     }
     mesgul = true;
@@ -242,14 +251,11 @@ export function createServer(opts = {}) {
       const { konum, ad, on } = await modemiBul();
       if (!on.hazir) {
         // Ekrana TURKCE gider; message/check gunluge/gelistiriciye ait.
-        const t = sorunTr(on.problems[0]?.kod);
-        gonder("hata", { kod: "PC_HAZIR_DEGIL", mesaj: t.baslik, cozum: t.neYap });
+        hataYolla(gonder, on.problems[0]?.kod);
         return bitir();
       }
       if (!konum) {
-        gonder("hata", { kod: "MODEM_YOK",
-          mesaj: `Modem ne ${fabrikaHost} ne ${sahaHost} adresinde cevap veriyor.`,
-          cozum: "Kabloyu LAN portuna tak ve tekrar dene." });
+        hataYolla(gonder, "DEVICE_UNREACHABLE");
         return bitir();
       }
       gonder("algilandi", { tur: "algilandi", eylem: `sifirlama_${ad}`, konum: konum.host });
@@ -309,7 +315,7 @@ export function createServer(opts = {}) {
   async function pinKaldirAkit(url, istek, yanit) {
     const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
     if (mesgul || degerlendiriliyor) {
-      gonder("hata", { kod: "MESGUL", mesaj: "Cihazla baska bir islem surüyor." });
+      hataYolla(gonder, "DEVICE_BUSY");
       return bitir();
     }
     const pin = url.searchParams.get("pin");
@@ -317,9 +323,7 @@ export function createServer(opts = {}) {
     try {
       const { konum, on } = await modemiBul();
       if (!on.hazir || !konum) {
-        gonder("hata", { kod: "MODEM_YOK",
-          mesaj: "Modem bulunamadi; PIN denenmedi.",
-          cozum: "Kablonun takili oldugundan emin ol." });
+        hataYolla(gonder, "DEVICE_UNREACHABLE");
         return;
       }
       const atOpts = { ...konum, kimlik,
@@ -331,8 +335,7 @@ export function createServer(opts = {}) {
       gonder("sim_kilit", { durum: kilit.durum, kilit: kilit.kilit,
         pin_kalan: kilit.pin_kalan, puk_kalan: kilit.puk_kalan });
       if (!kilit.at_port) {
-        const t = sorunTr("AT_PORT_YOK");
-        gonder("hata", { kod: "AT_PORT_YOK", mesaj: t.baslik, cozum: t.neYap });
+        hataYolla(gonder, "AT_PORT_YOK");
         return;
       }
 
@@ -355,7 +358,7 @@ export function createServer(opts = {}) {
   async function pinAkit(url, istek, yanit) {
     const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
     if (mesgul) {
-      gonder("hata", { kod: "MESGUL", mesaj: "Baska bir islem surüyor." });
+      hataYolla(gonder, "DEVICE_BUSY");
       return bitir();
     }
     const pin = url.searchParams.get("pin");
@@ -363,9 +366,7 @@ export function createServer(opts = {}) {
     try {
       const { konum, on } = await modemiBul();
       if (!on.hazir || !konum) {
-        gonder("hata", { kod: "MODEM_YOK",
-          mesaj: "Modem bulunamadi; PIN denenmedi.",
-          cozum: "Kablonun takili oldugundan emin ol." });
+        hataYolla(gonder, "DEVICE_UNREACHABLE");
         return;
       }
       // KARAR TEK YERDE: elle denemede de simPinHedefi'ne soruyoruz. Fark
@@ -408,14 +409,13 @@ export function createServer(opts = {}) {
     const { gonder, kopukMu } = sseAc(istek, yanit);
 
     if (mesgul) {
-      gonder("hata", { kod: "MESGUL",
-        mesaj: "Baska bir kurulum surüyor. Bitmesini bekle." });
+      hataYolla(gonder, "DEVICE_BUSY");
       return yanit.end();
     }
     const n = normalizePhone(telefon);
     if (!n) {
       // Cekirdek de reddeder; burada erken donuyoruz ki cihaza hic gidilmesin.
-      gonder("hata", { kod: "MSISDN", mesaj: "Gecerli telefon numarasi gerekli (05xxxxxxxxx)." });
+      hataYolla(gonder, telefon ? "MSISDN_INVALID" : "MSISDN_REQUIRED");
       return yanit.end();
     }
     mesgul = true;
@@ -425,8 +425,7 @@ export function createServer(opts = {}) {
       const { konum, on } = await modemiBul();
       if (!on.hazir) {
         // Ekrana TURKCE gider; message/check gunluge/gelistiriciye ait.
-        const t = sorunTr(on.problems[0]?.kod);
-        gonder("hata", { kod: "PC_HAZIR_DEGIL", mesaj: t.baslik, cozum: t.neYap });
+        hataYolla(gonder, on.problems[0]?.kod);
         return;
       }
       // Kimligi BURADA okuyoruz (sol panel + SIM durumu). Ayni okumayi

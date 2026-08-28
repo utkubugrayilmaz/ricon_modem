@@ -88,3 +88,21 @@ export function diffNvram(eski, yeni) {
   }
   return { eklenen, silinen, degisen };
 }
+
+// Zaman damgasi — sonuc nesnesi "bu okuma ne zaman yapildi" tasir.
+const now = () => new Date().toISOString();
+
+// --- fark: iki nvram nesnesini karsilastir (saf, cihaza gitmez) ---
+export function computeNvramDiff(once, sonra) {
+  const f = diffNvram(once, sonra);
+  return {
+    zaman: now(), komut: "fark",
+    degisen: f.degisen, eklenen: f.eklenen, silinen: f.silinen,
+    ozet: {
+      degisen: Object.keys(f.degisen).length,
+      eklenen: Object.keys(f.eklenen).length,
+      silinen: Object.keys(f.silinen).length,
+    },
+    ok: true, problems: [],
+  };
+}

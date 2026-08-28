@@ -177,7 +177,9 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 | Modül | İş |
 |---|---|
 | `ricon.js` | İnce CLI — argv + .env + `index` çağrısı |
-| `src/index.js` | Public API (tüm çekirdek fonksiyonlar) |
+| `src/index.js` | **Public API — TEK KAPI.** Uygulama yok, yalnız ne dışa açıldığı (58 satır) |
+| `src/okuma.js` | Cihaz okuma işlemleri: `dogrula` / `oku` / `kesif` / `konsol` |
+| `src/izleme.js` | Dönemsel örnekleme + zaman çizelgesi (canlı alan tespiti) |
 | `src/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |
 | `src/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |
 | `src/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
@@ -193,6 +195,7 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 | `src/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
 | `src/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
 | `src/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |
+| `src/sorun-metni.js` | Sorun kodu → **operatöre gösterilecek Türkçe**. Tek sözlük; `message`/`check` geliştirici tarafı |
 | `src/metrics.js` | Ölçüm özetleyici (PURE) — süre istatistikleri, karşılaştırma |
 | `src/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
 | `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez. `staticDir` verilmezse SALT API |

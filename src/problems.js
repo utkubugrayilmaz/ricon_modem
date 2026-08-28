@@ -101,10 +101,10 @@ const KATALOG = {
   }),
 
   // --- Icerik / ayristirma ---
-  PARSE_EMPTY: (yol) => ({
-    message: `No {key::value} pairs were found in ${yol}.`,
-    check: "The page format may have changed, or the body was truncated. The"
-      + " raw body is kept in the result for inspection.",
+  PROFIL_YOK: (ad) => ({
+    message: `No profile named "${ad}" is configured, so there is nothing to apply.`,
+    check: "Pass --profil with a known name (see profile.js PROFILES), or start"
+      + " the server with a sifirlamaProfil so the reset button has a target.",
   }),
   NVRAM_BAD_HEADER: () => ({
     message: "The nvram backup did not start with the expected ROUTER header.",
@@ -233,7 +233,7 @@ const KATALOG = {
 // INTERNET_YOK bilerek UYARI: ayarlar dogru yazilmis, provizyon basarili.
 // Internetin gelmemesi ayri bir sorun (PIN/kapsama/paket) ve retry cozmez —
 // sonucu ok:false yapmak yanlis alarm ve gereksiz tekrar uretir.
-const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED", "PARSE_EMPTY",
+const UYARI_KODLARI = new Set(["EMPTY_BODY", "AUTH_REQUIRED",
   "PIN_KALAN_BILINMIYOR",
   "INTERNET_YOK", "SIM_PIN_LOCKED", "SIM_PUK_LOCKED", "PIN_LAST_ATTEMPT",
   // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
