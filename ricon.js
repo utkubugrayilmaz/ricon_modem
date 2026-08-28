@@ -407,7 +407,11 @@ async function main() {
       + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n"
       + "       --host <ip> · --kaynak-ip <ip>  (.env'i ezer; modem o an neredeyse)\n",
     );
-    return komut && !KOMUTLAR.has(komut) ? 1 : 0;
+    // Yardim ISTEMEK hata degil -> 0. BILINMEYEN komut hatadir -> 1.
+    // Eskiden `--help` de 1 donuyordu: betikte `ricon.js --help && ...`
+    // zinciri sessizce kiriliyordu.
+    const yardimIstendi = !komut || komut === "-h" || komut === "--help";
+    return yardimIstendi ? 0 : 1;
   }
 
   // sunucu: surekli calisir — JSON basmaz, cikmaz. Dinleyen sunucu olay
