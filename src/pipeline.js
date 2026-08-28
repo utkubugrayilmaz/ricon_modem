@@ -425,11 +425,16 @@ export async function assessDevice(opts) {
     }
   }
 
+  // "Ne eksik" kararı ÇÖZÜLMÜŞ numaraya bakar, ham girdiye DEĞİL. Eskiden
+  // buraya `telefon` (operatörün yazdığı) geçiliyordu: cihazdan numara
+  // başarıyla okunduğu halde eksik ["telefon"] kalıyor, başlatılabilir
+  // yanlışlıkla false oluyordu (2026-08-28 canlı görüldü). Numaranın NEREDEN
+  // geldiği kararı ilgilendirmez — elimizde geçerli numara var mı, o yeter.
   rapor.eksik = provisionEksikleri({
     modemVar: Boolean(konum),
     simTakili: rapor.sim?.takili ?? false,
     simKilit: rapor.sim ?? null,
-    telefon, pin,
+    telefon: rapor.telefon.numara, pin,
   });
   rapor.baslatilabilir = rapor.eksik.length === 0;
   rapor.ok = isOk(rapor.problems);

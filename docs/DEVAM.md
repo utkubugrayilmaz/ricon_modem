@@ -1,6 +1,6 @@
-# Kaldığımız yer — 2026-08-27 akşamı
+# Kaldığımız yer — 2026-08-28
 
-Yarın buradan devam. Sıradaki iş **1 numaralı açık hata**.
+Sıradaki iş: **3 numaralı satır** — `assessDevice`'ı endpoint + UI'a bağlamak.
 
 ## Cihazın şu anki fiziksel durumu
 
@@ -10,49 +10,54 @@ Yarın buradan devam. Sıradaki iş **1 numaralı açık hata**.
 | SIM | **PIN'li olan** takılı, ICCID `8990011626160054386` |
 | SIM kilidi | **açık** — PIN arayüzden girildi, `m1s1simpin` nvram'da duruyor |
 | Numara | `5350634747` (SIM'den okundu) |
-| İnternet | çalışıyor (son görülen WAN IP `213.43.114.122`) |
+| İnternet | çalışıyor (son görülen WAN IP `213.43.107.143`) |
 | PC | `192.168.1.50` + `5.5.5.100` ikincil IP'ler kalıcı |
 
-Test: **148/148**. Çalışma ağacı temiz, her şey commit'li.
+Test: **153/153**. Çalışma ağacı temiz, her şey commit'li.
 
 ---
 
-## 1) AÇIK HATA — `assessDevice` içinde numara okuma başarısız
+## 1) ÇÖZÜLDÜ — `assessDevice` içinde numara okuma (2026-08-28)
 
-**Belirti:** `readMsisdn` tek başına çağrılınca **3.1 saniyede** numarayı okuyor
-(`5350634747`). Ama `assessDevice` içinden çağrılınca **başarısız** oluyor:
-`telefon: null`, `at_port: null`, toplam süre **144 saniye**.
+**Hipotez YANLIŞ çıktı.** "Tek bağlantılı cihaz, HTTP'den hemen sonra telnet
+çarpışıyor" değilmiş. Üç ölçüm:
 
-**En güçlü hipotez:** modem **tek bağlantılı**. `assessDevice` sırayla şunu
-yapıyor:
+| Test | Süre | Sonuç |
+|---|---|---|
+| Pipeline'ın yaptığı çağrı (iç içe `kimlik`) | 143.1 sn | başarısız, `aşama 2` |
+| Aynı çağrı, düz `kullanici`/`sifre` | 3.2 sn | `5350634747` ✓ |
+| HTTP okumasından HEMEN SONRA telnet | 5.8 sn | `5350634747` ✓ |
 
-1. `isReachable` × 2 (TCP yoklama)
-2. `readIdentity` → **HTTP** (2 uç, aralarında 1.5 sn bekleme)
-3. `readMsisdn` → **telnet 5123**
+Üçüncü satır tek-bağlantı hipotezini çürüttü. Gerçek sebep hata mesajındaki
+**`aşama 2`**: "login: gördüm, parolayı gönderdim, kabuk prompt'u gelmedi" —
+yani kimlik bilgisi boş gidiyordu.
 
-HTTP okuması bittikten hemen sonra telnet açmak muhtemelen cihazın tek
-bağlantısına çarpıyor; telnet login başarısız oluyor, `runConsole` 3 kez
-deniyor (~66 sn), sonra `atPortBul` bir kez daha deniyor (~66 sn) → 144 sn ve
-başarısız.
+**Kök neden — iki katmanın SÖZLEŞMESİ farklıydı.** HTTP katmanı (`Client`)
+kimliği iç içe taşıyor (`{kimlik:{kullanici,sifre}}`), konsol katmanı ise düz
+bekliyordu (`{kullanici,sifre}`). `pipeline.js` `readMsisdn`'e HTTP biçimini
+veriyordu; telnet login'ine `undefined` gidiyor, 3 deneme + port doğrulaması
+= 143 saniye ve "telefon okunamadı". Kimse yanlış kod yazmamıştı.
 
-**Yarın yapılacak (sırayla):**
+**Yapılanlar:**
+1. `konsolKimligi(opts)` — sınırda tek yerde normalize eder, iki biçimi de
+   kabul eder. Çağıranın doğru şekli hatırlamasını beklemekten sağlam.
+2. **Kimliksiz deneme YOK** — kimlik yoksa `runConsole` ağa hiç çıkmadan
+   `CONSOLE_KIMLIK_YOK` döner. 143 saniyeyi yiyen şey, hatanın kendisi kadar
+   hatanın SESSİZ olmasıydı: sebep "zaman aşımı" diye görünüyordu.
+3. `assessDevice` "ne eksik" kararını artık **çözülmüş** numaraya soruyor,
+   ham girdiye değil (cihazdan numara okunduğu halde `eksik:["telefon"]`
+   kalıyordu).
 
-1. Hipotezi **ölç**: `readIdentity` → (bekleme yok) → `readMsisdn` sırasını
-   elle çalıştır, sonra araya 2-3 sn bekleme koyup tekrar çalıştır. Fark varsa
-   hipotez doğrulanır.
-2. Doğrulanırsa: `assessDevice` içinde HTTP ile telnet arasına kısa bir bekleme
-   koy — ya da **sırayı ters çevir** (önce telnet/AT, sonra HTTP). Hangisi daha
-   hızlıysa o.
-3. Doğrulanmazsa: `runConsole`'un başarısızlık sebebini yazdır
-   (`problems[].message`) ve oradan git.
+**Canlı doğrulama:** `assessDevice` 143 sn → **4.9 sn**, `telefon:
+{numara:"5350634747", kaynak:"cihaz"}`, `eksik: []`, `baslatilabilir: true`.
 
-**Not:** bu, tek bağlantılı cihazda iki farklı kanalı (HTTP + telnet) arka
-arkaya kullanan İLK yer. Aynı sorun ileride başka yerde de çıkabilir; çözüm
-tek yerde (`assessDevice`) değil, genel bir kural olarak düşünülmeli.
+**Ders (kodla çözülmedi):** katmanlar arası veri BİÇİMİ sessizce uyuşmazsa,
+hata mesajı doğru yeri göstermez. Aşama numarası (`aşama 2`) burada teşhisi
+tek başına verdi — bu tür "nerede takıldım" bilgisini korumak lazım.
 
 ---
 
-## 2) Bugün bitenler (özet)
+## 2) Bugüne kadar bitenler (özet)
 
 - **Telefon numarası cihazdan okunuyor:** `AT+CNUM` → `5350634747`.
   Zorunlu sıra keşfedildi: **PIN kilitli SIM abone verisini açmıyor**, yani
@@ -78,12 +83,12 @@ tek yerde (`assessDevice`) değil, genel bir kural olarak düşünülmeli.
 
 ---
 
-## 3) Sıradaki işler (1 numaradan sonra)
+## 3) Sıradaki işler
 
 | # | İş | Not |
 |---|---|---|
 | 2 | `simPinKaldir` canlı testi | PIN'i **kullanıcı** girmeli. Çalışırsa SIM kalıcı PIN'siz olur, telefona gerek kalmaz |
-| 3 | `assessDevice`'ı endpoint + UI'a bağlamak | `/api/degerlendir`; UI: modem algılanınca **bir kez** çağır (pahalı, sürekli yoklama için değil) |
+| 3 | **SIRADAKİ** — `assessDevice`'ı endpoint + UI'a bağlamak | `/api/degerlendir`; UI: modem algılanınca **bir kez** çağır (pahalı, sürekli yoklama için değil) |
 | 4 | UI akışı: numara otomatik dolsun | okunamazsa operatör yazar (fallback duruyor) |
 | 5 | `sahaya_hazir` alanını ekranda göster | defterde var, UI'da yok |
 | 6 | Çok modemli seri akış (`--dongu`) | hiç denenmedi, sahada |
@@ -101,7 +106,7 @@ PUK'a gitmiyor) ama fabrika reset'i bunu tamamen önler.
 ## Faydalı komutlar
 
 ```bash
-npm test                                      # 148 test, cihaz gerektirmez
+npm test                                      # 153 test, cihaz gerektirmez
 node --env-file=.env ricon.js sunucu          # test arayüzü :8080
 node --env-file=.env ricon.js hazirla --telefon 05... [--pin 1234]
 node --env-file=.env ricon.js uygula --profil fabrika --uygula \

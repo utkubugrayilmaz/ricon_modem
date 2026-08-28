@@ -85,6 +85,23 @@ export function parseNvramShow(metin) {
   return cikti;
 }
 
+// Konsol kimligini NORMALIZE eder. Iki bicim de gecerli:
+//   { kullanici, sifre }              <- konsol katmaninin kendi bicimi
+//   { kimlik: { kullanici, sifre } }  <- HTTP katmaninin (Client) bicimi
+//
+// NEDEN VAR (2026-08-28, canli olculdu): pipeline HTTP bicimini konsol
+// katmanina veriyordu; login'e "undefined" gidiyor, oturum asama 2'de
+// takiliyor ve 143 saniye sonra "telefon okunamadi" deniyordu. Kimse yanlis
+// kod yazmamisti — iki katmanin SOZLESMESI farkliydi. Sinirda tek yerde
+// normalize etmek, her cagiranin dogru sekli hatirlamasini beklemekten
+// saglam: bir sonraki cagiran da yanlis sekli verse calisir.
+export function konsolKimligi(opts = {}) {
+  return {
+    kullanici: opts.kullanici ?? opts.kimlik?.kullanici ?? null,
+    sifre: opts.sifre ?? opts.kimlik?.sifre ?? "",
+  };
+}
+
 // --- Soket surucusu ---
 
 const CONSOLE_RETRIES = 3;       // tek-baglantili modemde gecici timeout olur
@@ -108,6 +125,14 @@ export async function runConsole(opts, komutlar) {
         problems: [problem("WRITE_BLOCKED_READONLY", `konsol: "${yazan}"`)] };
     }
   }
+  // KIMLIKSIZ DENEME YOK. Kimlik yoksa login'in tek olasi sonucu zaman
+  // asimidir; 3 deneme x ~22 sn bunu degistirmez, sadece 2 dakika yer ve
+  // sebebi "zaman asimi" diye gosterip GERCEK sebebi (kimlik yok) gizler.
+  // Bu tam olarak 2026-08-28'de 143 saniye kaybettiren sessizlikti.
+  if (!konsolKimligi(opts).kullanici) {
+    return { ok: false, ciktilar: {},
+      problems: [problem("CONSOLE_KIMLIK_YOK", opts.host)] };
+  }
   let son;
   for (let deneme = 0; deneme < denemeSayisi; deneme += 1) {
     son = await _trySession(opts, komutlar);   // her deneme = taze soket + login
@@ -121,9 +146,9 @@ export async function runConsole(opts, komutlar) {
 function _trySession(opts, komutlar) {
   const {
     host, kaynakIp, port = CONSOLE_PORT,
-    kullanici, sifre,
     zamanAsimiMs = 20000,
   } = opts;
+  const { kullanici, sifre } = konsolKimligi(opts);
   const ust = Math.min(zamanAsimiMs, MAX_TIMER_MS);
 
   return new Promise((resolve) => {

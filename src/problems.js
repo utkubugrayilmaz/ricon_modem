@@ -31,6 +31,14 @@ const KATALOG = {
   }),
 
   // --- HTTP / kimlik ---
+  CONSOLE_KIMLIK_YOK: (host) => ({
+    message: `No console credentials were supplied for ${host}, so the telnet`
+      + " login could not even be attempted.",
+    check: "Set MODEM_KULLANICI / MODEM_SIFRE, or pass {kullanici, sifre}"
+      + " (or {kimlik:{...}}) to the console layer. Failing fast here is"
+      + " deliberate: without credentials the login can only time out, and"
+      + " retries would burn ~2 minutes to reach the same answer.",
+  }),
   AUTH_REQUIRED: (yol) => ({
     message: `${yol} needs credentials (HTTP 401) but none were supplied.`,
     check: "Set MODEM_KULLANICI and MODEM_SIFRE in .env. Unauthenticated"

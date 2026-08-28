@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  iacReply, extractOutput, parseNvramShow, runConsole,
+  iacReply, extractOutput, parseNvramShow, runConsole, konsolKimligi,
 } from "../src/console.js";
 
 test("iacReply: DO->WONT, WILL->DONT", () => {
@@ -110,4 +110,41 @@ test("parseNvramShow: bastaki devam satiri anahtarsizsa yutulur (patlamaz)", () 
   const d = parseNvramShow("basibos satir\na=1");
   assert.equal(d.a, "1");
   assert.equal(Object.keys(d).length, 1);
+});
+
+// --- Kimlik bicimi (2026-08-28 canli olculdu, 143 sn'lik sessiz basarisizlik) ---
+//
+// KUSUR: HTTP katmani kimligi IC ICE tasiyor ({kimlik:{kullanici,sifre}}),
+// konsol katmani ise DUZ bekliyordu ({kullanici,sifre}). pipeline.js
+// readMsisdn'e ic ice sekli veriyordu; telnet login'e "undefined" gidiyor,
+// oturum asama 2'de takiliyor, 3 deneme + port dogrulama = 143 saniye ve
+// "telefon okunamadi". Yanlis bir sey yapilmiyordu; iki katmanin SOZLESMESI
+// farkliydi. Cozum: sinirda tek yerde normalize et.
+test("konsolKimligi: duz kullanici/sifre oldugu gibi gelir", () => {
+  assert.deepEqual(konsolKimligi({ kullanici: "riconadmin", sifre: "s3cr3t" }),
+    { kullanici: "riconadmin", sifre: "s3cr3t" });
+});
+
+test("konsolKimligi: ic ice {kimlik} bicimini de kabul eder", () => {
+  assert.deepEqual(konsolKimligi({ kimlik: { kullanici: "riconadmin", sifre: "s3cr3t" } }),
+    { kullanici: "riconadmin", sifre: "s3cr3t" });
+});
+
+test("konsolKimligi: duz bicim ic ice bicimi ezer (acik olan kazanir)", () => {
+  assert.deepEqual(konsolKimligi({ kullanici: "acik", sifre: "a",
+    kimlik: { kullanici: "gizli", sifre: "g" } }), { kullanici: "acik", sifre: "a" });
+});
+
+test("konsolKimligi: hicbiri yoksa kullanici null (sifre bos string)", () => {
+  assert.deepEqual(konsolKimligi({}), { kullanici: null, sifre: "" });
+});
+
+test("runConsole: kimlik yoksa AGA HIC CIKMAZ, hemen net hata verir", async () => {
+  // Erisilemez bir adres veriyoruz: guard calismazsa soket denemesi yapilir
+  // ve test saniyelerce surer. Guard calisiyorsa milisaniyede biter.
+  const t = Date.now();
+  const r = await runConsole({ host: "192.0.2.1" }, ["uname -a"]);
+  assert.equal(r.ok, false);
+  assert.equal(r.problems[0].kod, "CONSOLE_KIMLIK_YOK");
+  assert.ok(Date.now() - t < 500, "kimliksiz cagri aga cikmadan donmeli");
 });
