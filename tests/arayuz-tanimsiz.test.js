@@ -26,42 +26,42 @@ const SATIRSONU = String.fromCharCode(10);
 // KORUNUR. Regex ile denedim, tutmadi: tek bir sablon eslesmesi dosyanin buyuk
 // parcasini yutuyor, TANIMLAR da siliniyor ve tarama onlari "tanimsiz"
 // sayiyordu. Karakter karakter yurumek tek dogru yol.
-function kodIskeleti(metin) {
+function kodIskeleti(text) {
   const yigin = [];        // sablon icindeki ${} yuvalanmasi
-  let hal = "kod";         // kod | satirYorum | blokYorum | tek | cift | sablon
-  let cikti = "";
-  for (let i = 0; i < metin.length; i += 1) {
-    const c = metin[i];
-    const s = metin[i + 1];
-    if (hal === "kod") {
-      if (c === "/" && s === "/") { hal = "satirYorum"; i += 1; continue; }
-      if (c === "/" && s === "*") { hal = "blokYorum"; i += 1; continue; }
-      if (c === TIRNAK) { hal = "tek"; cikti += " "; continue; }
-      if (c === CIFT) { hal = "cift"; cikti += " "; continue; }
-      if (c === SABLON) { hal = "sablon"; cikti += " "; continue; }
-      if (c === "}" && yigin.length) { yigin.pop(); hal = "sablon"; cikti += " "; continue; }
-      cikti += c;
+  let state = "kod";         // kod | satirYorum | blokYorum | tek | cift | sablon
+  let output = "";
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    const s = text[i + 1];
+    if (state === "kod") {
+      if (c === "/" && s === "/") { state = "satirYorum"; i += 1; continue; }
+      if (c === "/" && s === "*") { state = "blokYorum"; i += 1; continue; }
+      if (c === TIRNAK) { state = "tek"; output += " "; continue; }
+      if (c === CIFT) { state = "cift"; output += " "; continue; }
+      if (c === SABLON) { state = "sablon"; output += " "; continue; }
+      if (c === "}" && yigin.length) { yigin.pop(); state = "sablon"; output += " "; continue; }
+      output += c;
       continue;
     }
-    if (hal === "satirYorum") {
-      if (c === SATIRSONU) { hal = "kod"; cikti += c; }
+    if (state === "satirYorum") {
+      if (c === SATIRSONU) { state = "kod"; output += c; }
       continue;
     }
-    if (hal === "blokYorum") {
-      if (c === "*" && s === "/") { hal = "kod"; i += 1; }
+    if (state === "blokYorum") {
+      if (c === "*" && s === "/") { state = "kod"; i += 1; }
       continue;
     }
-    if (hal === "tek" || hal === "cift") {
+    if (state === "tek" || state === "cift") {
       if (c === KACIS) { i += 1; continue; }
-      if ((hal === "tek" && c === TIRNAK) || (hal === "cift" && c === CIFT)) hal = "kod";
+      if ((state === "tek" && c === TIRNAK) || (state === "cift" && c === CIFT)) state = "kod";
       continue;
     }
     // sablon: duz metin atilir, ${...} icerigi KOD olarak devam eder
     if (c === KACIS) { i += 1; continue; }
-    if (c === "$" && s === "{") { yigin.push(1); hal = "kod"; i += 1; cikti += " "; continue; }
-    if (c === SABLON) { hal = "kod"; continue; }
+    if (c === "$" && s === "{") { yigin.push(1); state = "kod"; i += 1; output += " "; continue; }
+    if (c === SABLON) { state = "kod"; continue; }
   }
-  return cikti;
+  return output;
 }
 
 const ANAHTAR = new Set(["if", "else", "for", "while", "do", "switch", "case",
@@ -79,71 +79,71 @@ const KURESEL = new Set(["document", "window", "console", "fetch", "setTimeout",
 
 const AD = "[A-Za-z_$][A-Za-z0-9_$]*";
 
-function tanimlananlar(kod) {
+function tanimlananlar(code) {
   const t = new Set();
-  const ekle = (ham) => {
-    const ad = String(ham || "").trim();
-    if (ad && new RegExp(`^${AD}$`).test(ad) && !ANAHTAR.has(ad)) t.add(ad);
+  const ekle = (raw) => {
+    const name = String(raw || "").trim();
+    if (name && new RegExp(`^${AD}$`).test(name) && !ANAHTAR.has(name)) t.add(name);
   };
-  const temizle = (p) => p.replace(/=[^,]*/g, "").replace(/[{}[\]]/g, "")
+  const clear = (p) => p.replace(/=[^,]*/g, "").replace(/[{}[\]]/g, "")
     .split(":").pop();
 
-  for (const m of kod.matchAll(new RegExp(`function\\s+(${AD})`, "g"))) ekle(m[1]);
-  for (const m of kod.matchAll(new RegExp(`(?:const|let|var)\\s+(${AD})`, "g"))) ekle(m[1]);
+  for (const m of code.matchAll(new RegExp(`function\\s+(${AD})`, "g"))) ekle(m[1]);
+  for (const m of code.matchAll(new RegExp(`(?:const|let|var)\\s+(${AD})`, "g"))) ekle(m[1]);
   // yikim: const { a, b } = ...  /  const [a, b] = ...
-  for (const m of kod.matchAll(/(?:const|let|var)\s*[{[]([^}\]]*)[}\]]/g)) {
-    for (const p of m[1].split(",")) ekle(temizle(p));
+  for (const m of code.matchAll(/(?:const|let|var)\s*[{[]([^}\]]*)[}\]]/g)) {
+    for (const p of m[1].split(",")) ekle(clear(p));
   }
   // parametre listeleri: function f(a, b) / catch (e) / (a, b) => / a =>
-  for (const m of kod.matchAll(/(?:function[^(]*|catch\s*)\(([^)]*)\)/g)) {
-    for (const p of m[1].split(",")) ekle(temizle(p));
+  for (const m of code.matchAll(/(?:function[^(]*|catch\s*)\(([^)]*)\)/g)) {
+    for (const p of m[1].split(",")) ekle(clear(p));
   }
-  for (const m of kod.matchAll(/\(([^()]*)\)\s*=>/g)) {
-    for (const p of m[1].split(",")) ekle(temizle(p));
+  for (const m of code.matchAll(/\(([^()]*)\)\s*=>/g)) {
+    for (const p of m[1].split(",")) ekle(clear(p));
   }
-  for (const m of kod.matchAll(new RegExp(`(${AD})\\s*=>`, "g"))) ekle(m[1]);
+  for (const m of code.matchAll(new RegExp(`(${AD})\\s*=>`, "g"))) ekle(m[1]);
   // for (const x of ...) / for (const [a, b] of ...)
-  for (const m of kod.matchAll(/for\s*\(\s*(?:const|let|var)\s+([^;)]*?)\s+(?:of|in)\s/g)) {
+  for (const m of code.matchAll(/for\s*\(\s*(?:const|let|var)\s+([^;)]*?)\s+(?:of|in)\s/g)) {
     for (const p of m[1].replace(/[{}[\]]/g, "").split(",")) ekle(p);
   }
   return t;
 }
 
-function kullanilanlar(kod) {
+function kullanilanlar(code) {
   const k = new Map();
   const cagri = new RegExp(`(^|[^.A-Za-z0-9_$])(${AD})\\s*\\(`, "g");
   const arguman = new RegExp(`[(,]\\s*(${AD})\\s*[,)]`, "g");
-  kod.split(SATIRSONU).forEach((satir, i) => {
-    for (const m of satir.matchAll(cagri)) if (!k.has(m[2])) k.set(m[2], i + 1);
-    for (const m of satir.matchAll(arguman)) if (!k.has(m[1])) k.set(m[1], i + 1);
+  code.split(SATIRSONU).forEach((line, i) => {
+    for (const m of line.matchAll(cagri)) if (!k.has(m[2])) k.set(m[2], i + 1);
+    for (const m of line.matchAll(arguman)) if (!k.has(m[1])) k.set(m[1], i + 1);
   });
   return k;
 }
 
 test("arayuz kodunda TANIMSIZ isim yok", () => {
-  const kod = kodIskeleti(readFileSync(KAYNAK, "utf8"));
-  const tanim = tanimlananlar(kod);
+  const code = kodIskeleti(readFileSync(KAYNAK, "utf8"));
+  const tanim = tanimlananlar(code);
   const kusurlu = [];
-  for (const [ad, satir] of kullanilanlar(kod)) {
-    if (ANAHTAR.has(ad) || KURESEL.has(ad) || tanim.has(ad)) continue;
-    kusurlu.push(`${ad} (satir ${satir})`);
+  for (const [name, line] of kullanilanlar(code)) {
+    if (ANAHTAR.has(name) || KURESEL.has(name) || tanim.has(name)) continue;
+    kusurlu.push(`${name} (satir ${line})`);
   }
   assert.deepEqual(kusurlu, [], `tanimsiz isimler: ${kusurlu.join(", ")}`);
 });
 
 test("yorum/metin ayiklama TANIMLARI silmiyor", () => {
   const tanim = tanimlananlar(kodIskeleti(readFileSync(KAYNAK, "utf8")));
-  for (const ad of ["el", "tekrariAyarla", "numarayiSifirla", "durumuTazele",
+  for (const name of ["el", "tekrariAyarla", "numarayiSifirla", "durumuTazele",
     "okumayiUygula", "pinKilidiIste", "haneleriBoya"]) {
-    assert.ok(tanim.has(ad), `${ad} tanimi ayiklamada kayboldu`);
+    assert.ok(tanim.has(name), `${name} tanimi ayiklamada kayboldu`);
   }
 });
 
 test("tarama UYDURMA cagriyi yakalar (yanlis yesil vermesin)", () => {
-  const kod = kodIskeleti(readFileSync(KAYNAK, "utf8"));
-  assert.ok(tanimlananlar(kod).size > 60, "tanim toplama bozuk olabilir");
-  assert.ok(kullanilanlar(kod).size > 40, "kullanim toplama bozuk olabilir");
-  const bozuk = `${kod}${SATIRSONU}boyleBirSeyYok(1);`;
+  const code = kodIskeleti(readFileSync(KAYNAK, "utf8"));
+  assert.ok(tanimlananlar(code).size > 60, "tanim toplama bozuk olabilir");
+  assert.ok(kullanilanlar(code).size > 40, "kullanim toplama bozuk olabilir");
+  const bozuk = `${code}${SATIRSONU}boyleBirSeyYok(1);`;
   assert.ok(!tanimlananlar(bozuk).has("boyleBirSeyYok"));
   assert.ok(kullanilanlar(bozuk).has("boyleBirSeyYok"));
 });

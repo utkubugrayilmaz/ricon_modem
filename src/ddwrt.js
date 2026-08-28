@@ -2,7 +2,7 @@
 //
 // Bu firmware'in canli uclari {anahtar::deger} ciftleri dondurur. Ornek
 // (2026-08-26 canli cihazdan):
-//   {lan_mac::00:0C:43:43:5F:4E}
+//   {lanMac::00:0C:43:43:5F:4E}
 //   {m1imei::860000000000000}
 //   {m1signal::<table ...>...</table>}   <- bazi alanlar HTML tasir
 //
@@ -14,19 +14,19 @@ import { SIM_FIELD_MAP, SIM2_FIELD_MAP, OPERATORS } from "./constants.js";
 // Ham metinden {anahtar::deger} ciftlerini cikarir.
 // Prototip kirlenmesine karsi Object.create(null): cihazdan __proto__ adli
 // bir alan gelirse prototipi bozup ciktidan kaybolmasin.
-export function parsePairs(metin) {
-  const ciftler = Object.create(null);
-  const desen = /\{(\w+)::([^}]*)\}/g;
+export function parsePairs(text) {
+  const pairs = Object.create(null);
+  const pattern = /\{(\w+)::([^}]*)\}/g;
   let m;
-  while ((m = desen.exec(metin || "")) !== null) {
-    ciftler[m[1]] = temizle(m[2]);
+  while ((m = pattern.exec(text || "")) !== null) {
+    pairs[m[1]] = clear(m[2]);
   }
-  return ciftler;
+  return pairs;
 }
 
 // Tek bir degeri temizler: kenar bosluklari + tirnak; HTML varsa etiket at.
-function temizle(deger) {
-  let t = deger.trim().replace(/^['"]|['"]$/g, "");
+function clear(value) {
+  let t = value.trim().replace(/^['"]|['"]$/g, "");
   if (t.includes("<")) {
     t = t.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
@@ -34,9 +34,9 @@ function temizle(deger) {
 }
 
 // ICCID sonundaki dolgu 'F' gercek hane degildir, atilir.
-export function cleanIccid(ham) {
-  if (!ham) return null;
-  const t = ham.trim().toUpperCase().replace(/F+$/, "");
+export function cleanIccid(raw) {
+  if (!raw) return null;
+  const t = raw.trim().toUpperCase().replace(/F+$/, "");
   return t || null;
 }
 
@@ -49,21 +49,21 @@ export function guessOperator(imsi) {
 // Ham ciftlerden okunabilir SIM/hucresel gorunum uretir. HAM alanlar
 // silinmez — bu yalnizca EK bir gorunum. Bos degerler atlanir (bilinmeyen
 // deger 0 degil, yok demektir).
-export function simView(ham) {
+export function simView(raw) {
   const cikar = (harita) => {
-    const cikti = Object.create(null);
+    const output = Object.create(null);
     for (const [modemAlani, bizimAd] of Object.entries(harita)) {
-      const deger = (ham[modemAlani] ?? "").trim();
-      if (deger) cikti[bizimAd] = deger;
+      const value = (raw[modemAlani] ?? "").trim();
+      if (value) output[bizimAd] = value;
     }
-    return cikti;
+    return output;
   };
 
   const sim1 = cikar(SIM_FIELD_MAP);
   const sim2 = cikar(SIM2_FIELD_MAP);
 
   for (const sim of [sim1, sim2]) {
-    if (sim.iccid) sim.iccid_temiz = cleanIccid(sim.iccid);
+    if (sim.iccid) sim.iccidClean = cleanIccid(sim.iccid);
     if (sim.imsi) sim.operator = guessOperator(sim.imsi);
   }
 

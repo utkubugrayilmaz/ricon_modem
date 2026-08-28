@@ -108,9 +108,9 @@ body { display: flex; flex-direction: column; }
   border: 1px solid var(--cizgi);
   color: var(--gri);
 }
-.ust-durum[data-hal="fabrika"] { color: var(--yesil); border-color: var(--yesil); }
-.ust-durum[data-hal="saha"] { color: var(--yesil); border-color: var(--yesil); }
-.ust-durum[data-hal="hata"] { color: var(--kirmizi); border-color: var(--kirmizi); }
+.ust-durum[data-state="factory"] { color: var(--yesil); border-color: var(--yesil); }
+.ust-durum[data-state="field"] { color: var(--yesil); border-color: var(--yesil); }
+.ust-durum[data-state="error"] { color: var(--kirmizi); border-color: var(--kirmizi); }
 
 .ekran { flex: 1 1 auto; min-height: 0; }
 
@@ -201,7 +201,7 @@ body { display: flex; flex-direction: column; }
   font-size: 15px;
   color: var(--kirmizi);
 }
-.uyari[data-hal="tamam"] { color: var(--yesil); }
+.uyari[data-state="ok"] { color: var(--yesil); }
 
 .baslat {
   margin-top: 26px;
@@ -239,7 +239,7 @@ body { display: flex; flex-direction: column; }
   color: var(--gri);
   min-height: 1.4em;
 }
-.ipucu[data-hal="hata"] { color: var(--kirmizi); }
+.ipucu[data-state="error"] { color: var(--kirmizi); }
 
 /* ---------------- EKRAN 2: öncesi / sonrası ---------------- */
 
@@ -362,17 +362,17 @@ body { display: flex; flex-direction: column; }
   border: 1px solid rgba(255, 255, 255, 0.35);
   color: rgba(255, 255, 255, 0.8);
 }
-.hucre-sonra[data-hal="bekliyor"] .h-deger { opacity: 0.45; }
-.hucre-sonra[data-hal="yazildi"] { background: rgba(255, 255, 255, 0.08); }
-.hucre-sonra[data-hal="dogrulandi"] .h-hal {
+.hucre-sonra[data-state="pending"] .h-deger { opacity: 0.45; }
+.hucre-sonra[data-state="written"] { background: rgba(255, 255, 255, 0.08); }
+.hucre-sonra[data-state="verified"] .h-hal {
   background: var(--beyaz);
   color: var(--yesil);
   border-color: var(--beyaz);
 }
 /* Yazılamayan ayar: yeşil panelde kırmızı — teknisyen hangi satırın
    tutmadığını tek bakışta görsün. */
-.hucre-sonra[data-hal="hata"] { background: var(--kirmizi); }
-.hucre-sonra[data-hal="hata"] .h-hal {
+.hucre-sonra[data-state="error"] { background: var(--kirmizi); }
+.hucre-sonra[data-state="error"] .h-hal {
   background: var(--beyaz);
   color: var(--kirmizi);
   border-color: var(--beyaz);
@@ -380,7 +380,7 @@ body { display: flex; flex-direction: column; }
 
 /* Değişen satır sağda geldiğinde kısa bir giriş — sırayla oturduğu görünsün. */
 @media (prefers-reduced-motion: no-preference) {
-  .hucre-sonra[data-hal="dogrulandi"] { animation: otur 260ms ease-out; }
+  .hucre-sonra[data-state="verified"] { animation: otur 260ms ease-out; }
   @keyframes otur {
     from { opacity: 0.4; transform: translateX(6px); }
     to { opacity: 1; transform: none; }
@@ -437,8 +437,8 @@ body { display: flex; flex-direction: column; }
   font-variant-numeric: tabular-nums;
   min-width: 5.5ch;
 }
-.alt[data-hal="hazir"] { background: var(--yesil-koyu); }
-.alt[data-hal="hata"] { background: var(--kirmizi); }
+.alt[data-state="ready"] { background: var(--yesil-koyu); }
+.alt[data-state="error"] { background: var(--kirmizi); }
 .onay {
   margin-left: auto;
   font-family: inherit;
@@ -464,7 +464,7 @@ body { display: flex; flex-direction: column; }
 
 /* Ayarlar doğru ama SIM doğrulanamadı: başarı değil, başarısızlık da değil.
    Kendi rengi olmalı — teknisyen aksiyon alacak (PIN? kapsama? paket?). */
-.alt[data-hal="uyari"] { background: #8a5a00; }
+.alt[data-state="warning"] { background: #8a5a00; }
 
 /* ---------------- SIM PIN ---------------- */
 /* PIN yıkıcı olabilecek bir girdi (3 yanlış deneme = PUK kilidi), o yüzden
@@ -527,8 +527,8 @@ body { display: flex; flex-direction: column; }
   color: var(--gri);
   white-space: pre-line;
 }
-.pin-akis[data-hal="hata"] { color: var(--kirmizi); }
-.pin-akis[data-hal="tamam"] { color: var(--yesil); }
+.pin-akis[data-state="error"] { color: var(--kirmizi); }
+.pin-akis[data-state="ok"] { color: var(--yesil); }
 .pin-not {
   margin: 8px auto 0;
   max-width: 52ch;

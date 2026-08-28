@@ -41,8 +41,8 @@ function berInteger(n) {
 
 function berOID(oid) {
   const parts = oid.split(".").map(Number);
-  const ilk = 40 * parts[0] + parts[1];
-  const bytes = [ilk];
+  const first = 40 * parts[0] + parts[1];
+  const bytes = [first];
   for (const p of parts.slice(2)) {
     if (p < 0x80) { bytes.push(p); continue; }
     const yigin = [];
@@ -70,7 +70,7 @@ function getPaketi(community, oid, reqId) {
 
 // Cevaptan ilk varbind degerini kabaca cikarir (metin/int). Tam BER cozumleyici
 // degil — kimlik OID'leri icin yeterli; cozulemezse ham hex doner.
-function cevaptanDeger(buf) {
+function valueFromResponse(buf) {
   // Son OCTET STRING (0x04) ya da OID/INTEGER'i bul: varbind sonundaki deger.
   // Basit yaklasim: pdu icindeki son TLV degerini oku.
   let i = 0;
@@ -87,53 +87,53 @@ function cevaptanDeger(buf) {
     oku(); // SEQUENCE
     i += 0;
     // basitlik: tum bufu tara, son OCTET STRING'i dondur
-    let sonMetin = null;
+    let lastText = null;
     for (let j = 0; j < buf.length - 2; j += 1) {
       if (buf[j] === 0x04) {
         const l = buf[j + 1];
         if (l < 0x80 && j + 2 + l <= buf.length) {
           const s = buf.subarray(j + 2, j + 2 + l).toString("latin1");
-          if (/^[\x20-\x7e]*$/.test(s) && s.length > (sonMetin?.length || 0)) sonMetin = s;
+          if (/^[\x20-\x7e]*$/.test(s) && s.length > (lastText?.length || 0)) lastText = s;
         }
       }
     }
-    return sonMetin;
+    return lastText;
   } catch {
     return null;
   }
 }
 
 // Tek OID GET. Doner: { deger|null, hata|null }
-export function snmpGet(host, oid, community = "public", zamanAsimi = 2500) {
+export function snmpGet(host, oid, community = "public", timeout = 2500) {
   return new Promise((resolve) => {
-    const soket = dgram.createSocket("udp4");
+    const socket = dgram.createSocket("udp4");
     const reqId = Math.floor((Date.now() % 100000) + oid.length); // Date.now yasak degil burada
     const paket = getPaketi(community, oid, reqId);
-    let bitti = false;
-    const kapat = (sonuc) => {
-      if (bitti) return;
-      bitti = true;
-      try { soket.close(); } catch { /* zaten kapali */ }
-      resolve(sonuc);
+    let done = false;
+    const close = (result) => {
+      if (done) return;
+      done = true;
+      try { socket.close(); } catch { /* zaten kapali */ }
+      resolve(result);
     };
-    const zaman = setTimeout(() => kapat({ deger: null, hata: "timeout" }), zamanAsimi);
-    soket.on("message", (msg) => {
-      clearTimeout(zaman);
-      kapat({ deger: cevaptanDeger(msg), hata: null });
+    const timestamp = setTimeout(() => close({ value: null, error: "timeout" }), timeout);
+    socket.on("message", (msg) => {
+      clearTimeout(timestamp);
+      close({ value: valueFromResponse(msg), error: null });
     });
-    soket.on("error", (e) => { clearTimeout(zaman); kapat({ deger: null, hata: e.message }); });
-    soket.send(paket, 161, host, (e) => {
-      if (e) { clearTimeout(zaman); kapat({ deger: null, hata: e.message }); }
+    socket.on("error", (e) => { clearTimeout(timestamp); close({ value: null, error: e.message }); });
+    socket.send(paket, 161, host, (e) => {
+      if (e) { clearTimeout(timestamp); close({ value: null, error: e.message }); }
     });
   });
 }
 
 // Standart kimlik OID'lerini dener. Doner: { cevapVerdi, degerler:{}, community }
 export async function snmpIdentity(host, community = "public") {
-  const degerler = Object.create(null);
-  for (const [ad, oid] of Object.entries(SNMP_OIDS)) {
+  const values = Object.create(null);
+  for (const [name, oid] of Object.entries(SNMP_OIDS)) {
     const r = await snmpGet(host, oid, community);
-    if (r.deger != null) degerler[ad] = r.deger;
+    if (r.value != null) values[name] = r.value;
   }
-  return { cevapVerdi: Object.keys(degerler).length > 0, degerler, community };
+  return { responded: Object.keys(values).length > 0, values, community };
 }
