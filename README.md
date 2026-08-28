@@ -159,6 +159,12 @@ Arayüz dördüncü tüketici ve `examples/` altında — üründe değil.
 de** erişilebilir olur. Yalnız endpoint'ten ya da yalnız arayüzden ulaşılan bir
 yetenek, çekirdeğin bir parçası değil o katmanın gizli mantığıdır.
 
+**PIN kuralı — otomatik yol / insan yolu:** "bir hak yakıldıysa bir daha
+deneme" kuralı **aracın kendi kendine tekrarlamasına** karşıdır. Operatör
+başka bir PIN denemek isterse önü kesilmez — doğru PIN'i bilen odur. İnsanın
+da geçemediği tek kural **son hak**: orada yanlış PIN SIM'i PUK'a kilitler.
+Çağrılarda bu ayrım `elleOnay` seçeneğiyle taşınır (CLI'da `--zorla`).
+
 Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 
 | Sadece şunu istiyorum | Çağrı | CLI |

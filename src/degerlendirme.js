@@ -107,8 +107,14 @@ export async function assessDevice(opts) {
         puk_kalan: k.puk_kalan ?? rapor.sim.puk_kalan };
     }
     // Kilit kaldirmaya UYGUN MU? Karar cekirdekte (simKilidiUygunMu); tuketici
-    // yalnizca gosterir. Arayuz dugmeyi buna gore acar, CLI ayni cevaba bakar.
-    const u = simKilidiUygunMu(rapor.sim);
+    // yalnizca gosterir.
+    //
+    // elleOnay:true — cunku bu bilgi INSANA gosterilecek bir dugme icin.
+    // "Bir hak yakildiysa bir daha deneme" kurali OTOMATIK yol icindir: arac
+    // kendi kendine ayni isi tekrarlamasin. Operatorun baska bir PIN denemesini
+    // engellemek yanlis olur — dogru PIN'i bilen odur. Insanin da gecemedigi
+    // tek kural SON HAK; onu hakDurumu zaten elleOnay'a bakmadan reddediyor.
+    const u = simKilidiUygunMu(rapor.sim, { elleOnay: true });
     rapor.pin_kaldirilabilir = { uygun: u.uygun, sebep: u.sebep };
     rapor.problems.push(...u.problems.filter((p) => p.severity === "warning"));
   }

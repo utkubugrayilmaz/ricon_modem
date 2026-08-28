@@ -34,7 +34,12 @@ const izin = (problems = []) => ({ uygun: true, sebep: null, problems });
 // — arayuz "dugmeyi gosterelim mi?" sorusunu PIN girilmeden once soruyor.
 //
 // kilit: { kilit: "pin"|"puk"|null, pin_kalan, pin_toplam, puk_kalan }
-// elleOnay: insan kalan hakki GORUP onayladi (CLI --zorla / arayuz onayi).
+// elleOnay: bu denemeye INSAN karar verdi (PIN'i yazip dugmeye basti, ya da
+// CLI'da --zorla dedi). Kural su ayrimda: "bir hak yakildiysa BIR DAHA
+// DENEME" OTOMATIK yol icindir — arac kendi kendine ayni isi tekrarlamasin.
+// Insani engellemek icin degil: operator baska bir PIN denemek isterse onu
+// kesmek yanlis olur, dogru PIN'i bilen odur. Insanin da gecemedigi TEK kural
+// SON HAK'tir; orada yanlis PIN SIM'i PUK'a kilitler.
 export function hakDurumu(kilit = {}, { elleOnay = false } = {}) {
   if (kilit.kilit === "puk") return red("SIM_PUK_LOCKED", kilit.puk_kalan);
 

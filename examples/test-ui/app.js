@@ -49,12 +49,11 @@ for (const g of [pinGiris, pinIstekGiris]) {
   g.addEventListener("input", () => {
     g.value = g.value.replace(/\D/g, "").slice(0, 8);
     if (g === pinIstekGiris) pinDeneBtn.disabled = !/^\d{4,8}$/.test(g.value);
-    // pinHakYakildi: bu modemde bir deneme HARCANDI. Kural (kullanıcı isteği):
-    // bir hak yandıysa araç bir daha denemez — yeni PIN yazmak da açmaz.
-    // Modem çıkarılıp takılınca durum sıfırlanır.
-    if (g === pinGiris) {
-      pinKaldirBtn.disabled = pinHakYakildi || !/^\d{4,8}$/.test(g.value);
-    }
+    // Yanlis PIN'den sonra dugme KAPANMAZ. "Bir hak yandiysa bir daha deneme"
+    // kurali ARACIN kendi kendine tekrarlamasina karsi; operator baska bir PIN
+    // yazmak isterse onu kesmek yanlis — dogru PIN'i bilen o. Tek sert durak
+    // SON HAK, onu cekirdek reddediyor.
+    if (g === pinGiris) pinKaldirBtn.disabled = !/^\d{4,8}$/.test(g.value);
   });
 }
 pinDeneBtn.disabled = true;
@@ -68,7 +67,6 @@ pinDeneBtn.disabled = true;
 // Numara CIHAZDAN GELDIYSE salt goruntu olur; duzenleme "Degistir"den acilir.
 // Alan bossa kilit YOK — yoksa operator hicbir sey yazamaz.
 let kilitli = false;
-let pinHakYakildi = false;        // bu modemde PIN denemesi harcandı
 let okunuyor = false;             // değerlendirme sürüyor
 let otomatikDolduruldu = false;   // alandaki numara cihazdan mı geldi
 
@@ -180,8 +178,6 @@ function numarayiSifirla() {
   gizliGiris.readOnly = false;
   kaynakMetin.textContent = "";
   degistirBtn.hidden = true;   // alan zaten yazilabilir, kapiya gerek yok
-  // PIN durumu MODEME OZEL: yeni cihaz yeni SIM, yanmis hak devrolmaz.
-  pinHakYakildi = false;
   pinAkis.hidden = true;
   pinAkis.textContent = "";
   pinAlaniniGizle();
@@ -350,15 +346,18 @@ function pinKilidiIste(sim, uygunluk) {
     pinKaldirBtn.hidden = true;
     pinGiris.disabled = true;
     pinNot.textContent = {
-      PIN_HAK_YANMIS: "Daha önce bir hak yanmış — denenmeyecek.",
-      PIN_LAST_ATTEMPT: "Son hak — denenmeyecek. SIM'i telefonda aç.",
+      PIN_LAST_ATTEMPT: "Son hak — araç denemez. SIM'i telefonda aç.",
       SIM_PUK_LOCKED: "PUK kilitli. Telefondan PUK ile aç.",
     }[uygunluk.sebep] ?? "Denenmeyecek.";
     return;
   }
 
   pinGiris.disabled = false;
-  pinNot.textContent = "Tek deneme. Kilit SIM'den kalıcı kalkar.";
+  // Hak yanmissa SOYLE ama ENGELLEME: dogru PIN'i bilen operator.
+  const toplam = sim?.pin_toplam ?? 3;
+  pinNot.textContent = (kalan != null && kalan < toplam)
+    ? `Daha önce bir deneme yanmış. Kalan ${kalan}. PIN'den emin ol.`
+    : "Tek deneme. Kilit SIM'den kalıcı kalkar.";
   pinKaldirBtn.hidden = false;
   pinKaldirBtn.disabled = !/^\d{4,8}$/.test(pinGiris.value);
   pinGiris.focus();
@@ -436,12 +435,14 @@ function pinBitir(basarili, o) {
   // Deneme GERÇEKTEN harcandı mı? Yalnızca PIN_REJECTED bir hak yakar.
   // Biçim hatası, "son hak" reddi ya da port sorunu hak yakmaz — onlarda
   // tekrar denemeyi kapatmak operatörü boşuna kilitler.
-  pinHakYakildi = (o?.problems || []).some((p) => p.kod === "PIN_REJECTED");
+  const yandi = (o?.problems || []).some((p) => p.kod === "PIN_REJECTED");
   pinAkis.textContent = o?.acildi
     ? "SIM açıldı, kilit kalıcı kalkmadı."
     : (ilk?.baslik || "PIN kilidi kaldırılamadı")
       + (ilk?.neYap ? `\n${ilk.neYap}` : "");
-  pinKaldirBtn.disabled = pinHakYakildi || !/^\d{4,8}$/.test(pinGiris.value);
+  // Dugme ACIK kalir; PIN alani temizlendigi icin zaten yeni PIN bekliyor.
+  pinKaldirBtn.disabled = true;
+  pinGiris.focus();
   haneleriBoya();
 }
 

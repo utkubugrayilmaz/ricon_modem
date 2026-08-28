@@ -347,7 +347,11 @@ export function createServer(opts = {}) {
       // okuyacak (kararini taze veriye dayandirmali), ama port TARAMASINI
       // bir daha yapmasin — cihaz tek baglantili, her tur pahali.
       gonder("ilerleme", { mesaj: "PIN kilidi kaldiriliyor (TEK deneme)" });
-      const r = await simPinKaldir({ ...atOpts, atPort: kilit.at_port }, pin);
+      // elleOnay:true — bu uca yalniz OPERATOR PIN yazip dugmeye basinca
+      // gelinir. "Bir hak yakildiysa bir daha deneme" OTOMATIK yolun kurali;
+      // insani engellemez. SON HAK korumasi elleOnay'a bakmadan calisir.
+      const r = await simPinKaldir({ ...atOpts, atPort: kilit.at_port }, pin,
+        { elleOnay: true });
       gonder("pin_kaldir_sonuc", {
         ok: r.ok, acildi: r.acildi, kilit_kaldirildi: r.kilit_kaldirildi,
         durum: r.durum, pin_kalan: r.pin_kalan,

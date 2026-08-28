@@ -198,7 +198,7 @@ async function komutuCalistir() {
       // SON hakki zorla bile yakamaz (karar cekirdekte).
       return { zaman: new Date().toISOString(), komut: "sim-pin-kaldir",
         kuru: false, modem_ip: opts.host,
-        ...(await simPinKaldir(opts, pin, { zorla: argv.includes("--zorla") })) };
+        ...(await simPinKaldir(opts, pin, { elleOnay: argv.includes("--zorla") })) };
     }
     // SADECE TEST ICIN: PIN kilidini ACAR. Uretim akisinda yeri yok — kilit
     // KALDIRMA yolunu gercek bir kilitli SIM'de sinamak icin var. Ayni
@@ -226,7 +226,7 @@ async function komutuCalistir() {
       }
       return { zaman: new Date().toISOString(), komut: "sim-pin-kilitle",
         kuru: false, modem_ip: opts.host,
-        ...(await simPinKilitle(opts, pin, { zorla: argv.includes("--zorla") })) };
+        ...(await simPinKilitle(opts, pin, { elleOnay: argv.includes("--zorla") })) };
     }
     case "fark": {
       const [, once, sonra] = argv;

@@ -201,16 +201,16 @@ export async function readMsisdn(opts) {
 // ayni yere soruyor. Burada yalniz YOLA OZGU kapi var: SIM takili mi.
 //
 // Doner: { izin, sebep: kod|null, problems: [] }
-export function simKilitKaldirmaKarari(kilit = {}, pin, { zorla = false } = {}) {
+export function simKilitKaldirmaKarari(kilit = {}, pin, { elleOnay = false } = {}) {
   const yol = simYoluAcik(kilit);
   if (yol) return { izin: false, sebep: yol.sebep, problems: yol.problems };
-  const k = pinDenemesiUygunMu(kilit, pin, { elleOnay: zorla });
+  const k = pinDenemesiUygunMu(kilit, pin, { elleOnay });
   return { izin: k.uygun, sebep: k.sebep, problems: k.problems };
 }
 
 // PURE: PIN'i BILMEDEN "bu SIM uygun mu?" — arayuz dugmeyi buna gore acar.
-export function simKilidiUygunMu(kilit = {}, { zorla = false } = {}) {
-  return simYoluAcik(kilit) ?? hakDurumu(kilit, { elleOnay: zorla });
+export function simKilidiUygunMu(kilit = {}, { elleOnay = false } = {}) {
+  return simYoluAcik(kilit) ?? hakDurumu(kilit, { elleOnay });
 }
 
 // YOLA OZGU kapi: AT ile kilide dokunmak icin SIM ya kilitli ya hazir olmali.
@@ -237,12 +237,12 @@ function simYoluAcik(kilit) {
 // ⚠ TEHLIKE: yanlis PIN bir deneme yakar; UC yanlis -> SIM PUK'a kilitlenir.
 // Korumalar (nvram yolundakilerin AYNISI, tek yerde):
 //   1) bicim: 4-8 hane rakam, degilse cihaza HIC GITMEZ
-//   2) once KALAN HAK okunur; 1 ya da daha az kaldiysa zorlama olmadan DENEMEZ
+//   2) once KALAN HAK okunur; SON HAK asla otomatik yakilmaz
 //   3) TEK deneme; yanlissa TEKRAR DENEMEZ
 //   4) PIN hicbir yere yazilmaz (log/olay/defter) — yalniz bellekte gecer
 //
 // Doner: { ok, acildi, kilit_kaldirildi, durum, pin_kalan, problems }
-export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = true } = {}) {
+export async function simPinKaldir(opts, pin, { elleOnay = false, kaliciKapat = true } = {}) {
   const rapor = { ok: false, acildi: false, kilit_kaldirildi: false,
     durum: null, pin_kalan: null, problems: [] };
   // (1) Bicim — bozuk PIN garantili bosa harcanmis deneme. Cihaza HIC gitmez.
@@ -271,8 +271,8 @@ export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = tru
     }
     // SORGU OKUNAMADI (null): kilidin acik mi kapali mi oldugunu BILMIYORUZ.
     // Bilmeden devam etmek PIN gondermek demek ve yanlis PIN bir hak yakar.
-    // Bilmedigimiz icin harcamayiz — zorla ile gecilebilir.
-    if (acikMi === null && !zorla) {
+    // Bilmedigimiz icin harcamayiz — elleOnay ile gecilebilir.
+    if (acikMi === null && !elleOnay) {
       rapor.problems.push(problem("KILIT_DURUMU_OKUNAMADI"));
       return rapor;
     }
@@ -281,7 +281,7 @@ export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = tru
   // (3) KARAR — PURE, test edilmis, tek yer (bkz. simKilitKaldirmaKarari):
   // PUK / SIM yok / yanmis hak / son hak burada reddedilir. Arayuz de CLI de
   // ayni cevaba bakar; burasi gecilmeden cihazda PIN denenmez.
-  const karar = simKilitKaldirmaKarari(kilit, pin, { zorla });
+  const karar = simKilitKaldirmaKarari(kilit, pin, { elleOnay });
   if (!karar.izin) {
     rapor.problems.push(...karar.problems);
     return rapor;
@@ -324,11 +324,11 @@ export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = tru
 // ⚠ AYNI RISK: AT+CLCK="SC",1,"<pin>" PIN'i DOGRULAR. Yanlis PIN bir deneme
 // yakar, uc yanlis PUK demek. Bu yuzden korumalar birebir ayni ve AYNI PURE
 // karardan geliyor (simKilidiUygunMu): son hak yakilmaz, daha once hak
-// yanmissa zorla olmadan denenmez.
+// yanmissa OTOMATIK yol denemez (insan yine deneyebilir).
 //
 // NOT: kilit SONRAKI ACILISTA sorulur. Etkisini gormek icin modem kapat-ac.
 // Doner: { ok, kilit_acik, zaten, durum, pin_kalan, problems }
-export async function simPinKilitle(opts, pin, { zorla = false } = {}) {
+export async function simPinKilitle(opts, pin, { elleOnay = false } = {}) {
   const rapor = { ok: false, kilit_acik: false, zaten: false,
     durum: null, pin_kalan: null, problems: [] };
   if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
@@ -357,13 +357,13 @@ export async function simPinKilitle(opts, pin, { zorla = false } = {}) {
       return rapor;
     }
     // SORGU OKUNAMADI: durumu bilmeden PIN gondermek bir hak riske atmaktir.
-    if (acikMi === null && !zorla) {
+    if (acikMi === null && !elleOnay) {
       rapor.problems.push(problem("KILIT_DURUMU_OKUNAMADI"));
       return rapor;
     }
   }
 
-  const karar = simKilidiUygunMu(kilit, { zorla });
+  const karar = simKilidiUygunMu(kilit, { elleOnay });
   rapor.problems.push(...karar.problems);
   if (!karar.uygun) return rapor;
 

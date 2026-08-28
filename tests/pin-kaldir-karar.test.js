@@ -30,14 +30,19 @@ test("KULLANICI KURALI: bir hak yanmis (2/3) -> DENEMEZ, sadece bildirir", () =>
 
 test("son hak (1/3) -> DENEMEZ; zorla bile yakamaz", () => {
   assert.equal(simKilitKaldirmaKarari(kilitli(1), "1234").izin, false);
-  assert.equal(simKilitKaldirmaKarari(kilitli(1), "1234", { zorla: true }).izin, false,
-    "son hak asla otomatik yakilmaz");
+  assert.equal(simKilitKaldirmaKarari(kilitli(1), "1234", { elleOnay: true }).izin, false,
+    "SON HAK: insan onayi bile gecemez — yanlis PIN burada PUK demek");
   assert.equal(simKilitKaldirmaKarari(kilitli(0), "1234").izin, false);
 });
 
-test("zorla: yanmis hak kuralini gecer (bilincli insan karari)", () => {
-  const k = simKilitKaldirmaKarari(kilitli(2), "1234", { zorla: true });
-  assert.equal(k.izin, true);
+// AYRIM (kullanici netlestirdi): "bir hak yakildiysa BIR DAHA DENEME" kurali
+// OTOMATIK yol icindir — arac kendi kendine ayni isi tekrarlamasin. INSAN
+// baska bir PIN denemek isterse onun onu kesilmez; dogru PIN'i bilen odur.
+test("elleOnay: yanmis hak kuralini gecer (insan baska PIN deneyebilir)", () => {
+  assert.equal(simKilitKaldirmaKarari(kilitli(2), "1234").izin, false,
+    "OTOMATIK yol: hak yanmissa denemez");
+  assert.equal(simKilitKaldirmaKarari(kilitli(2), "1234", { elleOnay: true }).izin, true,
+    "INSAN yolu: engellenmez");
 });
 
 test("kalan hak OKUNAMADI (null) -> izin, ama uyari tasir", () => {
@@ -102,7 +107,7 @@ test("simKilidiUygunMu: PIN gerekmez, ayni kurallari uygular", () => {
   assert.equal(simKilidiUygunMu(kilitli(3)).uygun, true);
   assert.equal(simKilidiUygunMu(kilitli(2)).sebep, "PIN_HAK_YANMIS");
   assert.equal(simKilidiUygunMu(kilitli(1)).sebep, "PIN_LAST_ATTEMPT");
-  assert.equal(simKilidiUygunMu(kilitli(2), { zorla: true }).uygun, true);
+  assert.equal(simKilidiUygunMu(kilitli(2), { elleOnay: true }).uygun, true);
 });
 
 test("simKilitKaldirmaKarari uygunluk kararini AYNI yerden alir", () => {
@@ -111,4 +116,23 @@ test("simKilitKaldirmaKarari uygunluk kararini AYNI yerden alir", () => {
     assert.equal(simKilitKaldirmaKarari(kilitli(kalan), "1234").izin,
       simKilidiUygunMu(kilitli(kalan)).uygun, `kalan: ${kalan}`);
   }
+});
+
+// --- OTOMATIK yol / INSAN yolu ayrimi (kullanici kurali) ---
+//
+// "Bir hak yakildiysa arac bir daha denemesin" ISTEGI, aracin KENDI KENDINE
+// ayni isi tekrarlamasina karsiydi. Ilk yazimda bunu insana da uyguladim:
+// operator yanlis PIN girince dugme KAYBOLUYORDU ve dogru PIN'i deneyemiyordu.
+// Yanlis olan buydu — dogru PIN'i bilen operator.
+test("hak yanmis SIM: OTOMATIK denemez, INSAN deneyebilir", () => {
+  const yanmis = kilitli(2);
+  assert.equal(simKilidiUygunMu(yanmis).uygun, false, "otomatik yol durur");
+  assert.equal(simKilidiUygunMu(yanmis, { elleOnay: true }).uygun, true, "insan yolu acik");
+});
+
+test("SON HAK: iki yol da durur (tek gecilemez kural)", () => {
+  const son = kilitli(1);
+  assert.equal(simKilidiUygunMu(son).uygun, false);
+  assert.equal(simKilidiUygunMu(son, { elleOnay: true }).uygun, false,
+    "yanlis PIN burada PUK demek; insan onayi bile gecemez");
 });
