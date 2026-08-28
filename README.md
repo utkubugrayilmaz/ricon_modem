@@ -172,6 +172,22 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 
 Çalışan örnek: `examples/paket-kullanimi.js`.
 
+### Parça parça import
+
+Başka bir proje (ör. uzaktaki makineleri gösteren bir panel) tümünü almak
+zorunda değil — her katman kendi alt yolundan gelir:
+
+```js
+import { readIdentity } from "ricon-modem/okuma";        // sadece modem bilgisi
+import { readMsisdn } from "ricon-modem/at";             // sadece telefon numarası
+import { assessDevice } from "ricon-modem/degerlendirme";// sadece "ne eksik"
+import { pinDenemesiUygunMu } from "ricon-modem/pin-karar"; // sadece karar (cihazsız)
+```
+
+Her biri `opts` alır, sonuç nesnesi döner, throw etmez. Aynı fonksiyon
+terminalden de (`ricon.js numara`) HTTP ucundan da çağrılabilir — endpoint'e
+çevirmek `examples/endpoint-kullanimi.md`'de 8 satır.
+
 ## Mimari
 
 | Modül | İş |
@@ -191,7 +207,8 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 | `src/scanner.js` | Paralel TCP port taraması |
 | `src/snmp.js` | Saf Node SNMPv2c GET |
 | `src/provisioning.js` | Provizyon motoru (oku→planla→yaz→doğrula, idempotent) |
-| `src/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü) |
+| `src/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü). Numarayı **SIM'den kendisi okur** |
+| `src/degerlendirme.js` | ⭐ "Ne durumda, ne eksik, **tekrar bakmalı mıyım**?" — tekrar politikası PURE ve çekirdekte |
 | `src/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
 | `src/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
 | `src/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |

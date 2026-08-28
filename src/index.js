@@ -21,8 +21,12 @@ export {
 export {
   provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
   readIdentity, simTakiliMi, waitForInternet, simPinHedefi,
-  assessDevice, provisionEksikleri,
 } from "./pipeline.js";
+// Cihaz DEGERLENDIRME — "ne durumda, ne eksik, tekrar bakmali miyim?"
+// yenidenDenemeKarari PURE: tekrar politikasi cekirdekte, arayuzde degil.
+export {
+  assessDevice, provisionEksikleri, yenidenDenemeKarari, degerlendirmeyiIzle,
+} from "./degerlendirme.js";
 export { readSim, normalizePhone, telefonGirdiBicimi, parseSimStatus } from "./sim.js";
 // PIN denemesi kararlari — PURE, TEK YER. nvram yolu, AT yolu ve
 // internet-sonrasi deneme yolu ucu de buraya soruyor.

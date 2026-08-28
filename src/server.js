@@ -24,7 +24,8 @@ import { extname, join } from "node:path";
 import {
   provisionModem, applyProvisioning, applyPin, provisionRecord, pcPreflight,
   readIdentity, waitForInternet, normalizePhone, settingLabel, SETTING_LABELS,
-  simPinHedefi, assessDevice, telefonGirdiBicimi, simPinKaldir, readSimLock,
+  simPinHedefi, assessDevice, yenidenDenemeKarari,
+  telefonGirdiBicimi, simPinKaldir, readSimLock,
   problemleriTurkcelestir, sorunTr,
 } from "./index.js";
 import { isReachable } from "./scanner.js";
@@ -150,6 +151,9 @@ export function createServer(opts = {}) {
       const r = await assessDevice({ fabrikaHost, sahaHost, kimlik });
       jsonVer(yanit, 200, {
         ok: r.ok,
+        // TEKRAR KARARI CEKIRDEKTEN. Arayuz "ne zaman yeniden bakayim?"
+        // sorusunu kendi cevaplamiyor — yoksa politika iki yerde olurdu.
+        tekrar: yenidenDenemeKarari(r),
         modem: r.modem,
         sim: r.sim,
         telefon: { ...r.telefon, girdi: telefonGirdiBicimi(r.telefon.numara) },

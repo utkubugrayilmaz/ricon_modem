@@ -15,8 +15,8 @@
 //                                --reboot-yok
 //   node ricon.js sunucu         Tarayici arayuzu (UI) — http://127.0.0.1:8080
 //   node ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
-//                                TELEFON ZORUNLU: --telefon 05xx (yoksa sorar)
-//                                --dongu (cok modem; her modemde ayri sorar)
+//                                Numara SIM'den okunur; --telefon 05xx EZER
+//                                --dongu (cok modem: tak -> hazir -> cikar)
 //                                --profil · --saha-host · --deneme N · --max N
 //                                --kayit <dosya> (varsayilan data/hazirlanan.jsonl)
 //
@@ -353,15 +353,15 @@ async function komutuCalistir() {
       };
       const dongu = argv.includes("--dongu");
       if (dongu) {
-        // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli) — verilse
-        // bile yok sayilir, modem basina sorulur.
+        // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli);
+        // numara her modemde o modemin SIM'inden okunuyor.
         return provisionLoop({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity });
       }
-      // Tek modem: --telefon verilmediyse sor. Verildiyse HAM gecer — gecersizse
+      // Tek modem: --telefon VERMEK ARTIK ZORUNLU DEGIL. Cekirdek numarayi
+      // SIM'den okuyor (AT+CNUM); okuyamazsa telefonSor ile burayi cagirip
+      // operatore soruyor. Verilirse operator bilerek eziyor; gecersizse
       // cekirdek MSISDN_INVALID der (sessizce yeniden sormaz).
-      const telBayrak = bayrak("--telefon");
-      const telefon = telBayrak !== undefined ? telBayrak : await telefonSor(1);
-      return provisionModem({ ...hOpts, telefon });
+      return provisionModem({ ...hOpts, telefon: bayrak("--telefon") });
     }
     default: return null;
   }
@@ -393,8 +393,9 @@ async function main() {
       + "  uygula [--uygula]            provizyon (bayraksiz KURU/dry-run)\n"
       + "         [--profil saha|fabrika] [--yeni-host ip] [--yeni-kaynak ip]\n"
       + "         [--reboot-yok]\n"
-      + "  hazirla --telefon 05xx       tak-calistir: algila->provizyon->dogrula\n"
-      + "         [--dongu]             cok modem (her modemde telefon sorar)\n"
+      + "  hazirla                      tak-calistir: algila->provizyon->dogrula\n"
+      + "         [--telefon 05xx]      numara SIM'den okunur; bu bayrak EZER\n"
+      + "         [--dongu]             cok modem: tak -> hazir -> cikar -> sonraki\n"
       + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
       + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
       + "  sunucu                       tarayici arayuzu (UI) — cekirdegi tuketir\n"

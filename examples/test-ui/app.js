@@ -256,9 +256,11 @@ async function degerlendir(host) {
     degerlendirilenHost = host;
     degerlendirmeSonucu = o;
     okumayiUygula(o);
+    tekrariAyarla(o);
   } catch {
     ipucu.dataset.hal = "hata";
     ipucu.textContent = "Numara okunamadı — sunucuya ulaşılamadı.";
+    tekrariAyarla({ tekrar: { tekrar: true, sonra_sn: 5 } });
   } finally {
     okunuyor = false;
     haneleriBoya();
@@ -408,6 +410,7 @@ pinKaldirBtn.addEventListener("click", pinKilidiniKaldir);
 
 function durumuIzle(ac) {
   clearInterval(durumZamani);
+  if (!ac) { clearTimeout(tekrarZamani); tekrarZamani = null; }
   if (ac) { durumuTazele(); durumZamani = setInterval(durumuTazele, 3000); }
 }
 durumuIzle(true);

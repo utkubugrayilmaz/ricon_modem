@@ -18,8 +18,8 @@ import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./profile.js";
 import { Client } from "./client.js";
 import { parsePairs } from "./ddwrt.js";
 import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
-import { problem, isOk } from "./problems.js";
-import { readMsisdn, readSimLock, simKilidiUygunMu } from "./at.js";
+import { problem } from "./problems.js";
+import { readMsisdn } from "./at.js";
 import { pinDenemesiUygunMu, hakYakilmisMi } from "./pin-karar.js";
 
 const now = () => new Date().toISOString();
@@ -327,134 +327,6 @@ async function kaydiTamamla({ rapor, konum, hazirKimlik, kimlik, telefon,
   return rapor;
 }
 
-// PURE: hazırlamaya başlamak için NE EKSİK? Tüketici (UI/endpoint/terminal)
-// buna bakıp hangi ekranı göstereceğine karar verir — karar mantığı burada,
-// arayüzde değil. Sıra ÖNEMLİ: en temel eksik başta.
-//
-// Doner: ["modem"] | ["sim"] | ["telefon"] | ["pin"] | []  (boş = başlanabilir)
-export function provisionEksikleri({ modemVar, simTakili, simKilit, telefon, pin } = {}) {
-  const eksik = [];
-  if (!modemVar) eksik.push("modem");
-  else if (!simTakili) eksik.push("sim");
-  if (!normalizePhone(telefon)) eksik.push("telefon");
-  // PIN yalnızca cihaz KİLİT BİLDİRDİYSE ve elimizde PIN yoksa eksiktir.
-  // Kilit yoksa PIN sorulmaz — proje hedefi PIN'siz akış.
-  if (simKilit?.kilit === "pin" && !pin) eksik.push("pin");
-  // PUK kilidi "eksik girdi" değil, insan müdahalesi gerektiren bir arıza:
-  // eksik listesine koymuyoruz, problems ile bildiriliyor.
-  return eksik;
-}
-
-// Cihazın O ANKI durumu ve ne eksik — TEK ÇAĞRI.
-//
-// Neden ayrı fonksiyon: "modem bağlandı → numarayı çek → PIN gerekiyor mu bak
-// → gerekiyorsa iste, gerekmiyorsa başlat" kararı TÜKETİCİDE tekrarlanmasın.
-// UI, endpoint ve terminal aynı cevaba bakar.
-//
-// PAHALI: kimlik okuması (~4 sn) yapar. Sürekli yoklama için DEĞİL — modem
-// algılandığında BİR KEZ çağrılmalı (tek bağlantılı cihazı boğmayalım).
-export async function assessDevice(opts) {
-  const {
-    fabrikaHost = "192.168.1.1", sahaHost = "5.5.5.1",
-    kimlik, telefon = null, pin = null,
-  } = opts;
-  const on = pcPreflight(onekAl(fabrikaHost), onekAl(sahaHost));
-  const rapor = {
-    zaman: now(), komut: "degerlendir",
-    pc: { hazir: on.hazir, problems: on.problems },
-    modem: { konum: null, host: null },
-    kimlik: null, sim: null,
-    telefon: { numara: normalizePhone(telefon), kaynak: telefon ? "girdi" : "yok" },
-    internet: null,
-    problems: [...on.problems],
-  };
-  if (!on.hazir) {
-    rapor.eksik = ["pc"];
-    rapor.baslatilabilir = false;
-    rapor.ok = false;
-    return rapor;
-  }
-
-  const fabrikaVar = await isReachable(fabrikaHost, on.fabrikaKaynak);
-  const sahaVar = fabrikaVar ? false : await isReachable(sahaHost, on.sahaKaynak);
-  const konum = fabrikaVar
-    ? { host: fabrikaHost, kaynakIp: on.fabrikaKaynak, ad: "fabrika" }
-    : sahaVar ? { host: sahaHost, kaynakIp: on.sahaKaynak, ad: "saha" } : null;
-  rapor.modem = { konum: konum?.ad ?? null, host: konum?.host ?? null };
-
-  if (konum && kimlik) {
-    let k = null;
-    try { k = await readIdentity({ ...konum, kimlik }); } catch { /* kismi sonuc gecerli */ }
-    if (k) {
-      rapor.kimlik = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
-        lan_mac: k.lan_mac, operator: k.operator };
-      rapor.sim = { takili: simTakiliMi(k), ...k.sim };
-      rapor.internet = { var: Boolean(k.wan_ip), wan_ip: k.wan_ip };
-      if (!simTakiliMi(k)) rapor.problems.push(problem("SIM_MISSING", k.sim_durumu));
-      else if (k.sim?.kilit === "pin") rapor.problems.push(problem("SIM_PIN_LOCKED", k.sim.pin_kalan));
-      else if (k.sim?.kilit === "puk") rapor.problems.push(problem("SIM_PUK_LOCKED", k.sim.puk_kalan));
-    }
-  }
-  if (!konum) rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
-
-  // SIM PIN KILITLI: kalan hakki MODULDEN oku. Web sayfasi bu sayiyi her zaman
-  // vermiyor (2026-08-28: `pin_kalan: null` geldi), AT tarafi veriyor
-  // (`+QPINC: "SC",3,10`). Bu sayi bir GUVENLIK kararinin girdisi — "daha once
-  // hak yanmis mi?" — o yuzden tahmine birakilmaz, ~3 sn'ye deger. Yalnizca
-  // KILITLI durumda okunuyor: acik SIM'de gereksiz bir tur olurdu.
-  if (konum && kimlik && rapor.sim?.kilit === "pin") {
-    bildir(opts, "SIM kilidi modulden okunuyor (kalan hak)");
-    const k = await readSimLock({ ...konum, kimlik });
-    rapor.at_port = k.at_port;
-    if (k.at_port) {
-      rapor.sim = { ...rapor.sim,
-        durum_modul: k.durum,
-        pin_kalan: k.pin_kalan ?? rapor.sim.pin_kalan,
-        puk_kalan: k.puk_kalan ?? rapor.sim.puk_kalan };
-    }
-    // Kilit kaldirmaya UYGUN MU? Karar cekirdekte (simKilidiUygunMu); tuketici
-    // yalnizca gosterir. Arayuz dugmeyi buna gore acar, CLI ayni cevaba bakar.
-    const u = simKilidiUygunMu(rapor.sim);
-    rapor.pin_kaldirilabilir = { uygun: u.uygun, sebep: u.sebep };
-    rapor.problems.push(...u.problems.filter((p) => p.severity === "warning"));
-  }
-
-  // TELEFON NUMARASINI CIHAZDAN OKU — artik elle girmeye gerek yok.
-  // Yalnizca SIM HAZIRSA denenir: kilitli SIM abone verisini (EF_MSISDN)
-  // acmiyor, canli olculdu (2026-08-27). Kilitliyse once PIN, sonra numara.
-  if (konum && kimlik && rapor.sim?.hazir) {
-    bildir(opts, "telefon numarasi cihazdan okunuyor (AT+CNUM)");
-    const n = await readMsisdn({ ...konum, kimlik });
-    rapor.at_port = n.at_port;
-    if (n.telefon) {
-      const elle = normalizePhone(telefon);
-      if (elle && elle !== n.telefon) {
-        // Cihazdaki numara SIM'in KENDISINDEN geliyor; elle girilen yanlis
-        // olabilir. Sessizce birini secmek yerine ikisini de bildiriyoruz.
-        rapor.problems.push(problem("MSISDN_UYUSMAZLIK", elle, n.telefon));
-      }
-      rapor.telefon = { numara: n.telefon, kaynak: "cihaz" };
-    } else {
-      rapor.problems.push(...n.problems);
-    }
-  }
-
-  // "Ne eksik" kararı ÇÖZÜLMÜŞ numaraya bakar, ham girdiye DEĞİL. Eskiden
-  // buraya `telefon` (operatörün yazdığı) geçiliyordu: cihazdan numara
-  // başarıyla okunduğu halde eksik ["telefon"] kalıyor, başlatılabilir
-  // yanlışlıkla false oluyordu (2026-08-28 canlı görüldü). Numaranın NEREDEN
-  // geldiği kararı ilgilendirmez — elimizde geçerli numara var mı, o yeter.
-  rapor.eksik = provisionEksikleri({
-    modemVar: Boolean(konum),
-    simTakili: rapor.sim?.takili ?? false,
-    simKilit: rapor.sim ?? null,
-    telefon: rapor.telefon.numara, pin,
-  });
-  rapor.baslatilabilir = rapor.eksik.length === 0;
-  rapor.ok = isOk(rapor.problems);
-  return rapor;
-}
-
 // PURE: konum + dry-run durumuna göre sıradaki eylem. Test edilebilir.
 // Doner: "zaten_hazir" | "provizyon_fabrika" | "provizyon_saha" | "modem_yok"
 export function nextAction(fabrikaVar, sahaVar, sahaDryRunDurum) {
@@ -483,6 +355,11 @@ export async function provisionModem(opts) {
     kimlikBilgi: hazirKimlikBilgi = null,
   } = opts;
   const rapor = { zaman: now(), komut: "hazirla", problems: [] };
+  // Numara CAGRIDAN gelebilir ya da CIHAZDAN okunur (asagida, SIM hazirsa).
+  // `let` cunku cozum algilamadan sonra olusuyor; bitir()/etkinProfilYap()
+  // cagri aninda gecerli degeri goruyor.
+  let telefonNorm = normalizePhone(telefon);
+  let telefonKaynak = telefonNorm ? "girdi" : null;
 
   // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
   // kaydiTamamla). Cagri yerleri degismedi.
@@ -491,18 +368,25 @@ export async function provisionModem(opts) {
       simDurum, pinPlanlandi });
 
 
-  const bitir = (konum, hazirKimlik = null, internet = null) =>
-    kaydiTamamla({ rapor, konum, hazirKimlik, kimlik, telefon, profil, internet, opts });
+  const bitir = (konum, hazirKimlik = null, internet = null) => {
+    rapor.telefon = { numara: telefonNorm, kaynak: telefonKaynak };
+    return kaydiTamamla({ rapor, konum, hazirKimlik, kimlik,
+      telefon: telefonNorm, profil, internet, opts });
+  };
 
 
   if (!kimlik) {
     rapor.problems.push(problem("AUTH_REQUIRED", "modem"));
     rapor.durum = "kimlik_yok"; rapor.ok = false; return bitir(null);
   }
-  // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi: kurulum aninda biliniyor,
-  // sonradan cihazdan OKUNAMIYOR (bkz. sim.js). Kayitsiz modem sahaya cikmasin.
-  if (!normalizePhone(telefon)) {
-    rapor.problems.push(problem(telefon ? "MSISDN_INVALID" : "MSISDN_REQUIRED", telefon || "—"));
+  // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi — kayitsiz modem sahaya
+  // cikmasin. AMA artik cihazdan OKUNABILIYOR (AT+CNUM, ~3 sn): verilmediyse
+  // asagida SIM'den okunuyor, okunamazsa orada reddediliyor.
+  //
+  // Burada yalniz VERILMIS ama GECERSIZ numara reddediliyor: bu bir GIRDI
+  // hatasi, cihaza gitmeye gerek yok.
+  if (telefon && !telefonNorm) {
+    rapor.problems.push(problem("MSISDN_INVALID", telefon));
     rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
   }
 
@@ -511,7 +395,6 @@ export async function provisionModem(opts) {
   //   · cihaz adı = telefon numarası (modeme bağlanan hangi hat olduğunu görsün;
   //     not: bu alan yalnızca parolayla girince okunur, defter hâlâ tek kaynak)
   //   · SIM PIN — YALNIZCA kilit varsa ve güvenlik kapıları geçilirse
-  const telefonNorm = normalizePhone(telefon);
   const etkinProfilYap = (pinHedef) => {
     const ek = {};
     if (telefonNorm) ek[DEVICE_NAME_KEY] = `0${telefonNorm}`;
@@ -565,6 +448,33 @@ export async function provisionModem(opts) {
         kimlikBilgiOnce = await readIdentity({ ...konum, kimlik });
       } catch { kimlikBilgiOnce = null; }
     }
+    // NUMARAYI CIHAZDAN OKU — verilmediyse. Burada okunuyor cunku SIM'in
+    // hazir oldugu ilk an burasi: kilitli SIM abone verisini (EF_MSISDN)
+    // acmiyor. Bu adim provisionModem'in ICINDE: boylece CLI, HTTP ucu ve
+    // baska bir Node projesi de otomatik numara aliyor — yalniz bizim
+    // arayuzumuz degil. Okunamazsa YEDEK yol asagida (opts.telefonSor).
+    if (konum && !telefonNorm && kimlikBilgiOnce?.sim?.hazir) {
+      bildir(opts, "telefon numarasi SIM'den okunuyor (AT+CNUM)");
+      const n = await readMsisdn({ ...konum, kimlik });
+      if (n.telefon) {
+        telefonNorm = n.telefon;
+        telefonKaynak = "cihaz";
+      } else {
+        rapor.problems.push(...n.problems);
+      }
+    }
+    // YEDEK: numara SIM'de yazili degilse tuketiciye sor (CLI operatore
+    // sorar, arayuz alani acar). Cihaza tekrar gidilmiyor.
+    if (konum && !telefonNorm && typeof opts.telefonSor === "function") {
+      const elle = normalizePhone(await opts.telefonSor(1));
+      if (elle) { telefonNorm = elle; telefonKaynak = "operator"; }
+    }
+    if (konum && !telefonNorm) {
+      rapor.problems.push(problem("MSISDN_REQUIRED", "—"));
+      rapor.durum = "telefon_yok"; rapor.ok = false;
+      return bitir(konum, kimlikBilgiOnce);
+    }
+
     if (konum && kimlikBilgiOnce && !simTakiliMi(kimlikBilgiOnce)) {
       rapor.problems.push(problem("SIM_MISSING", kimlikBilgiOnce.sim_durumu));
       rapor.durum = "sim_yok"; rapor.deneme = deneme; rapor.ok = false;
@@ -687,11 +597,10 @@ export async function provisionLoop(opts) {
     bildir(opts, "modem takilmasi bekleniyor...");
     await modemBekle(modemOpts);
     bildir(opts, "modem algilandi, hazirlaniyor");
-    // Telefon her modemde FARKLI (her cihazin SIM'i kendi hatti) — sabit
-    // opts.telefon yoksa tuketiciden modem basina sorulur.
-    const telefon = opts.telefon
-      ?? (typeof opts.telefonSor === "function" ? await opts.telefonSor(sayac + 1) : null);
-    const r = await provisionModem({ ...modemOpts, telefon });
+    // Numarayi SORMUYORUZ: provisionModem onu SIM'den okuyor. Okuyamazsa
+    // yine opts.telefonSor'a dusuyor — yani yedek yol duruyor, ama artik
+    // her modemde operatoru bekletmiyor. Dongunun amaci tam bu: tak, cikar.
+    const r = await provisionModem({ ...modemOpts, telefon: opts.telefon });
     sonuc.hazirlanan.push({
       durum: r.durum, ok: r.ok, deneme: r.deneme,
       telefon: r.kayit?.telefon ?? null, iccid: r.kayit?.iccid ?? null,
