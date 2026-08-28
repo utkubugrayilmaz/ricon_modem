@@ -246,7 +246,23 @@ async function durumuTazele() {
 let degerlendirilenHost = null;   // hangi modem için okuduk
 let degerlendirmeSonucu = null;   // son okuma (ipucunu o yazar)
 let sonDenemeZamani = 0;
+let tekrarZamani = null;          // çekirdeğin istediği yeniden bakış
 const DENEME_ARASI_MS = 15000;    // başarısız okumadan sonra bekleme
+
+// Çekirdek "tekrar bak, N sn sonra" diyorsa uy. KARAR BURADA VERİLMİYOR:
+// hangi durumun tekrar hak ettiği (geçici hata mı, insan mı bekleniyor)
+// yenidenDenemeKarari'nda — sunucu onu cevabın `tekrar` alanında yolluyor.
+// Burası yalnızca zamanlayıcı.
+function tekrariAyarla(o) {
+  clearTimeout(tekrarZamani);
+  tekrarZamani = null;
+  if (!o?.tekrar?.tekrar) return;
+  tekrarZamani = setTimeout(() => {
+    degerlendirilenHost = null;    // aynı modem için yeniden bakılacak
+    sonDenemeZamani = 0;
+    durumuTazele();
+  }, o.tekrar.sonra_sn * 1000);
+}
 
 function degerlendirmeyiTetikle(d) {
   if (okunuyor || d.mesgul) return;
@@ -261,23 +277,33 @@ async function degerlendir(host) {
   ipucu.removeAttribute("data-hal");
   ipucu.textContent = "SIM'den numara okunuyor…";
   haneleriBoya();                 // BAŞLAT'ı okuma bitene kadar kapatır
+  // SADECE AĞ/AYRIŞTIRMA bu try'da. Çizim kodu AYRI: ekranı çizen bir hata
+  // "sunucuya ulaşılamadı" diye bildirilirse teşhis yanlış olur — tam bu
+  // oldu: tanımsız bir fonksiyon yüzünden numara ekrana geldiği halde
+  // "numara okunamadı" yazıyordu.
+  let o = null;
   try {
     const r = await fetch("/api/degerlendir");
-    const o = await r.json();
+    o = await r.json();
     // 409: cihazla başka bir iş sürüyor. Hata değil, sırasını bekler.
-    if (r.status === 409) return;
-    degerlendirilenHost = host;
-    degerlendirmeSonucu = o;
-    okumayiUygula(o);
-    tekrariAyarla(o);
+    if (r.status === 409) o = null;
   } catch {
-    ipucu.dataset.hal = "hata";
-    ipucu.textContent = "Numara okunamadı — sunucuya ulaşılamadı.";
-    tekrariAyarla({ tekrar: { tekrar: true, sonra_sn: 5 } });
+    o = null;
   } finally {
     okunuyor = false;
-    haneleriBoya();
   }
+  if (!o) {
+    ipucu.dataset.hal = "hata";
+    ipucu.textContent = "Sunucuya ulaşılamadı.";
+    tekrariAyarla({ tekrar: { tekrar: true, sonra_sn: 5 } });
+    haneleriBoya();
+    return;
+  }
+  degerlendirilenHost = host;
+  degerlendirmeSonucu = o;
+  okumayiUygula(o);
+  tekrariAyarla(o);
+  haneleriBoya();
 }
 
 // Okuma sonucunu ekrana çevirir. KARAR YOK: `eksik` çekirdekten geliyor,

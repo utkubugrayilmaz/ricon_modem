@@ -4,7 +4,7 @@ Bugün **tam zincir canlı çalıştı**: modem takıldı → numara SIM'den oku
 kurulum → doğrulama. PIN'li SIM kolu da gerçek bir kilitli SIM'de sınandı ve
 **tek bir deneme hakkı yanmadan** kilit kaldırıldı.
 
-Test: **196/196**. Sıradaki iş: **çok modemli seri akış (`--dongu`)**.
+Test: **199/199**. Sıradaki iş: **çok modemli seri akış (`--dongu`)**.
 
 ## Cihazın şu anki fiziksel durumu
 
@@ -108,6 +108,34 @@ zaten kapalıysa PIN'i hiç göndermiyor.
 
 ## 5) Adversaryal denetim (2026-08-28) — kendi işime karşı tez
 
+### En ciddi bulgu: arayüzde tanımsız fonksiyon
+
+Belirti: numara ekrana geliyor ("SIM'den okundu"), hemen altında
+**"Numara okunamadı — sunucuya ulaşılamadı."** yazıyor.
+
+Sebep: `tekrariAyarla` **çağrılıyordu ama hiç tanımlı değildi** (`tekrarZamani`
+de öyle). Bir Python yaması eşleşmemiş, ben çıktıya güvenip doğrulamamıştım.
+Akış: `numarayiYerlestir` numarayı basıyor → `tekrariAyarla(o)` **ReferenceError**
+→ `catch` "sunucuya ulaşılamadı" diyor. `durumuIzle(false)` de aynı hatayı
+atıyordu, yani **kurulum başlatma** da kırılmıştı.
+
+Neden yakalanmadı: `node --check` çalışma-anı hatasını görmez ve `app.js`'in
+**hiçbir otomatik kapsaması yoktu**.
+
+Yapılanlar:
+1. Eksik bildirim + fonksiyon eklendi.
+2. `degerlendir()`'de **ağ ile çizim ayrıldı**: çizim hatası artık "sunucuya
+   ulaşılamadı" diye bildirilmiyor. Yanlış teşhis bu karışımdan geliyordu.
+3. Nöbetçi test `tests/arayuz-tanimsiz.test.js`: arayüz kodunda tanımsız isim
+   arıyor. **Mutasyonla kanıtlandı** — tanımı geçici olarak kaldırdım, test
+   tam o iki ismi bildirdi (`tekrarZamani`, `tekrariAyarla`).
+
+Süreç dersi: ters bölü yoğun dosyaları iç içe kabuk/python heredoc'larıyla
+yazmak kaçışları tutarsız eziyor (aynı dosyada `` sağlam kalırken `\s`
+bozuldu — regex hiçbir şeyi eşleştirmiyordu ve test sessizce yanlış sonuç
+veriyordu). Böyle dosyalar doğrudan yazılmalı, yamayla değil.
+
+
 Kanıtla sınandı, savunulamayan düzeltildi.
 
 | Karşı tez | Sonuç |
@@ -151,7 +179,7 @@ gerekmez: o yol nvram'a hiçbir şey yazmıyor — 2026-08-28'de `m1s1simpin` bo
 ## Faydalı komutlar
 
 ```bash
-npm test                                      # 196 test, cihaz gerektirmez
+npm test                                      # 199 test, cihaz gerektirmez
 node --env-file=.env ricon.js sunucu          # test arayüzü :8080
 node --env-file=.env ricon.js degerlendir     # durum + ne eksik (~5 sn)
 node --env-file=.env ricon.js numara          # SADECE telefon numarası
