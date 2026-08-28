@@ -16,12 +16,22 @@ test("her sorun kodunun TURKCE karsiligi var", () => {
   assert.deepEqual(eksik, [], `cevirisi olmayan kodlar: ${eksik.join(", ")}`);
 });
 
-test("Turkce metinler ekrana hazir: baslik + ne yapilacak, TEK satir baslik", () => {
+// KISA OLACAK. Tezgahtaki teknisyen paragraf okumaz; uzun metin ekranda
+// gercek bilgiyi (kalan hak, numara) asagi itiyor. Ust sinirlar bilincli:
+// baslik bir ETIKET, neYap TEK eylem.
+const BASLIK_UST = 40;
+const NEYAP_UST = 90;
+
+test("Turkce metinler KISA: baslik <= 40, neYap <= 90 karakter", () => {
   for (const kod of PROBLEM_CODES) {
     const t = sorunTr(kod);
     assert.ok(t.baslik?.length > 3, `${kod}: baslik yok`);
-    assert.ok(t.neYap?.length > 10, `${kod}: neYap yok`);
+    assert.ok(t.neYap?.length > 3, `${kod}: neYap yok`);
     assert.ok(!t.baslik.includes("\n"), `${kod}: baslik tek satir olmali`);
+    assert.ok(t.baslik.length <= BASLIK_UST,
+      `${kod}: baslik ${t.baslik.length} karakter, ust sinir ${BASLIK_UST}`);
+    assert.ok(t.neYap.length <= NEYAP_UST,
+      `${kod}: neYap ${t.neYap.length} karakter, ust sinir ${NEYAP_UST}`);
   }
 });
 

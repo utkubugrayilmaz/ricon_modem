@@ -35,9 +35,9 @@ const pinGiris = el("pinGiris");
 const pinIstek = el("pinIstek");
 const pinIstekGiris = el("pinIstekGiris");
 const pinDeneBtn = el("pinDeneBtn");
-const kaynakSatir = el("kaynak");
 const kaynakMetin = el("kaynakMetin");
 const degistirBtn = el("degistirBtn");
+const pinAlan = el("pinAlan");
 const pinKaldirBtn = el("pinKaldirBtn");
 const pinEtiketNot = el("pinEtiketNot");
 const pinNot = el("pinNot");
@@ -65,7 +65,8 @@ pinDeneBtn.disabled = true;
 // kalktı değil, YEDEĞE indi: numara SIM'de yazılı olmayabilir ya da SIM
 // PIN kilitliyken abone verisi hiç açılmaz. O durumda ekran bugünkü gibi
 // çalışır — operatör yazar.
-let kilitli = false;              // numara cihazdan geldi, alan salt-okunur
+// Numara SALT GORUNTU baslar. Duzenleme tek kapidan acilir: "Degistir".
+let kilitli = true;
 let pinHakYakildi = false;        // bu modemde PIN denemesi harcandı
 let okunuyor = false;             // değerlendirme sürüyor
 let otomatikDolduruldu = false;   // alandaki numara cihazdan mı geldi
@@ -130,27 +131,23 @@ gizliGiris.addEventListener("blur", haneleriBoya);
 gizliGiris.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !baslatBtn.disabled) baslatBtn.click();
 });
-haneler.addEventListener("click", () => { if (!kilitli) gizliGiris.focus(); });
-gizliGiris.focus();
 haneleriBoya();
 
-// "Değiştir": cihazdan gelen numarayi elle duzeltmenin TEK kapisi. Kilidi
-// acar ama numarayi SILMEZ — operator genelde tek haneyi duzeltir.
+// Duzenlemenin TEK kapisi. Numarayi SILMEZ — genelde tek hane duzeltilir.
 degistirBtn.addEventListener("click", () => {
-  kilidiAc("elle düzeltiliyor");
+  kilidiAc();
   gizliGiris.focus();
   gizliGiris.setSelectionRange(gizliGiris.value.length, gizliGiris.value.length);
 });
 
-function kilidiAc(metin) {
+function kilidiAc() {
   kilitli = false;
   gizliGiris.readOnly = false;
-  if (metin) kaynakMetin.textContent = metin;
-  degistirBtn.hidden = Boolean(metin);
+  kaynakMetin.textContent = "elle giriliyor";
+  degistirBtn.hidden = true;
   haneleriBoya();
 }
 
-// Numarayi CIHAZDAN gelmis olarak yerlestirir: alan dolar ve kilitlenir.
 function numarayiYerlestir(girdi) {
   gizliGiris.value = girdi;
   kilitli = true;
@@ -158,25 +155,23 @@ function numarayiYerlestir(girdi) {
   gizliGiris.readOnly = true;
   kaynakMetin.textContent = "SIM'den okundu";
   degistirBtn.hidden = false;
-  kaynakSatir.hidden = false;
   haneleriBoya();
 }
 
-// Cihaz gittiginde: OTOMATIK gelen numara artik baska bir modeme aittir,
-// silinir. Operatorun ELLE yazdigina dokunulmaz — onu silmek kullanicinin
-// isini cope atmak olur.
+// Cihaz gittiginde: OTOMATIK gelen numara baska bir modeme aittir, silinir.
+// Operatorun ELLE yazdigina dokunulmaz.
 function numarayiSifirla() {
   if (otomatikDolduruldu) gizliGiris.value = "";
   otomatikDolduruldu = false;
-  kilitli = false;
-  gizliGiris.readOnly = false;
-  kaynakSatir.hidden = true;
+  kilitli = true;
+  gizliGiris.readOnly = true;
+  kaynakMetin.textContent = "";
   degistirBtn.hidden = false;
-  // PIN durumu da MODEME ÖZEL: yeni cihaz yeni SIM demek, yanmış hak devrolmaz.
+  // PIN durumu MODEME OZEL: yeni cihaz yeni SIM, yanmis hak devrolmaz.
   pinHakYakildi = false;
   pinAkis.hidden = true;
   pinAkis.textContent = "";
-  pinAlaniniSadelestir();
+  pinAlaniniGizle();
   haneleriBoya();
 }
 
@@ -209,15 +204,13 @@ async function durumuTazele() {
       ustDurum.dataset.hal = d.modem.konum;
       ustDurum.textContent = `modem ${d.modem.host} (${d.modem.konum})`;
       if (!okunuyor && !degerlendirmeSonucu) {
-        ipucu.textContent = d.modem.konum === "saha"
-          ? "Bu modem zaten kurulmuş görünüyor; başlatırsan doğrulanır."
-          : "Modem hazır.";
+        ipucu.textContent = d.modem.konum === "saha" ? "Zaten kurulmuş." : "Modem hazır.";
       }
       degerlendirmeyiTetikle(d);
     } else {
       ustDurum.dataset.hal = "bekle";
       ustDurum.textContent = "modem yok";
-      ipucu.textContent = "Modemi LAN portundan tak.";
+      ipucu.textContent = "Modemi tak.";
       // Cihaz gitti: bir sonraki modem KENDI okumasini hak eder.
       if (degerlendirilenHost || degerlendirmeSonucu) {
         degerlendirilenHost = null;
@@ -265,7 +258,7 @@ async function degerlendir(host) {
     okumayiUygula(o);
   } catch {
     ipucu.dataset.hal = "hata";
-    ipucu.textContent = "Numara okunamadı (sunucuya ulaşılamadı) — elle girebilirsin.";
+    ipucu.textContent = "Numara okunamadı — sunucuya ulaşılamadı.";
   } finally {
     okunuyor = false;
     haneleriBoya();
@@ -277,18 +270,16 @@ async function degerlendir(host) {
 function okumayiUygula(o) {
   if (o.telefon?.girdi) {
     numarayiYerlestir(o.telefon.girdi);
-    pinAlaniniSadelestir();
+    pinAlaniniGizle();
     ipucu.removeAttribute("data-hal");
-    ipucu.textContent = o.baslatilabilir
-      ? "Numara SIM'den okundu. Başlatabilirsin."
-      : `Numara okundu, ama eksik var: ${o.eksik.join(", ")}.`;
+    ipucu.textContent = o.baslatilabilir ? "" : `eksik: ${o.eksik.join(", ")}`;
     return;
   }
   // Numara gelmedi — sebebe göre ayrılıyoruz.
   numarayiSifirla();
   ipucu.dataset.hal = "hata";
   if (o.eksik?.includes("sim")) {
-    ipucu.textContent = "SIM takılı değil — tak, sonra numara kendiliğinden gelir.";
+    ipucu.textContent = "SIM takılı değil.";
     return;
   }
   if (o.eksik?.includes("pin")) {
@@ -298,57 +289,46 @@ function okumayiUygula(o) {
     pinKilidiIste(o.sim, o.pin_kaldirilabilir);
     return;
   }
-  ipucu.textContent = "Numara SIM'e yazılı değil — elle gir.";
+  ipucu.textContent = "Numara SIM'de yok — elle gir.";
   gizliGiris.focus();
 }
 
-// SIM kilitli: PIN alanını "bilirsen yaz" olmaktan çıkarıp ASIL İŞ haline
-// getirir. Kalan hak burada yazıyor — operatör neyi riske attığını denemeden
-// görsün diye.
+// SIM kilitli: PIN alanini ACAR. Kalan hak yaziyor — operator neyi riske
+// attigini denemeden gorsun.
 function pinKilidiIste(sim, uygunluk) {
   const kalan = sim?.pin_kalan;
-  ipucu.textContent = "SIM PIN kilitli — kilitliyken numara okunamıyor.";
+  pinAlan.hidden = false;
+  ipucu.textContent = "SIM PIN kilitli";
   pinEtiketNot.textContent = kalan === null || kalan === undefined
-    ? "— SIM kilitli, PIN gerekiyor (kalan hak okunamadı)"
-    : `— SIM kilitli, kalan hak: ${kalan}`;
+    ? "— kalan hak okunamadı" : `— kalan hak: ${kalan}`;
 
   // KARAR ÇEKİRDEKTEN: burada yeniden hesaplanmıyor. Uygun değilse düğme
   // hiç görünmez — "yanlışlıkla basılabilecek" bir kapı bırakmıyoruz.
+  // Uygun degilse dugme yok: yanlislikla basilacak kapi birakmiyoruz.
   if (uygunluk && uygunluk.uygun === false) {
     pinKaldirBtn.hidden = true;
-    pinNot.innerHTML = uygunluk.sebep === "PIN_HAK_YANMIS"
-      ? "<strong>Bu SIM'de daha önce bir hak yanmış.</strong> PIN'den %100 emin"
-        + " olmadan deneme — yanlış PIN bir hak daha yakar. PIN'i operatör"
-        + " kaydından doğrula; eminsen terminalden"
-        + " <code>ricon.js sim-pin-kaldir --pin ... --uygula --zorla</code>."
-      : uygunluk.sebep === "PIN_LAST_ATTEMPT"
-        ? "<strong>SON HAK.</strong> Araç bu SIM'de PIN denemez — yanlış PIN"
-          + " SIM'i PUK'a kilitler. SIM'i telefona takıp orada aç."
-        : uygunluk.sebep === "SIM_PUK_LOCKED"
-          ? "<strong>SIM PUK kilitli.</strong> PIN yazmak işe yaramaz;"
-            + " telefondan PUK ile açılması gerekir."
-          : "Bu SIM'de kilit kaldırma denenmeyecek.";
-    pinGiris.blur();
+    pinGiris.disabled = true;
+    pinNot.textContent = {
+      PIN_HAK_YANMIS: "Daha önce bir hak yanmış — denenmeyecek.",
+      PIN_LAST_ATTEMPT: "Son hak — denenmeyecek. SIM'i telefonda aç.",
+      SIM_PUK_LOCKED: "PUK kilitli. Telefondan PUK ile aç.",
+    }[uygunluk.sebep] ?? "Denenmeyecek.";
     return;
   }
 
-  pinNot.innerHTML = "PIN <strong>SIM'in kendisinden</strong> kaldırılır:"
-    + " cihazda parola saklanmaz, SIM bundan sonra her modemde açık gelir."
-    + " <strong>Tek deneme yapılır</strong> — yanlış PIN bir hak yakar."
-    + (kalan === null || kalan === undefined
-      ? " Kalan hak okunamadı: PIN'den emin ol."
-      : "");
+  pinGiris.disabled = false;
+  pinNot.textContent = "Tek deneme. Kilit SIM'den kalıcı kalkar.";
   pinKaldirBtn.hidden = false;
   pinKaldirBtn.disabled = !/^\d{4,8}$/.test(pinGiris.value);
   pinGiris.focus();
 }
 
-// PIN alanını normal haline döndürür (kilit yok ya da kaldırıldı).
-function pinAlaniniSadelestir() {
+function pinAlaniniGizle() {
+  pinAlan.hidden = true;
   pinKaldirBtn.hidden = true;
-  pinEtiketNot.textContent = "— biliyorsan yaz, boş da bırakabilirsin";
-  pinNot.innerHTML = "Sadece internet gelmezse denenir. Kilitli olmayan SIM'e"
-    + " <strong>yazılmaz</strong> — 3 yanlış deneme SIM'i PUK'a kilitler.";
+  pinGiris.disabled = false;
+  pinEtiketNot.textContent = "";
+  pinNot.textContent = "";
 }
 
 // --- PIN kilidini kaldır: SSE akışı ---
@@ -374,10 +354,9 @@ function pinKilidiniKaldir() {
   pinAkim.addEventListener("sim_kilit", (e) => {
     const o = JSON.parse(e.data);
     if (o.kilit === "puk") {
-      yaz(`SIM PUK KİLİTLİ (kalan ${o.puk_kalan ?? "?"}) — PIN yazmak işe yaramaz,`
-        + " SIM'i telefona takıp PUK ile aç.");
+      yaz(`SIM PUK kilitli (kalan ${o.puk_kalan ?? "?"}) — telefondan PUK ile aç.`);
     } else {
-      yaz(`SIM durumu: ${o.durum} · kalan PIN hakkı: ${o.pin_kalan ?? "?"}`);
+      yaz(`${o.durum} · kalan hak: ${o.pin_kalan ?? "?"}`);
     }
   });
   pinAkim.addEventListener("pin_kaldir_sonuc", (e) => {
@@ -399,8 +378,8 @@ function pinBitir(basarili, o) {
   pinGiris.value = "";             // PIN hiçbir yerde durmaz, ekranda da
   if (basarili) {
     pinAkis.dataset.hal = "tamam";
-    pinAkis.textContent = "PIN kilidi kaldırıldı. Numara okunuyor…";
-    pinAlaniniSadelestir();
+    pinAkis.textContent = "kilit kaldırıldı · numara okunuyor…";
+    pinAlaniniGizle();
     // Zincirin son halkası: kilit kalktı → SIM artık abone verisini veriyor →
     // numarayı ŞİMDİ oku. Aynı modem için tekrar okuyacağız, bayrağı temizle.
     degerlendirilenHost = null;
@@ -418,7 +397,7 @@ function pinBitir(basarili, o) {
   // tekrar denemeyi kapatmak operatörü boşuna kilitler.
   pinHakYakildi = (o?.problems || []).some((p) => p.kod === "PIN_REJECTED");
   pinAkis.textContent = o?.acildi
-    ? "SIM açıldı ama kilit kalıcı kaldırılamadı — kurulum devam edebilir."
+    ? "SIM açıldı, kilit kalıcı kalkmadı."
     : (ilk?.baslik || "PIN kilidi kaldırılamadı")
       + (ilk?.neYap ? `\n${ilk.neYap}` : "");
   pinKaldirBtn.disabled = pinHakYakildi || !/^\d{4,8}$/.test(pinGiris.value);
@@ -938,7 +917,7 @@ pinDeneBtn.addEventListener("click", () => {
   pinDeneBtn.disabled = true;
   altBar.removeAttribute("data-hal");
   altDurum.textContent = "SIM PIN deneniyor…";
-  akisaYaz("PIN denemesi başlatıldı (yalnızca PIN yazılır)");
+  akisaYaz("PIN deneniyor");
   if (akim) { akim.close(); akim = null; }
   akim = new EventSource(`/api/pin?pin=${encodeURIComponent(p)}`);
   for (const tur of ["ilerleme", "internet_bekleniyor", "internet", "reboot",
@@ -950,7 +929,7 @@ pinDeneBtn.addEventListener("click", () => {
 function pinOlayi(tur, o) {
   if (tur === "ilerleme") return akisaYaz(o.mesaj);
   if (tur === "reboot") return akisaYaz("modem yeniden başlatılıyor");
-  if (tur === "pin_deneniyor") return akisaYaz("SIM PIN yazılıyor (tek deneme)");
+  if (tur === "pin_deneniyor") return akisaYaz("SIM PIN yazılıyor");
   if (tur === "internet_bekleniyor") {
     altDurum.textContent = `PIN sonrası internet bekleniyor (${o.gecen_sn}/${o.max_sn} sn)`;
     return undefined;

@@ -11,8 +11,8 @@ env
 node_modules/
 *.tgz
 
-# Ham terminal dokumu — parola hash+kimlik icerir
-docs/manuel_test.md
-docs/konsol_keşfi_manuel.md
-docs/*manuel*
-docs/*_manuel*
+# ARSIV — repoda yeri yok, diskte kalir. Icinde: eski nvram/izleme anlik
+# goruntuleri, modem arayuzu ekran goruntuleri, ham terminal dokumleri
+# (parola hash + kimlik icerir). Hicbiri kod ya da test tarafindan
+# KULLANILMIYOR (2026-08-28 referans taramasiyla dogrulandi).
+arsiv/
