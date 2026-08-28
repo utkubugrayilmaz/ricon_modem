@@ -11,8 +11,8 @@ import {
   simUnlockDecision, isSimLockEligible, PIN_TOTAL_DEFAULT,
 } from "../src/at.js";
 
-const locked = (pinRemaining, ek = {}) => ({
-  status: "SIM PIN", lock: "pin", ready: false, pinRemaining, pukRemaining: 10, ...ek,
+const locked = (pinRemaining, extra = {}) => ({
+  status: "SIM PIN", lock: "pin", ready: false, pinRemaining, pukRemaining: 10, ...extra,
 });
 
 test("kilitli SIM, hak EL DEGMEMIS (3/3) -> izin", () => {

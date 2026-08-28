@@ -23,7 +23,7 @@ const notify = (options, message) => { if (typeof options.onProgress === "functi
 
 // --- dogrula: ortam/erisim teshisi ---
 export async function checkDevice(options) {
-  const { host, sourceIp, kimlik } = options;
+  const { host, sourceIp, credentials } = options;
   const report = { timestamp: now(), command: "dogrula", modemIp: host, problems: [] };
   report.localIfaces = localInterfaces();
   report.sourceIp = sourceIp || null;
@@ -33,53 +33,53 @@ export async function checkDevice(options) {
   if (!report.erisilebilir) report.problems.push(problem("DEVICE_UNREACHABLE", host));
 
   if (report.erisilebilir) {
-    const c = new Client({ host, sourceIp, kimlik });
-    const sistem = await c.get("/asp/status/Info.live.htm");
-    report.sistem_ucu = { code: sistem.code, boyut: sistem.body?.length ?? 0 };
-    const korumali = await c.get("/asp/status/Status_Internet.live.asp");
-    report.kimlikli_uc = { code: korumali.code };
-    report.problems.push(...korumali.problems);
+    const c = new Client({ host, sourceIp, credentials });
+    const system = await c.get("/asp/status/Info.live.htm");
+    report.systemEndpoint = { code: system.code, bytes: system.body?.length ?? 0 };
+    const guarded = await c.get("/asp/status/Status_Internet.live.asp");
+    report.authEndpoint = { code: guarded.code };
+    report.problems.push(...guarded.problems);
   }
-  report.identityReady = Boolean(kimlik);
+  report.identityReady = Boolean(credentials);
   report.ok = isOk(report.problems);
   return report;
 }
 
 // --- oku: HER SEYI cek (sistem + SIM + ayar + nvram) ---
 export async function readDevice(options) {
-  const { host, sourceIp, kimlik } = options;
+  const { host, sourceIp, credentials } = options;
   if (isHostBusy(host)) {
     return { timestamp: now(), command: "oku", modemIp: host, ok: false,
       problems: [problem("DEVICE_BUSY", host)] };
   }
   lockHost(host);
   try {
-    const c = new Client({ host, sourceIp, kimlik });
+    const c = new Client({ host, sourceIp, credentials });
     const report = {
-      timestamp: now(), command: "oku", modemIp: host, identityReady: Boolean(kimlik),
-      uclar: {}, ham_alanlar: {}, problems: [],
+      timestamp: now(), command: "oku", modemIp: host, identityReady: Boolean(credentials),
+      endpoints: {}, rawFields: {}, problems: [],
     };
     for (const uc of ENDPOINTS) {
       notify(options, `oku ${uc.path}`);
       const r = await c.get(uc.path);
-      report.uclar[uc.name] = { path: uc.path, code: r.code, boyut: r.body?.length ?? 0, kind: uc.kind };
+      report.endpoints[uc.name] = { path: uc.path, code: r.code, bytes: r.body?.length ?? 0, kind: uc.kind };
       report.problems.push(...r.problems.filter((p) => p.severity === "error" || p.code === "AUTH_REQUIRED"));
       if (!r.ok || !r.body) continue;
       if (uc.bicim === "ddwrt") {
-        Object.assign(report.ham_alanlar, parsePairs(r.body));
+        Object.assign(report.rawFields, parsePairs(r.body));
       } else if (uc.bicim === "nvram") {
         const { values, count, problems } = parseNvram(r.govdeBuf);
         report.nvram = values;
         report.nvramKeyCount = count;
         report.problems.push(...problems);
       } else {
-        report.uclar[uc.name].ham_html_boyut = r.body.length;
+        report.endpoints[uc.name].rawHtmlBytes = r.body.length;
       }
     }
-    const { sim1, sim2 } = simView(report.ham_alanlar);
+    const { sim1, sim2 } = simView(report.rawFields);
     report.sim1 = sim1;
     report.sim2 = sim2;
-    report.sistem = systemView(report.ham_alanlar);
+    report.system = systemView(report.rawFields);
     report.ok = isOk(report.problems);
     return report;
   } finally {
@@ -114,14 +114,14 @@ export async function discoverDevice(options) {
   });
   report.arp = await arpTable(subnetPrefix(host));
   report.mac = report.arp[host] || null;
-  report.mac_uretici = guessVendor(report.mac);
+  report.macVendor = guessVendor(report.mac);
   // IPv6 komsu tablosu: cihazin IPv4'u bilinmiyorsa (yanlis alt ag) OUI'den
   // yine de "orada bir Ricon var" denebilir — yanlis-IP teshisini kolaylastirir.
   report.ipv6_komsular = (await ipv6Neighbors())
     .map((k) => ({ ...k, uretici: guessVendor(k.mac) }))
     .filter((k) => k.uretici);
 
-  const c = new Client({ host, sourceIp, kimlik: null });
+  const c = new Client({ host, sourceIp, credentials: null });
   notify(options, "HTTP parmak izi");
   const kok = await c.get("/");
   report.http = {
@@ -138,12 +138,12 @@ export async function discoverDevice(options) {
 // --- konsol: telnet root shell (salt okunur) ---
 // opts.nvram=true ise tam nvram; degilse sistem kesfi.
 export async function readConsole(options) {
-  const { host, sourceIp, kimlik, nvram = false } = options;
-  if (!kimlik) {
+  const { host, sourceIp, credentials, nvram = false } = options;
+  if (!credentials) {
     return { timestamp: now(), command: "konsol", modemIp: host, ok: false,
       problems: [problem("AUTH_REQUIRED", "telnet 5123")] };
   }
-  const consoleOptions = { host, sourceIp, username: kimlik.username, password: kimlik.password };
+  const consoleOptions = { host, sourceIp, username: credentials.username, password: credentials.password };
   const report = { timestamp: now(), command: "konsol", modemIp: host, problems: [] };
   if (nvram) {
     notify(options, "nvram tam dokumu (CLI)");

@@ -6,8 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { simPinTarget } from "../src/index.js";
 
-const lock = (ek = {}) => ({ lock: "pin", pinRemaining: 3, pinTotal: 3,
-  pukRemaining: 10, pukTotal: 10, ...ek });
+const lock = (extra = {}) => ({ lock: "pin", pinRemaining: 3, pinTotal: 3,
+  pukRemaining: 10, pukTotal: 10, ...extra });
 const codes = (r) => r.problems.map((p) => p.code);
 
 test("1-2) KILIT YOK -> DOKUNMA (sakli PIN SIM'i aciyor olabilir)", () => {

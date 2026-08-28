@@ -126,13 +126,13 @@ test("konsolKimligi: duz kullanici/sifre oldugu gibi gelir", () => {
 });
 
 test("konsolKimligi: ic ice {kimlik} bicimini de kabul eder", () => {
-  assert.deepEqual(consoleCredentials({ kimlik: { username: "riconadmin", password: "s3cr3t" } }),
+  assert.deepEqual(consoleCredentials({ credentials: { username: "riconadmin", password: "s3cr3t" } }),
     { username: "riconadmin", password: "s3cr3t" });
 });
 
 test("konsolKimligi: duz bicim ic ice bicimi ezer (acik olan kazanir)", () => {
   assert.deepEqual(consoleCredentials({ username: "acik", password: "a",
-    kimlik: { username: "gizli", password: "g" } }), { username: "acik", password: "a" });
+    credentials: { username: "gizli", password: "g" } }), { username: "acik", password: "a" });
 });
 
 test("konsolKimligi: hicbiri yoksa kullanici null (sifre bos string)", () => {

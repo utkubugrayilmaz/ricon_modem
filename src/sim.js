@@ -75,14 +75,14 @@ export function phoneInputFormat(raw) {
 // SIM/hucresel bilgisini okur. opts: { host, kaynakIp, kimlik, telefon? }
 // Doner: sonuc nesnesi (throw etmez).
 export async function readSim(options) {
-  const { host, sourceIp, kimlik, phone } = options;
+  const { host, sourceIp, credentials, phone } = options;
   const report = { timestamp: now(), command: "sim", modemIp: host, problems: [] };
-  if (!kimlik) {
+  if (!credentials) {
     report.problems.push(problem("AUTH_REQUIRED", SIM_ENDPOINT));
     report.ok = false;
     return report;
   }
-  const c = new Client({ host, sourceIp, kimlik });
+  const c = new Client({ host, sourceIp, credentials });
   const r = await c.get(SIM_ENDPOINT);
   report.problems.push(...r.problems.filter((p) => p.severity === "error"));
   const { sim1, sim2 } = simView(parsePairs(r.body || ""));

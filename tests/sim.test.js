@@ -18,7 +18,7 @@ test("normalizePhone: gecersiz -> null", () => {
 });
 
 test("readSim: kimliksiz AUTH_REQUIRED (cihaza gitmez)", async () => {
-  const r = await readSim({ host: "127.0.0.1", kimlik: null });
+  const r = await readSim({ host: "127.0.0.1", credentials: null });
   assert.equal(r.ok, false);
   assert.equal(r.problems[0].code, "AUTH_REQUIRED");
 });

@@ -30,12 +30,12 @@ export const TCP_PORTS = Object.freeze([
 // tarama yanlis guven verir. Tek gereken UDP servisi SNMP; o snmp.js'te
 // dogrudan gercek bir GET ile yoklanir (kesin cevap).
 
-// HTTP uclari. tur: "sistem" = kimliksiz erisilebilir (2026-08-26 dogrulandi),
+// HTTP uclari. tur: "system" = kimliksiz erisilebilir (2026-08-26 dogrulandi),
 // "kimlik" = HTTP Basic gerekli, "config" = tam yapilandirma yedegi.
 // Not: bu firmware'de canli veri .live.htm (sistem) ve .live.asp (kimlikli).
 export const ENDPOINTS = Object.freeze([
-  { name: "info", path: "/asp/status/Info.htm", kind: "sistem", bicim: "html" },
-  { name: "info_live", path: "/asp/status/Info.live.htm", kind: "sistem", bicim: "ddwrt" },
+  { name: "info", path: "/asp/status/Info.htm", kind: "system", bicim: "html" },
+  { name: "info_live", path: "/asp/status/Info.live.htm", kind: "system", bicim: "ddwrt" },
   { name: "internet_live", path: "/asp/status/Status_Internet.live.asp", kind: "kimlik", bicim: "ddwrt" },
   { name: "wireless_live", path: "/asp/status/Status_Wireless.live.asp", kind: "kimlik", bicim: "ddwrt" },
   { name: "setup_index", path: "/asp/setup/index.asp", kind: "kimlik", bicim: "html" },

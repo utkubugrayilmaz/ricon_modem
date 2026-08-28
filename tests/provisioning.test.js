@@ -65,7 +65,7 @@ test("FIELD_PROFILE: doğrulanmis anahtarlari tasir, hedefler string", () => {
 });
 
 test("applyProvisioning: kimliksiz AUTH_REQUIRED (cihaza gitmez)", async () => {
-  const r = await applyProvisioning({ host: "127.0.0.1", kimlik: null }, FIELD_PROFILE);
+  const r = await applyProvisioning({ host: "127.0.0.1", credentials: null }, FIELD_PROFILE);
   assert.equal(r.ok, false);
   assert.equal(r.problems[0].code, "AUTH_REQUIRED");
 });

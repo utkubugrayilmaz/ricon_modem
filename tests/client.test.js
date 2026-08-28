@@ -46,7 +46,7 @@ test("istemci: kimlikli 401 AUTH_REJECTED verir", async () => {
   try {
     const c = new Client({
       host: "127.0.0.1", port: m.port, timeoutMs: 3000,
-      kimlik: { username: "a", password: "b" },
+      credentials: { username: "a", password: "b" },
     });
     const r = await c.get("/x");
     assert.equal(r.problems[0].code, "AUTH_REJECTED");

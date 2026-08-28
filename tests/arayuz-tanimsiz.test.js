@@ -133,8 +133,8 @@ test("arayuz kodunda TANIMSIZ isim yok", () => {
 
 test("yorum/metin ayiklama TANIMLARI silmiyor", () => {
   const tanim = tanimlananlar(kodIskeleti(readFileSync(KAYNAK, "utf8")));
-  for (const name of ["el", "tekrariAyarla", "numarayiSifirla", "durumuTazele",
-    "okumayiUygula", "pinKilidiIste", "haneleriBoya"]) {
+  for (const name of ["el", "scheduleRetry", "clearNumber", "refreshStatus",
+    "applyAssessment", "askPinUnlock", "paintDigits"]) {
     assert.ok(tanim.has(name), `${name} tanimi ayiklamada kayboldu`);
   }
 });
