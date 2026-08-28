@@ -7,48 +7,48 @@ import { problem } from "../src/problems.js";
 
 test("parseSimStatus: PIN kilidi + KALAN DENEME sayilari (canli metin)", () => {
   const d = parseSimStatus("Need verification PIN code (PIN: 3/3, PUK: 10/10)");
-  assert.equal(d.lock, "pin");
-  assert.equal(d.ready, false);
-  assert.equal(d.pinRemaining, 3);
-  assert.equal(d.pinTotal, 3);
-  assert.equal(d.pukRemaining, 10);
-  assert.equal(d.pukTotal, 10);
+  assert.equal(d.kilit, "pin");
+  assert.equal(d.hazir, false);
+  assert.equal(d.pin_kalan, 3);
+  assert.equal(d.pin_toplam, 3);
+  assert.equal(d.puk_kalan, 10);
+  assert.equal(d.puk_toplam, 10);
 });
 
 test("parseSimStatus: deneme yakildikca kalan DUSER", () => {
   const d = parseSimStatus("Need verification PIN code (PIN: 1/3, PUK: 10/10)");
-  assert.equal(d.pinRemaining, 1, "son hak — otomatik deneme YAPILMAMALI");
+  assert.equal(d.pin_kalan, 1, "son hak — otomatik deneme YAPILMAMALI");
 });
 
 test("parseSimStatus: PUK kilidi PIN kilidiyle KARISTIRILMAZ", () => {
   const d = parseSimStatus("Need verification PUK code (PIN: 0/3, PUK: 9/10)");
-  assert.equal(d.lock, "puk", "PIN degil PUK — PIN yazmak ise yaramaz");
-  assert.equal(d.pinRemaining, 0);
-  assert.equal(d.pukRemaining, 9);
+  assert.equal(d.kilit, "puk", "PIN degil PUK — PIN yazmak ise yaramaz");
+  assert.equal(d.pin_kalan, 0);
+  assert.equal(d.puk_kalan, 9);
 });
 
 test("parseSimStatus: OK -> kilit yok, hazir", () => {
   const d = parseSimStatus("OK");
-  assert.equal(d.lock, null);
-  assert.equal(d.ready, true);
-  assert.equal(d.pinRemaining, null, "sayac yoksa null (0 DEGIL)");
+  assert.equal(d.kilit, null);
+  assert.equal(d.hazir, true);
+  assert.equal(d.pin_kalan, null, "sayac yoksa null (0 DEGIL)");
 });
 
 test("parseSimStatus: SIM yok / gecersiz -> kilit yok ama hazir da degil", () => {
   for (const m of ["Not Insert", "Invalid"]) {
     const d = parseSimStatus(m);
-    assert.equal(d.lock, null);
-    assert.equal(d.ready, false, `"${m}" hazir sayilmamali`);
-    assert.equal(d.raw, m, "ham metin korunur (teshis icin)");
+    assert.equal(d.kilit, null);
+    assert.equal(d.hazir, false, `"${m}" hazir sayilmamali`);
+    assert.equal(d.ham, m, "ham metin korunur (teshis icin)");
   }
 });
 
 test("parseSimStatus: bos/undefined patlamaz", () => {
   for (const m of [null, undefined, "", "   "]) {
     const d = parseSimStatus(m);
-    assert.equal(d.lock, null);
-    assert.equal(d.ready, false);
-    assert.equal(d.raw, null);
+    assert.equal(d.kilit, null);
+    assert.equal(d.hazir, false);
+    assert.equal(d.ham, null);
   }
 });
 

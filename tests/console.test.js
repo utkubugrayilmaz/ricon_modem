@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  iacReply, extractOutput, parseNvramShow, runConsole, consoleCredentials,
+  iacReply, extractOutput, parseNvramShow, runConsole, konsolKimligi,
 } from "../src/console.js";
 
 test("iacReply: DO->WONT, WILL->DONT", () => {
@@ -22,13 +22,13 @@ test("iacReply: IAC yoksa bos", () => {
 
 test("extractOutput: markerlar arasindan ciktiyi alir, ekoyu atlar", () => {
   // Terminal once komutu eko'lar (ayni satirda), sonra gercek ciktiyi basar.
-  const raw =
+  const ham =
     "echo __RCN_BASLA__; uname; echo __RCN_BIT__\r\n" + // eko satiri
     "__RCN_BASLA__\r\n" +
     "Linux router 2.6.36\r\n" +
     "__RCN_BIT__\r\n" +
     "riconadmin@router:~# ";
-  const c = extractOutput(raw);
+  const c = extractOutput(ham);
   assert.equal(c, "Linux router 2.6.36");
 });
 
@@ -41,7 +41,7 @@ test("parseNvramShow: key=value satirlarini cozer, ilk = ile boler", () => {
   const d = parseNvramShow(m);
   assert.equal(d.lan_ipaddr, "192.168.1.1");
   assert.equal(d.wl_ssid, "Ricon-WiFi");
-  assert.equal(d.bos, "");   // anahtar adi CIHAZIN verisi, cevrilmez
+  assert.equal(d.bos, "");
   assert.equal(d.esit, "a=b=c"); // ilk = ile bolundu
 });
 
@@ -53,31 +53,31 @@ test("parseNvramShow: __proto__ prototipi kirletmez", () => {
 
 test("runConsole: salt-okunurda yazan komut reddedilir (I/O yok)", async () => {
   const r = await runConsole(
-    { host: "127.0.0.1", username: "a", password: "b" },
+    { host: "127.0.0.1", kullanici: "a", sifre: "b" },
     ["nvram set lan_ipaddr=5.5.5.1", "nvram commit"],
   );
   assert.equal(r.ok, false);
-  assert.equal(r.problems[0].code, "WRITE_BLOCKED_READONLY");
+  assert.equal(r.problems[0].kod, "WRITE_BLOCKED_READONLY");
 });
 
 test("runConsole: reboot/rm/> gibi tehlikeli komutlar da reddedilir", async () => {
-  for (const command of ["reboot", "rm -rf /", "echo x > /etc/config", "cat a >> b", "sysupgrade x"]) {
+  for (const komut of ["reboot", "rm -rf /", "echo x > /etc/config", "cat a >> b", "sysupgrade x"]) {
     const r = await runConsole(
-      { host: "127.0.0.1", username: "a", password: "b" }, [command],
+      { host: "127.0.0.1", kullanici: "a", sifre: "b" }, [komut],
     );
-    assert.equal(r.problems[0].code, "WRITE_BLOCKED_READONLY", `reddedilmeliydi: ${command}`);
+    assert.equal(r.problems[0].kod, "WRITE_BLOCKED_READONLY", `reddedilmeliydi: ${komut}`);
   }
 });
 
 test("runConsole: masum yonlendirmeler (2>/dev/null, 2>&1) SERBEST", async () => {
   // Bu komutlar yazma-korumasina TAKILMAMALI (I/O baslamadan, kapali port ->
   // baglanti hatasi bekleriz; yani WRITE_BLOCKED olmamali).
-  for (const command of ["nvram show 2>/dev/null", "dmesg 2>&1 | tail"]) {
+  for (const komut of ["nvram show 2>/dev/null", "dmesg 2>&1 | tail"]) {
     const r = await runConsole(
-      { host: "127.0.0.1", port: 1, username: "a", password: "b", timeoutMs: 800 },
-      [command],
+      { host: "127.0.0.1", port: 1, kullanici: "a", sifre: "b", zamanAsimiMs: 800 },
+      [komut],
     );
-    assert.notEqual(r.problems[0]?.code, "WRITE_BLOCKED_READONLY", `serbest olmaliydi: ${command}`);
+    assert.notEqual(r.problems[0]?.kod, "WRITE_BLOCKED_READONLY", `serbest olmaliydi: ${komut}`);
   }
 });
 
@@ -121,22 +121,22 @@ test("parseNvramShow: bastaki devam satiri anahtarsizsa yutulur (patlamaz)", () 
 // "telefon okunamadi". Yanlis bir sey yapilmiyordu; iki katmanin SOZLESMESI
 // farkliydi. Cozum: sinirda tek yerde normalize et.
 test("konsolKimligi: duz kullanici/sifre oldugu gibi gelir", () => {
-  assert.deepEqual(consoleCredentials({ username: "riconadmin", password: "s3cr3t" }),
-    { username: "riconadmin", password: "s3cr3t" });
+  assert.deepEqual(konsolKimligi({ kullanici: "riconadmin", sifre: "s3cr3t" }),
+    { kullanici: "riconadmin", sifre: "s3cr3t" });
 });
 
 test("konsolKimligi: ic ice {kimlik} bicimini de kabul eder", () => {
-  assert.deepEqual(consoleCredentials({ kimlik: { username: "riconadmin", password: "s3cr3t" } }),
-    { username: "riconadmin", password: "s3cr3t" });
+  assert.deepEqual(konsolKimligi({ kimlik: { kullanici: "riconadmin", sifre: "s3cr3t" } }),
+    { kullanici: "riconadmin", sifre: "s3cr3t" });
 });
 
 test("konsolKimligi: duz bicim ic ice bicimi ezer (acik olan kazanir)", () => {
-  assert.deepEqual(consoleCredentials({ username: "acik", password: "a",
-    kimlik: { username: "gizli", password: "g" } }), { username: "acik", password: "a" });
+  assert.deepEqual(konsolKimligi({ kullanici: "acik", sifre: "a",
+    kimlik: { kullanici: "gizli", sifre: "g" } }), { kullanici: "acik", sifre: "a" });
 });
 
 test("konsolKimligi: hicbiri yoksa kullanici null (sifre bos string)", () => {
-  assert.deepEqual(consoleCredentials({}), { username: null, password: "" });
+  assert.deepEqual(konsolKimligi({}), { kullanici: null, sifre: "" });
 });
 
 test("runConsole: kimlik yoksa AGA HIC CIKMAZ, hemen net hata verir", async () => {
@@ -145,6 +145,6 @@ test("runConsole: kimlik yoksa AGA HIC CIKMAZ, hemen net hata verir", async () =
   const t = Date.now();
   const r = await runConsole({ host: "192.0.2.1" }, ["uname -a"]);
   assert.equal(r.ok, false);
-  assert.equal(r.problems[0].code, "CONSOLE_NO_CREDENTIALS");
+  assert.equal(r.problems[0].kod, "CONSOLE_KIMLIK_YOK");
   assert.ok(Date.now() - t < 500, "kimliksiz cagri aga cikmadan donmeli");
 });

@@ -18,146 +18,146 @@ import { consoleRecon, consoleNvram } from "./console.js";
 import { problem, isOk } from "./problems.js";
 
 const now = () => new Date().toISOString();
-const subnetPrefix = (host) => host.split(".").slice(0, 3).join(".") + ".";
-const notify = (options, message) => { if (typeof options.onProgress === "function") options.onProgress(message); };
+const onekAl = (host) => host.split(".").slice(0, 3).join(".") + ".";
+const bildir = (opts, mesaj) => { if (typeof opts.ilerle === "function") opts.ilerle(mesaj); };
 
 // --- dogrula: ortam/erisim teshisi ---
-export async function checkDevice(options) {
-  const { host, sourceIp, kimlik } = options;
-  const report = { timestamp: now(), command: "dogrula", modemIp: host, problems: [] };
-  report.localIfaces = localInterfaces();
-  report.sourceIp = sourceIp || null;
-  if (!sourceIp) report.problems.push(problem("NO_SOURCE_IP", `${subnetPrefix(host)}50`));
+export async function checkDevice(opts) {
+  const { host, kaynakIp, kimlik } = opts;
+  const rapor = { zaman: now(), komut: "dogrula", modem_ip: host, problems: [] };
+  rapor.yerel_arayuzler = localInterfaces();
+  rapor.kaynak_ip = kaynakIp || null;
+  if (!kaynakIp) rapor.problems.push(problem("NO_SOURCE_IP", `${onekAl(host)}50`));
 
-  report.erisilebilir = await isReachable(host, sourceIp);
-  if (!report.erisilebilir) report.problems.push(problem("DEVICE_UNREACHABLE", host));
+  rapor.erisilebilir = await isReachable(host, kaynakIp);
+  if (!rapor.erisilebilir) rapor.problems.push(problem("DEVICE_UNREACHABLE", host));
 
-  if (report.erisilebilir) {
-    const c = new Client({ host, sourceIp, kimlik });
+  if (rapor.erisilebilir) {
+    const c = new Client({ host, kaynakIp, kimlik });
     const sistem = await c.get("/asp/status/Info.live.htm");
-    report.sistem_ucu = { code: sistem.code, boyut: sistem.body?.length ?? 0 };
+    rapor.sistem_ucu = { kod: sistem.kod, boyut: sistem.govde?.length ?? 0 };
     const korumali = await c.get("/asp/status/Status_Internet.live.asp");
-    report.kimlikli_uc = { code: korumali.code };
-    report.problems.push(...korumali.problems);
+    rapor.kimlikli_uc = { kod: korumali.kod };
+    rapor.problems.push(...korumali.problems);
   }
-  report.identityReady = Boolean(kimlik);
-  report.ok = isOk(report.problems);
-  return report;
+  rapor.kimlik_hazir = Boolean(kimlik);
+  rapor.ok = isOk(rapor.problems);
+  return rapor;
 }
 
 // --- oku: HER SEYI cek (sistem + SIM + ayar + nvram) ---
-export async function readDevice(options) {
-  const { host, sourceIp, kimlik } = options;
+export async function readDevice(opts) {
+  const { host, kaynakIp, kimlik } = opts;
   if (isHostBusy(host)) {
-    return { timestamp: now(), command: "oku", modemIp: host, ok: false,
+    return { zaman: now(), komut: "oku", modem_ip: host, ok: false,
       problems: [problem("DEVICE_BUSY", host)] };
   }
   lockHost(host);
   try {
-    const c = new Client({ host, sourceIp, kimlik });
-    const report = {
-      timestamp: now(), command: "oku", modemIp: host, identityReady: Boolean(kimlik),
+    const c = new Client({ host, kaynakIp, kimlik });
+    const rapor = {
+      zaman: now(), komut: "oku", modem_ip: host, kimlik_hazir: Boolean(kimlik),
       uclar: {}, ham_alanlar: {}, problems: [],
     };
     for (const uc of ENDPOINTS) {
-      notify(options, `oku ${uc.path}`);
-      const r = await c.get(uc.path);
-      report.uclar[uc.name] = { path: uc.path, code: r.code, boyut: r.body?.length ?? 0, kind: uc.kind };
-      report.problems.push(...r.problems.filter((p) => p.severity === "error" || p.code === "AUTH_REQUIRED"));
-      if (!r.ok || !r.body) continue;
+      bildir(opts, `oku ${uc.yol}`);
+      const r = await c.get(uc.yol);
+      rapor.uclar[uc.ad] = { yol: uc.yol, kod: r.kod, boyut: r.govde?.length ?? 0, tur: uc.tur };
+      rapor.problems.push(...r.problems.filter((p) => p.severity === "error" || p.kod === "AUTH_REQUIRED"));
+      if (!r.ok || !r.govde) continue;
       if (uc.bicim === "ddwrt") {
-        Object.assign(report.ham_alanlar, parsePairs(r.body));
+        Object.assign(rapor.ham_alanlar, parsePairs(r.govde));
       } else if (uc.bicim === "nvram") {
-        const { values, count, problems } = parseNvram(r.govdeBuf);
-        report.nvram = values;
-        report.nvramKeyCount = count;
-        report.problems.push(...problems);
+        const { degerler, sayi, problems } = parseNvram(r.govdeBuf);
+        rapor.nvram = degerler;
+        rapor.nvram_anahtar_sayisi = sayi;
+        rapor.problems.push(...problems);
       } else {
-        report.uclar[uc.name].ham_html_boyut = r.body.length;
+        rapor.uclar[uc.ad].ham_html_boyut = r.govde.length;
       }
     }
-    const { sim1, sim2 } = simView(report.ham_alanlar);
-    report.sim1 = sim1;
-    report.sim2 = sim2;
-    report.sistem = systemView(report.ham_alanlar);
-    report.ok = isOk(report.problems);
-    return report;
+    const { sim1, sim2 } = simView(rapor.ham_alanlar);
+    rapor.sim1 = sim1;
+    rapor.sim2 = sim2;
+    rapor.sistem = systemView(rapor.ham_alanlar);
+    rapor.ok = isOk(rapor.problems);
+    return rapor;
   } finally {
     unlockHost(host);
   }
 }
 
 // Info.live.htm ham alanlarindan okunabilir sistem gorunumu.
-export function systemView(raw) {
-  const al = (k) => (raw[k] ?? "").trim() || undefined;
+export function systemView(ham) {
+  const al = (k) => (ham[k] ?? "").trim() || undefined;
   return {
     lan_ip: al("lan_ip"),
-    lanMac: al("lanMac"),
-    lanMacVendor: guessVendor(al("lanMac")),
+    lan_mac: al("lan_mac"),
+    lan_mac_uretici: guessVendor(al("lan_mac")),
     wan_mac1: al("wan_mac1"),
-    wifiStatus: al("wl_radio"),
-    wifiChannel: al("wl_channel"),
+    wifi_durum: al("wl_radio"),
+    wifi_kanal: al("wl_channel"),
     uptime: al("uptime_spe") || al("uptime"),
-    memory: al("mem_info"),
+    bellek: al("mem_info"),
     lan_proto: al("lan_proto"),
   };
 }
 
 // --- kesif: salt-okunur port/parmak-izi/SNMP ---
-export async function discoverDevice(options) {
-  const { host, sourceIp, community = "public" } = options;
-  const report = { timestamp: now(), command: "kesif", modemIp: host, problems: [] };
-  notify(options, "port taramasi");
-  report.ports = (await scanPorts(host, sourceIp, TCP_PORTS)).map((p) => {
-    const tanim = TCP_PORTS.find((k) => k.port === p.port);
-    return { ...p, name: tanim?.name };
+export async function discoverDevice(opts) {
+  const { host, kaynakIp, community = "public" } = opts;
+  const rapor = { zaman: now(), komut: "kesif", modem_ip: host, problems: [] };
+  bildir(opts, "port taramasi");
+  rapor.kapilar = (await scanPorts(host, kaynakIp, TCP_PORTS)).map((p) => {
+    const tanim = TCP_PORTS.find((k) => k.kapi === p.kapi);
+    return { ...p, ad: tanim?.ad };
   });
-  report.arp = await arpTable(subnetPrefix(host));
-  report.mac = report.arp[host] || null;
-  report.mac_uretici = guessVendor(report.mac);
+  rapor.arp = await arpTable(onekAl(host));
+  rapor.mac = rapor.arp[host] || null;
+  rapor.mac_uretici = guessVendor(rapor.mac);
   // IPv6 komsu tablosu: cihazin IPv4'u bilinmiyorsa (yanlis alt ag) OUI'den
   // yine de "orada bir Ricon var" denebilir — yanlis-IP teshisini kolaylastirir.
-  report.ipv6_komsular = (await ipv6Neighbors())
+  rapor.ipv6_komsular = (await ipv6Neighbors())
     .map((k) => ({ ...k, uretici: guessVendor(k.mac) }))
     .filter((k) => k.uretici);
 
-  const c = new Client({ host, sourceIp, kimlik: null });
-  notify(options, "HTTP parmak izi");
+  const c = new Client({ host, kaynakIp, kimlik: null });
+  bildir(opts, "HTTP parmak izi");
   const kok = await c.get("/");
-  report.http = {
-    code: kok.code,
-    baslik: (kok.body.match(/<title[^>]*>(.*?)<\/title>/i)?.[1] || "").trim() || null,
-    ddwrt_izi: /prototype\.js|WEB-ROUTER|Industrial Cellular Router/i.test(kok.body),
+  rapor.http = {
+    kod: kok.kod,
+    baslik: (kok.govde.match(/<title[^>]*>(.*?)<\/title>/i)?.[1] || "").trim() || null,
+    ddwrt_izi: /prototype\.js|WEB-ROUTER|Industrial Cellular Router/i.test(kok.govde),
   };
-  notify(options, "SNMP");
-  report.snmp = await snmpIdentity(host, community);
-  report.ok = isOk(report.problems);
-  return report;
+  bildir(opts, "SNMP");
+  rapor.snmp = await snmpIdentity(host, community);
+  rapor.ok = isOk(rapor.problems);
+  return rapor;
 }
 
 // --- konsol: telnet root shell (salt okunur) ---
 // opts.nvram=true ise tam nvram; degilse sistem kesfi.
-export async function readConsole(options) {
-  const { host, sourceIp, kimlik, nvram = false } = options;
+export async function readConsole(opts) {
+  const { host, kaynakIp, kimlik, nvram = false } = opts;
   if (!kimlik) {
-    return { timestamp: now(), command: "konsol", modemIp: host, ok: false,
+    return { zaman: now(), komut: "konsol", modem_ip: host, ok: false,
       problems: [problem("AUTH_REQUIRED", "telnet 5123")] };
   }
-  const consoleOptions = { host, sourceIp, username: kimlik.username, password: kimlik.password };
-  const report = { timestamp: now(), command: "konsol", modemIp: host, problems: [] };
+  const kOpts = { host, kaynakIp, kullanici: kimlik.kullanici, sifre: kimlik.sifre };
+  const rapor = { zaman: now(), komut: "konsol", modem_ip: host, problems: [] };
   if (nvram) {
-    notify(options, "nvram tam dokumu (CLI)");
-    const { values, count, problems } = await consoleNvram(consoleOptions);
-    report.nvram = values;
-    report.nvramKeyCount = count;
-    report.problems.push(...problems);
+    bildir(opts, "nvram tam dokumu (CLI)");
+    const { degerler, sayi, problems } = await consoleNvram(kOpts);
+    rapor.nvram = degerler;
+    rapor.nvram_anahtar_sayisi = sayi;
+    rapor.problems.push(...problems);
   } else {
-    notify(options, "sistem kesfi");
-    const { outputs, problems } = await consoleRecon(consoleOptions);
-    report.commands = outputs;
-    report.problems.push(...problems);
+    bildir(opts, "sistem kesfi");
+    const { ciktilar, problems } = await consoleRecon(kOpts);
+    rapor.komutlar = ciktilar;
+    rapor.problems.push(...problems);
   }
-  report.ok = isOk(report.problems);
-  return report;
+  rapor.ok = isOk(rapor.problems);
+  return rapor;
 }
 

@@ -19,15 +19,15 @@
 // KAPSAM KARARI — USSD (*101#) yolu BILEREK YOK. Kardes calismada var ama
 // GSM7 paketleme + UCS2 cozme ~150 satir ve bizim SIM'lerde CNUM zaten
 // doluyor. Kanitlanmamis bir yedek icin o hacmi tasimiyoruz; CNUM bos gelirse
-// `method: "none"` dondurup ICCID bildiriyoruz (operator elle girer — bugun
+// `yontem: "yok"` dondurup ICCID bildiriyoruz (operator elle girer — bugun
 // zaten oyle yapiyor). Ihtiyac cikarsa kardes calismadan alinir.
 
 import { runConsole } from "./console.js";
 import { normalizePhone } from "./sim.js";
 import { problem } from "./problems.js";
-import { canSpendPinAttempt, attemptBudget, PIN_TOTAL_DEFAULT } from "./pin-karar.js";
+import { pinDenemesiUygunMu, hakDurumu, PIN_TOPLAM_VARSAYILAN } from "./pin-karar.js";
 
-export { PIN_TOTAL_DEFAULT };
+export { PIN_TOPLAM_VARSAYILAN };
 
 // AT portu. OLCULDU (2026-08-27 canli, Ricon S9922M44 + Quectel Q200AF):
 // /dev/ttyUSB0 AT komutlarina OK donuyor ve numara 3 saniyede geliyor.
@@ -49,15 +49,15 @@ export const AT_PORT = "/dev/ttyUSB0";
 //   AT+CLCK="SC",0,"1234"  mode 0 = kilidi KAPAT: parola ister, hak yakar.
 // Ayrimi yapmayinca simPinKaldir'in DOGRULAMA adimi kendi kapisina takiliyor,
 // bos cevap aliyor ve kilit gercekten kalksa bile "kaldirilamadi" diyordu.
-const AT_CLCK_QUERY = /^AT\+CLCK=\s*"?[A-Z]+"?\s*,\s*2\s*$/i;
-const AT_WRITE_PATTERN = /^AT\+(CPIN|CLCK|CPWD|CFUN|CGDCONT|CMGS|CMGW)=|^AT&W|^ATZ|^AT\+CUSD=/i;
+const AT_CLCK_SORGU = /^AT\+CLCK=\s*"?[A-Z]+"?\s*,\s*2\s*$/i;
+const AT_YAZAN = /^AT\+(CPIN|CLCK|CPWD|CFUN|CGDCONT|CMGS|CMGW)=|^AT&W|^ATZ|^AT\+CUSD=/i;
 
 // Bu komut cihazda bir sey DEGISTIRIR mi (ya da PIN hakki harcar mi)?
 // PURE: cihaz gerektirmez, test edilebilir.
-export function isAtWriteCommand(command) {
-  const k = String(command ?? "").trim();
-  if (AT_CLCK_QUERY.test(k)) return false;
-  return AT_WRITE_PATTERN.test(k);
+export function atYazanMi(komut) {
+  const k = String(komut ?? "").trim();
+  if (AT_CLCK_SORGU.test(k)) return false;
+  return AT_YAZAN.test(k);
 }
 
 // --- Saf ayristiricilar (cihaz GEREKTIRMEZ, test edilebilir) ---
@@ -66,11 +66,11 @@ export function isAtWriteCommand(command) {
 // Bicim: +CNUM: "alpha","+905350634756",145
 // Doner: bizim kanonik bicimimizde (5xxxxxxxxx) ya da null. AYRI bir
 // normalize fonksiyonu YAZMIYORUZ — normalizePhone tek dogru kaynak.
-export function parseCnum(response) {
-  if (!response) return null;
+export function parseCnum(cevap) {
+  if (!cevap) return null;
   const re = /\+CNUM:\s*(?:"[^"]*")?\s*,\s*"([^"]*)"/g;
   let m;
-  while ((m = re.exec(response)) !== null) {
+  while ((m = re.exec(cevap)) !== null) {
     const n = normalizePhone(m[1]);
     if (n) return n;
   }
@@ -78,45 +78,45 @@ export function parseCnum(response) {
 }
 
 // +CPIN? : SIM kilit durumu. "READY" | "SIM PIN" | "SIM PUK" | ... | "UNKNOWN"
-export function parseCpin(response) {
-  if (!response) return "UNKNOWN";
-  const m = response.match(/\+CPIN:\s*([A-Za-z0-9 ]+)/);
+export function parseCpin(cevap) {
+  if (!cevap) return "UNKNOWN";
+  const m = cevap.match(/\+CPIN:\s*([A-Za-z0-9 ]+)/);
   return m ? m[1].trim().toUpperCase() : "UNKNOWN";
 }
 
 // +QPINC / +CPINC : kalan PIN/PUK deneme sayisi. Doner: {pin, puk} | null
 // Quectel modulu (Q200AF) +QPINC kullaniyor; +CPINC standart yedek.
-export function parsePinCounter(response) {
-  if (!response) return null;
-  const q = response.match(/\+QPINC:\s*"?SC"?\s*,\s*(\d+)\s*,\s*(\d+)/i);
+export function parsePinCounter(cevap) {
+  if (!cevap) return null;
+  const q = cevap.match(/\+QPINC:\s*"?SC"?\s*,\s*(\d+)\s*,\s*(\d+)/i);
   if (q) return { pin: Number(q[1]), puk: Number(q[2]) };
-  const c = response.match(/\+CPINC:\s*(\d+),(\d+),(\d+),(\d+)/);
+  const c = cevap.match(/\+CPINC:\s*(\d+),(\d+),(\d+),(\d+)/);
   if (c) return { pin: Number(c[1]), puk: Number(c[3]) };
   return null;
 }
 
 // +CLCK: PIN sorgusu ACIK mi? true=acik, false=kapali, null=okunamadi
-export function parseClck(response) {
-  if (!response) return null;
-  const m = response.match(/\+CLCK:\s*([01])/);
+export function parseClck(cevap) {
+  if (!cevap) return null;
+  const m = cevap.match(/\+CLCK:\s*([01])/);
   return m ? m[1] === "1" : null;
 }
 
 // +CCID / +ICCID : SIM seri numarasi. Sondaki dolgu F atilir.
-export function parseCcid(response) {
-  if (!response) return null;
-  const m = response.match(/\+(?:C?CID|ICCID):\s*"?([0-9A-Fa-f]+)"?/)
-    || response.match(/\b(\d{18,20}F?)\b/);
+export function parseCcid(cevap) {
+  if (!cevap) return null;
+  const m = cevap.match(/\+(?:C?CID|ICCID):\s*"?([0-9A-Fa-f]+)"?/)
+    || cevap.match(/\b(\d{18,20}F?)\b/);
   return m ? m[1].replace(/[Ff]$/, "") : null;
 }
 
 // AT cevabi basarili mi? Modul komut sonunda OK ya da ERROR basar.
-export const atOk = (response) => /\bOK\b/.test(response || "") && !/\bERROR\b/i.test(response || "");
+export const atTamam = (cevap) => /\bOK\b/.test(cevap || "") && !/\bERROR\b/i.test(cevap || "");
 
 // Portu ACIK TUTAN kabuk komutunu uretir. Saf: test edilebilir.
-export function atShellCommand(port, command, readSec = 3) {
-  return `exec 3<>${port}; printf '${command}\\r' >&3; `
-    + `while read -t ${readSec} l <&3; do echo "ATL:$l"; done; exec 3<&-`;
+export function atKabukKomutu(port, komut, okumaSn = 3) {
+  return `exec 3<>${port}; printf '${komut}\\r' >&3; `
+    + `while read -t ${okumaSn} l <&3; do echo "ATL:$l"; done; exec 3<&-`;
 }
 
 // DENENDI VE VAZGECILDI — portu komuttan once bosaltmak (`read -t 1` dongusu).
@@ -133,14 +133,14 @@ export function atShellCommand(port, command, readSec = 3) {
 // Cevap KARISMIS mi? Tek komut TEK sonlandirici doner (OK ya da ERROR).
 // Birden fazlasi, portta baska bir komutun cevabinin kaldigini gosterir —
 // yani elimizdeki metin hangi komuta ait, emin olamayiz.
-export function isAtResponseMixed(response) {
-  const terminator = String(response || "").match(/^\s*(OK|ERROR|\+CME ERROR.*)\s*$/gm) || [];
-  return terminator.length > 1;
+export function atKarismisMi(cevap) {
+  const sonlandirici = String(cevap || "").match(/^\s*(OK|ERROR|\+CME ERROR.*)\s*$/gm) || [];
+  return sonlandirici.length > 1;
 }
 
 // Kabuk ciktisindan yalnizca modul cevabini ayiklar (ATL: onekli satirlar).
-export function extractAtResponse(raw) {
-  return String(raw || "").split(/\r?\n/)
+export function atCevabiAyikla(ham) {
+  return String(ham || "").split(/\r?\n/)
     .filter((s) => s.includes("ATL:"))
     .map((s) => s.slice(s.indexOf("ATL:") + 4).trim())
     .join("\n");
@@ -155,63 +155,63 @@ export function extractAtResponse(raw) {
 // icin bu kacinilmaz, o yuzden yazmaIzni veriliyor — ama AT SEVIYESINDE
 // kendi kapimiz var (AT_YAZAN): PIN harcayan komutlar acik izin olmadan
 // gecmiyor.
-export async function atCommand(options, command, { readSec = 3, allowWrite = false,
-  attempts, timeoutMs } = {}) {
-  if (!allowWrite && isAtWriteCommand(command)) {
-    return { ok: false, response: "", problems: [problem("WRITE_BLOCKED_READONLY", `AT: ${command}`)] };
+export async function atKomut(opts, komut, { okumaSn = 3, yazmaIzni = false,
+  denemeler, zamanAsimiMs } = {}) {
+  if (!yazmaIzni && atYazanMi(komut)) {
+    return { ok: false, cevap: "", problems: [problem("WRITE_BLOCKED_READONLY", `AT: ${komut}`)] };
   }
-  const port = options.atPort || AT_PORT;
-  const shell = atShellCommand(port, command, readSec);
+  const port = opts.atPort || AT_PORT;
+  const kabuk = atKabukKomutu(port, komut, okumaSn);
   const r = await runConsole(
-    { ...options, allowWrite: true, attempts,
-      timeoutMs: timeoutMs ?? (20000 + readSec * 1000) },
-    ["stty -echo 2>/dev/null", shell],
+    { ...opts, yazmaIzni: true, denemeler,
+      zamanAsimiMs: zamanAsimiMs ?? (20000 + okumaSn * 1000) },
+    ["stty -echo 2>/dev/null", kabuk],
   );
-  if (!r.ok) return { ok: false, response: "", problems: r.problems };
-  return { ok: true, response: extractAtResponse(r.outputs?.[shell]), problems: [] };
+  if (!r.ok) return { ok: false, cevap: "", problems: r.problems };
+  return { ok: true, cevap: atCevabiAyikla(r.ciktilar?.[kabuk]), problems: [] };
 }
 
 // AT portu cevap veriyor mu? Doner: { port, problems }
-export async function findAtPort(options) {
-  const port = options.atPort || AT_PORT;
-  const r = await atCommand({ ...options, atPort: port }, "AT", { readSec: 2 });
-  if (r.ok && atOk(r.response)) return { port, problems: [] };
-  return { port: null, problems: r.problems.length ? r.problems : [problem("AT_PORT_NOT_FOUND", port)] };
+export async function atPortBul(opts) {
+  const port = opts.atPort || AT_PORT;
+  const r = await atKomut({ ...opts, atPort: port }, "AT", { okumaSn: 2 });
+  if (r.ok && atTamam(r.cevap)) return { port, problems: [] };
+  return { port: null, problems: r.problems.length ? r.problems : [problem("AT_PORT_YOK", port)] };
 }
 
 // SIM'in TELEFON NUMARASINI okur. Bugune kadar operator elle giriyordu;
 // numara SIM'de yaziliysa (EF_MSISDN) buradan okunabiliyor.
-// Doner: { telefon, method: "cnum"|"none", iccid, atPort, problems }
-export async function readMsisdn(options) {
-  let port = options.atPort ?? null;
+// Doner: { telefon, yontem: "cnum"|"yok", iccid, at_port, problems }
+export async function readMsisdn(opts) {
+  let port = opts.atPort ?? null;
   let cnum = null;
   // Olculmus porta DOGRUDAN gercek komutu gonderiyoruz — ayrica bir yoklama
   // turu yapmiyoruz. Cevap hic AT gibi degilse (ne OK ne +CNUM) portu bir kez
   // dogrulayip net bir hata veriyoruz.
   if (!port) {
     port = AT_PORT;
-    cnum = await atCommand({ ...options, atPort: port }, "AT+CNUM");
-    if (!atOk(cnum.response) && !/\+CNUM/.test(cnum.response)) {
-      const found = await findAtPort(options);
-      if (!found.port) {
-        return { phone: null, method: "none", iccid: null, atPort: null,
-          problems: found.problems };
+    cnum = await atKomut({ ...opts, atPort: port }, "AT+CNUM");
+    if (!atTamam(cnum.cevap) && !/\+CNUM/.test(cnum.cevap)) {
+      const bulunan = await atPortBul(opts);
+      if (!bulunan.port) {
+        return { telefon: null, yontem: "yok", iccid: null, at_port: null,
+          problems: bulunan.problems };
       }
-      port = found.port;
+      port = bulunan.port;
       cnum = null;
     }
   }
-  const atOptions = { ...options, atPort: port };
-  if (!cnum) cnum = await atCommand(atOptions, "AT+CNUM");
-  const phone = parseCnum(cnum.response);
-  if (phone) {
-    return { phone, method: "cnum", iccid: null, atPort: port, problems: [] };
+  const atOpts = { ...opts, atPort: port };
+  if (!cnum) cnum = await atKomut(atOpts, "AT+CNUM");
+  const telefon = parseCnum(cnum.cevap);
+  if (telefon) {
+    return { telefon, yontem: "cnum", iccid: null, at_port: port, problems: [] };
   }
   // CNUM bos: numara SIM'e yazilmamis. ICCID'yi bildirip operatore birakiyoruz.
-  const ccid = await atCommand(atOptions, "AT+CCID");
+  const ccid = await atKomut(atOpts, "AT+CCID");
   return {
-    phone: null, method: "none", iccid: parseCcid(ccid.response), atPort: port,
-    problems: [problem("MSISDN_NOT_ON_SIM")],
+    telefon: null, yontem: "yok", iccid: parseCcid(ccid.cevap), at_port: port,
+    problems: [problem("MSISDN_CIHAZDA_YOK")],
   };
 }
 
@@ -220,28 +220,28 @@ export async function readMsisdn(options) {
 // ayni yere soruyor. Burada yalniz YOLA OZGU kapi var: SIM takili mi.
 //
 // Doner: { izin, sebep: kod|null, problems: [] }
-export function simUnlockDecision(lock = {}, pin, { humanApproved = false } = {}) {
-  const path = simPathOpen(lock);
-  if (path) return { allow: false, reason: path.reason, problems: path.problems };
-  const k = canSpendPinAttempt(lock, pin, { humanApproved });
-  return { allow: k.eligible, reason: k.reason, problems: k.problems };
+export function simKilitKaldirmaKarari(kilit = {}, pin, { elleOnay = false } = {}) {
+  const yol = simYoluAcik(kilit);
+  if (yol) return { izin: false, sebep: yol.sebep, problems: yol.problems };
+  const k = pinDenemesiUygunMu(kilit, pin, { elleOnay });
+  return { izin: k.uygun, sebep: k.sebep, problems: k.problems };
 }
 
 // PURE: PIN'i BILMEDEN "bu SIM uygun mu?" — arayuz dugmeyi buna gore acar.
-export function isSimLockEligible(lock = {}, { humanApproved = false } = {}) {
-  return simPathOpen(lock) ?? attemptBudget(lock, { humanApproved });
+export function simKilidiUygunMu(kilit = {}, { elleOnay = false } = {}) {
+  return simYoluAcik(kilit) ?? hakDurumu(kilit, { elleOnay });
 }
 
 // YOLA OZGU kapi: AT ile kilide dokunmak icin SIM ya kilitli ya hazir olmali.
 // Uygunsa null doner (kapi acik), degilse red nesnesi.
-function simPathOpen(lock) {
-  if (lock.lock === "puk") {
-    return { eligible: false, reason: "SIM_PUK_LOCKED",
-      problems: [problem("SIM_PUK_LOCKED", lock.pukRemaining)] };
+function simYoluAcik(kilit) {
+  if (kilit.kilit === "puk") {
+    return { uygun: false, sebep: "SIM_PUK_LOCKED",
+      problems: [problem("SIM_PUK_LOCKED", kilit.puk_kalan)] };
   }
-  if (lock.lock !== "pin" && !lock.ready) {
-    return { eligible: false, reason: "SIM_MISSING",
-      problems: [problem("SIM_MISSING", lock.status)] };
+  if (kilit.kilit !== "pin" && !kilit.hazir) {
+    return { uygun: false, sebep: "SIM_MISSING",
+      problems: [problem("SIM_MISSING", kilit.durum)] };
   }
   return null;
 }
@@ -251,10 +251,10 @@ function simPathOpen(lock) {
 // Okuma bedava ve PIN harcamaz; kararin girdisi olan bir sorguda karisik
 // veriyle devam etmektense tekrar sormak dogru. Karisma sebebi: onceki
 // komutun cevabi gec gelip bizim okuma penceremize dusuyor.
-async function atQuery(atOptions, command, options = {}) {
-  const first = await atCommand(atOptions, command, options);
-  if (!isAtResponseMixed(first.response)) return first;
-  return atCommand(atOptions, command, options);
+async function atSorgu(atOpts, komut, secenek = {}) {
+  const ilk = await atKomut(atOpts, komut, secenek);
+  if (!atKarismisMi(ilk.cevap)) return ilk;
+  return atKomut(atOpts, komut, secenek);
 }
 
 // Kilit sorgusu (AT+CLCK="SC",2). Parola istemez, hak HARCAMAZ.
@@ -262,10 +262,10 @@ async function atQuery(atOptions, command, options = {}) {
 //
 // null iki halde doner: cevap okunamadi ya da cevap KARISMIS. Ikisinde de
 // "bilmiyoruz" demek dogru cevap — cagiran buna gore PIN gondermemeyi secer.
-async function readLockState(atOptions) {
-  const r = await atQuery(atOptions, 'AT+CLCK="SC",2');
-  if (isAtResponseMixed(r.response)) return null;   // tekrar okundu, hala karisik
-  return parseClck(r.response);
+async function kilitSorgusu(atOpts) {
+  const r = await atSorgu(atOpts, 'AT+CLCK="SC",2');
+  if (atKarismisMi(r.cevap)) return null;   // tekrar okundu, hala karisik
+  return parseClck(r.cevap);
 }
 
 // SIM PIN KILIDINI KALICI OLARAK KALDIRIR — projenin hedefi tam bu.
@@ -283,76 +283,76 @@ async function readLockState(atOptions) {
 //   4) PIN hicbir yere yazilmaz (log/olay/defter) — yalniz bellekte gecer
 //
 // Doner: { ok, acildi, kilit_kaldirildi, durum, pin_kalan, problems }
-export async function disableSimPin(options, pin, { humanApproved = false, kaliciKapat = true } = {}) {
-  const report = { ok: false, opened: false, lockRemoved: false,
-    status: null, pinRemaining: null, problems: [] };
+export async function simPinKaldir(opts, pin, { elleOnay = false, kaliciKapat = true } = {}) {
+  const rapor = { ok: false, acildi: false, kilit_kaldirildi: false,
+    durum: null, pin_kalan: null, problems: [] };
   // (1) Bicim — bozuk PIN garantili bosa harcanmis deneme. Cihaza HIC gitmez.
   if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
-    report.problems.push(problem("PIN_INVALID"));
-    return report;
+    rapor.problems.push(problem("PIN_INVALID"));
+    return rapor;
   }
-  const lock = await readSimLock(options);
-  report.status = lock.status;
-  report.pinRemaining = lock.pinRemaining;
-  const atOptions = { ...options, atPort: lock.atPort };
+  const kilit = await readSimLock(opts);
+  rapor.durum = kilit.durum;
+  rapor.pin_kalan = kilit.pin_kalan;
+  const atOpts = { ...opts, atPort: kilit.at_port };
 
   // (2) SIM ZATEN ACIK: kilit gercekten hala acikta mi? Bunu SORGUYLA
   // ogreniyoruz (AT+CLCK="SC",2 — parola istemez, hak harcamaz). Kilit
   // zaten kapaliysa YAPILACAK IS YOK: PIN'i hic gondermiyoruz. Onceki hal
   // her cagriyi bir parola sunumuna ceviriyordu; PIN'siz SIM'de bu bedava
   // bir risk ve gereksiz bir tur.
-  if (lock.ready) {
-    report.ok = true;
-    report.opened = true;
-    if (!kaliciKapat) return report;
-    const isEnabled = await readLockState(atOptions);
-    if (isEnabled === false) {
-      report.lockRemoved = true;   // istenen durum: kilit kapali
-      return report;
+  if (kilit.hazir) {
+    rapor.ok = true;
+    rapor.acildi = true;
+    if (!kaliciKapat) return rapor;
+    const acikMi = await kilitSorgusu(atOpts);
+    if (acikMi === false) {
+      rapor.kilit_kaldirildi = true;   // istenen durum: kilit kapali
+      return rapor;
     }
     // SORGU OKUNAMADI (null): kilidin acik mi kapali mi oldugunu BILMIYORUZ.
     // Bilmeden devam etmek PIN gondermek demek ve yanlis PIN bir hak yakar.
     // Bilmedigimiz icin harcamayiz — elleOnay ile gecilebilir.
-    if (isEnabled === null && !humanApproved) {
-      report.problems.push(problem("LOCK_STATE_UNKNOWN"));
-      return report;
+    if (acikMi === null && !elleOnay) {
+      rapor.problems.push(problem("KILIT_DURUMU_OKUNAMADI"));
+      return rapor;
     }
   }
 
   // (3) KARAR — PURE, test edilmis, tek yer (bkz. simKilitKaldirmaKarari):
   // PUK / SIM yok / yanmis hak / son hak burada reddedilir. Arayuz de CLI de
   // ayni cevaba bakar; burasi gecilmeden cihazda PIN denenmez.
-  const karar = simUnlockDecision(lock, pin, { humanApproved });
-  if (!karar.allow) {
-    report.problems.push(...karar.problems);
-    return report;
+  const karar = simKilitKaldirmaKarari(kilit, pin, { elleOnay });
+  if (!karar.izin) {
+    rapor.problems.push(...karar.problems);
+    return rapor;
   }
-  report.problems.push(...karar.problems);   // izin verildi; varsa UYARI tasinir
+  rapor.problems.push(...karar.problems);   // izin verildi; varsa UYARI tasinir
 
   // (4) TEK deneme — SIM kilitliyse ac.
-  if (!lock.ready) {
-    await atCommand(atOptions, "AT+CMEE=2", { allowWrite: true });   // hatalar metin gelsin
-    const r = await atCommand(atOptions, `AT+CPIN="${pin}"`, { allowWrite: true, readSec: 5 });
-    if (!atOk(r.response)) {
-      report.problems.push(problem("PIN_REJECTED", lock.pinRemaining));
-      return report;   // TEKRAR DENEMEZ
+  if (!kilit.hazir) {
+    await atKomut(atOpts, "AT+CMEE=2", { yazmaIzni: true });   // hatalar metin gelsin
+    const r = await atKomut(atOpts, `AT+CPIN="${pin}"`, { yazmaIzni: true, okumaSn: 5 });
+    if (!atTamam(r.cevap)) {
+      rapor.problems.push(problem("PIN_REJECTED", kilit.pin_kalan));
+      return rapor;   // TEKRAR DENEMEZ
     }
-    report.ok = true;
-    report.opened = true;
+    rapor.ok = true;
+    rapor.acildi = true;
   }
 
-  if (!kaliciKapat) return report;
+  if (!kaliciKapat) return rapor;
 
   // (5) Kilidi KALICI kapat + dogrula. Bu adim basarisiz olsa da SIM acik kaldi.
-  const close = await atCommand(atOptions, `AT+CLCK="SC",0,"${pin}"`, { allowWrite: true, readSec: 5 });
-  if (!atOk(close.response)) {
-    report.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
-    return report;
+  const kapat = await atKomut(atOpts, `AT+CLCK="SC",0,"${pin}"`, { yazmaIzni: true, okumaSn: 5 });
+  if (!atTamam(kapat.cevap)) {
+    rapor.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
+    return rapor;
   }
-  const verify = await readLockState(atOptions);
-  report.lockRemoved = verify === false;
-  if (!report.lockRemoved) report.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
-  return report;
+  const dogrula = await kilitSorgusu(atOpts);
+  rapor.kilit_kaldirildi = dogrula === false;
+  if (!rapor.kilit_kaldirildi) rapor.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
+  return rapor;
 }
 
 // SIM PIN KILIDINI ACAR (kurar) — simPinKaldir'in TERSI.
@@ -369,80 +369,80 @@ export async function disableSimPin(options, pin, { humanApproved = false, kalic
 //
 // NOT: kilit SONRAKI ACILISTA sorulur. Etkisini gormek icin modem kapat-ac.
 // Doner: { ok, kilit_acik, zaten, durum, pin_kalan, problems }
-export async function enableSimPin(options, pin, { humanApproved = false } = {}) {
-  const report = { ok: false, lockEnabled: false, zaten: false,
-    status: null, pinRemaining: null, problems: [] };
+export async function simPinKilitle(opts, pin, { elleOnay = false } = {}) {
+  const rapor = { ok: false, kilit_acik: false, zaten: false,
+    durum: null, pin_kalan: null, problems: [] };
   if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
-    report.problems.push(problem("PIN_INVALID"));
-    return report;
+    rapor.problems.push(problem("PIN_INVALID"));
+    return rapor;
   }
-  const lock = await readSimLock(options);
-  report.status = lock.status;
-  report.pinRemaining = lock.pinRemaining;
-  const atOptions = { ...options, atPort: lock.atPort };
+  const kilit = await readSimLock(opts);
+  rapor.durum = kilit.durum;
+  rapor.pin_kalan = kilit.pin_kalan;
+  const atOpts = { ...opts, atPort: kilit.at_port };
 
   // SIM su an KILITLI ise kilit zaten kurulu — yapacak is yok, PIN gonderilmez.
-  if (lock.lock === "pin") {
-    report.ok = true;
-    report.lockEnabled = true;
-    report.zaten = true;
-    return report;
+  if (kilit.kilit === "pin") {
+    rapor.ok = true;
+    rapor.kilit_acik = true;
+    rapor.zaten = true;
+    return rapor;
   }
   // Acik SIM: kilit sorgusu ZATEN 1 mi? (sorgu hak harcamaz)
-  if (lock.ready) {
-    const isEnabled = await readLockState(atOptions);
-    if (isEnabled === true) {
-      report.ok = true;
-      report.lockEnabled = true;
-      report.zaten = true;
-      return report;
+  if (kilit.hazir) {
+    const acikMi = await kilitSorgusu(atOpts);
+    if (acikMi === true) {
+      rapor.ok = true;
+      rapor.kilit_acik = true;
+      rapor.zaten = true;
+      return rapor;
     }
     // SORGU OKUNAMADI: durumu bilmeden PIN gondermek bir hak riske atmaktir.
-    if (isEnabled === null && !humanApproved) {
-      report.problems.push(problem("LOCK_STATE_UNKNOWN"));
-      return report;
+    if (acikMi === null && !elleOnay) {
+      rapor.problems.push(problem("KILIT_DURUMU_OKUNAMADI"));
+      return rapor;
     }
   }
 
-  const karar = isSimLockEligible(lock, { humanApproved });
-  report.problems.push(...karar.problems);
-  if (!karar.eligible) return report;
+  const karar = simKilidiUygunMu(kilit, { elleOnay });
+  rapor.problems.push(...karar.problems);
+  if (!karar.uygun) return rapor;
 
-  await atCommand(atOptions, "AT+CMEE=2", { allowWrite: true });
-  const ac = await atCommand(atOptions, `AT+CLCK="SC",1,"${pin}"`, { allowWrite: true, readSec: 5 });
-  if (!atOk(ac.response)) {
-    report.problems.push(problem("PIN_REJECTED", lock.pinRemaining));
-    return report;   // TEKRAR DENEMEZ
+  await atKomut(atOpts, "AT+CMEE=2", { yazmaIzni: true });
+  const ac = await atKomut(atOpts, `AT+CLCK="SC",1,"${pin}"`, { yazmaIzni: true, okumaSn: 5 });
+  if (!atTamam(ac.cevap)) {
+    rapor.problems.push(problem("PIN_REJECTED", kilit.pin_kalan));
+    return rapor;   // TEKRAR DENEMEZ
   }
-  report.ok = true;
-  report.lockEnabled = (await readLockState(atOptions)) === true;
-  if (!report.lockEnabled) report.problems.push(problem("PIN_LOCK_NOT_ENABLED"));
-  return report;
+  rapor.ok = true;
+  rapor.kilit_acik = (await kilitSorgusu(atOpts)) === true;
+  if (!rapor.kilit_acik) rapor.problems.push(problem("PIN_LOCK_NOT_ENABLED"));
+  return rapor;
 }
 
 // SIM kilit durumunu MODULDEN okur (web sayfasindan degil): kalan PIN/PUK
 // hakkini da verir. Doner: { durum, hazir, pin_kalan, puk_kalan, problems }
-export async function readSimLock(options) {
-  const { port, problems: portProblems } = options.atPort
-    ? { port: options.atPort, problems: [] } : await findAtPort(options);
-  if (!port) return { status: "UNKNOWN", ready: false, pinRemaining: null, pukRemaining: null, problems: portProblems };
+export async function readSimLock(opts) {
+  const { port, problems: portSorun } = opts.atPort
+    ? { port: opts.atPort, problems: [] } : await atPortBul(opts);
+  if (!port) return { durum: "UNKNOWN", hazir: false, pin_kalan: null, puk_kalan: null, problems: portSorun };
 
-  const atOptions = { ...options, atPort: port };
+  const atOpts = { ...opts, atPort: port };
   // Kilit durumu ve kalan hak, PIN harcama kararinin GIRDISI — temiz portta
   // okunur, karisan cevaptan karar cikarilmaz.
-  const status = parseCpin((await atQuery(atOptions, "AT+CPIN?")).response);
-  let counter = null;
-  for (const command of ['AT+QPINC="SC"', "AT+CPINC"]) {
-    counter = parsePinCounter((await atQuery(atOptions, command)).response);
-    if (counter) break;
+  const durum = parseCpin((await atSorgu(atOpts, "AT+CPIN?")).cevap);
+  let sayac = null;
+  for (const komut of ['AT+QPINC="SC"', "AT+CPINC"]) {
+    sayac = parsePinCounter((await atSorgu(atOpts, komut)).cevap);
+    if (sayac) break;
   }
   return {
-    status,
-    ready: status === "READY",
-    lock: status === "SIM PIN" ? "pin" : status.includes("PUK") ? "puk" : null,
-    pinRemaining: counter?.pin ?? null,
-    pukRemaining: counter?.puk ?? null,
-    atPort: port,
+    durum,
+    hazir: durum === "READY",
+    kilit: durum === "SIM PIN" ? "pin" : durum.includes("PUK") ? "puk" : null,
+    pin_kalan: sayac?.pin ?? null,
+    puk_kalan: sayac?.puk ?? null,
+    at_port: port,
     problems: [],
   };
 }

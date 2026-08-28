@@ -136,7 +136,7 @@ cihaza yazar, ağa açılması açık bir karar olmalı (`--dinle 0.0.0.0`).
 
 ```json
 {"zaman":"...","durum":"hazir","ok":true,"deneme":1,"profil":"saha",
- "modemIp":"5.5.5.1","phone":"5321234567","lanMac":"00:0c:43:...",
+ "modem_ip":"5.5.5.1","telefon":"5321234567","lan_mac":"00:0c:43:...",
  "iccid":"8990...","imsi":"28601...","imei":"867...","operator":"Turkcell"}
 ```
 
@@ -144,19 +144,6 @@ Sahada "bu modem hazırlanmış mıydı, hangi hat takılıydı" sorusunun tek k
 Cihazın **etiket seri numarası ne HTTP'de ne nvram'da yok** (arandı) — kalıcı
 kimlik `lan_mac` + `imei` + `iccid`. Dosya `data/` altında ve **gitignore'da**:
 telefon/ICCID/IMEI abonelik verisidir, commit edilmez.
-
-## Dil kuralı — kod İngilizce, metin Türkçe
-
-**Fonksiyon, değişken, parametre, çıktı alan adları ve problem kodları
-İngilizce.** Amaç: paketi import eden ya da kaynağı okuyan bir geliştiricinin
-Türkçe bilmeden sistemi anlayabilmesi.
-
-**Türkçe kalanlar bilinçli:** yorum satırları (kararın *nedeni* burada yazılı),
-operatöre gösterilen metinler, CLI komut adları (`dogrula`, `hazirla`,
-`degerlendir` — tezgahtaki teknisyen için) ve `.env` değişken adları.
-
-Cihazın kendi anahtarları da çevrilmez: `m1s1simpin`, `lan_mac`, `wl_radio`
-gibi adlar modemin verisidir, bizim değil.
 
 ## Modülerlik düsturu
 
@@ -182,12 +169,12 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 
 | Sadece şunu istiyorum | Çağrı | CLI |
 |---|---|---|
-| Telefon numarası | `readMsisdn(options)` | `ricon.js numara` |
-| SIM kilidi + kalan hak | `readSimLock(options)` | `ricon.js sim-kilit` |
-| PIN kilidini kalıcı kaldır | `disableSimPin(options, pin)` | `ricon.js sim-pin-kaldir --uygula` |
-| Ne eksik, başlanabilir mi | `assessDevice(options)` | `ricon.js degerlendir` |
-| "Ne eksik" kararı (SAF, cihazsız) | `provisioningGaps({...})` | — |
-| Kendi kabuk komutum | `runConsole(options, ["uname -a"])` | `ricon.js konsol` |
+| Telefon numarası | `readMsisdn(opts)` | `ricon.js numara` |
+| SIM kilidi + kalan hak | `readSimLock(opts)` | `ricon.js sim-kilit` |
+| PIN kilidini kalıcı kaldır | `simPinKaldir(opts, pin)` | `ricon.js sim-pin-kaldir --uygula` |
+| Ne eksik, başlanabilir mi | `assessDevice(opts)` | `ricon.js degerlendir` |
+| "Ne eksik" kararı (SAF, cihazsız) | `provisionEksikleri({...})` | — |
+| Kendi kabuk komutum | `runConsole(opts, ["uname -a"])` | `ricon.js konsol` |
 
 Çalışan örnek: `examples/paket-kullanimi.js`.
 
@@ -200,7 +187,7 @@ zorunda değil — her katman kendi alt yolundan gelir:
 import { readIdentity } from "ricon-modem/okuma";        // sadece modem bilgisi
 import { readMsisdn } from "ricon-modem/at";             // sadece telefon numarası
 import { assessDevice } from "ricon-modem/degerlendirme";// sadece "ne eksik"
-import { canSpendPinAttempt } from "ricon-modem/pin-karar"; // sadece karar (cihazsız)
+import { pinDenemesiUygunMu } from "ricon-modem/pin-karar"; // sadece karar (cihazsız)
 ```
 
 Her biri `opts` alır, sonuç nesnesi döner, throw etmez. Aynı fonksiyon

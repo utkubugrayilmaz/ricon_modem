@@ -66,7 +66,7 @@ pinDeneBtn.disabled = true;
 // çalışır — operatör yazar.
 // Numara CIHAZDAN GELDIYSE salt goruntu olur; duzenleme "Degistir"den acilir.
 // Alan bossa kilit YOK — yoksa operator hicbir sey yazamaz.
-let locked = false;
+let kilitli = false;
 let okunuyor = false;             // değerlendirme sürüyor
 let otomatikDolduruldu = false;   // alandaki numara cihazdan mı geldi
 
@@ -79,7 +79,7 @@ const haneKutulari = [...haneler.children];
 
 // Numara geçerli mi? 11 hane ve 05 ile başlamalı (TR mobil).
 // Aynı kural çekirdekte de var (telefonNormalize) — burası sadece erken uyarı.
-function isValid(d) {
+function gecerliMi(d) {
   return d.length === HANE_SAYISI && d.startsWith("05");
 }
 
@@ -89,34 +89,34 @@ function haneleriBoya() {
     kutu.textContent = d[i] ?? "";
     kutu.classList.toggle("dolu", i < d.length);
     kutu.classList.toggle("imlec",
-      !locked && i === d.length && document.activeElement === gizliGiris);
+      !kilitli && i === d.length && document.activeElement === gizliGiris);
   });
 
-  const tamam = isValid(d);
+  const tamam = gecerliMi(d);
   haneler.classList.toggle("hatali", d.length === HANE_SAYISI && !tamam);
-  haneler.classList.toggle("kilitli", locked);
+  haneler.classList.toggle("kilitli", kilitli);
   baslatBtn.disabled = !tamam || okunuyor;
 
   // Kilitliyse numara CIHAZDAN geldi: "eksik hane" uyarisi anlamsiz, alt
   // satirda zaten nereden geldigi yaziyor.
-  if (locked) {
+  if (kilitli) {
     uyari.textContent = " ";
-    uyari.removeAttribute("data-state");
+    uyari.removeAttribute("data-hal");
     return;
   }
   if (d.length === 0) {
     uyari.textContent = " ";
-    uyari.removeAttribute("data-state");
+    uyari.removeAttribute("data-hal");
   } else if (d.length < HANE_SAYISI) {
-    const remaining = HANE_SAYISI - d.length;
-    uyari.textContent = `Eksik: ${remaining} hane kaldı`;
-    uyari.removeAttribute("data-state");
+    const kalan = HANE_SAYISI - d.length;
+    uyari.textContent = `Eksik: ${kalan} hane kaldı`;
+    uyari.removeAttribute("data-hal");
   } else if (!d.startsWith("05")) {
     uyari.textContent = "Numara 05 ile başlamalı";
-    uyari.removeAttribute("data-state");
+    uyari.removeAttribute("data-hal");
   } else {
     uyari.textContent = "Numara tam";
-    uyari.dataset.state = "ok";
+    uyari.dataset.hal = "tamam";
   }
 }
 
@@ -135,7 +135,7 @@ haneleriBoya();
 // Duzenlemenin TEK kapisi. Numarayi SILMEZ — genelde tek hane duzeltilir.
 // Alan duzenlemeye acikken hanelere tiklamak odaklar. Kilitliyken HICBIR SEY
 // yapmaz — cihazdan gelen numara tiklayarak bozulmasin.
-haneler.addEventListener("click", () => { if (!locked) gizliGiris.focus(); });
+haneler.addEventListener("click", () => { if (!kilitli) gizliGiris.focus(); });
 
 degistirBtn.addEventListener("click", () => {
   kilidiAc();
@@ -144,16 +144,16 @@ degistirBtn.addEventListener("click", () => {
 });
 
 function kilidiAc() {
-  locked = false;
+  kilitli = false;
   gizliGiris.readOnly = false;
   kaynakMetin.textContent = "elle giriliyor";
   degistirBtn.hidden = true;
   haneleriBoya();
 }
 
-function numarayiYerlestir(input) {
-  gizliGiris.value = input;
-  locked = true;
+function numarayiYerlestir(girdi) {
+  gizliGiris.value = girdi;
+  kilitli = true;
   otomatikDolduruldu = true;
   gizliGiris.readOnly = true;
   kaynakMetin.textContent = "SIM'den okundu";
@@ -174,7 +174,7 @@ function numarayiSifirla() {
   // Ilk yazimda burada KILITLENIYORDU ve hemen ardindan "elle gir" yazip
   // focus() cagriliyordu; readOnly alana yazilamaz, yani operatore yaz
   // deyip yazdirmiyorduk.
-  locked = false;
+  kilitli = false;
   gizliGiris.readOnly = false;
   kaynakMetin.textContent = "";
   degistirBtn.hidden = true;   // alan zaten yazilabilir, kapiya gerek yok
@@ -191,33 +191,33 @@ async function durumuTazele() {
   try {
     const r = await fetch("/api/durum");
     const d = await r.json();
-    if (!d.pc?.ready) {
+    if (!d.pc?.hazir) {
       // EN OLASI SEBEP KABLO. Kablo çıkınca modem alt ağındaki ikincil IP
       // görünmez oluyor ve bu, "IP hiç tanımlı değil" ile birebir aynı
       // görünüyor — araç ikisini ayırt edemiyor (bkz. NO_SOURCE_IP).
       // O yüzden ekranda önce ucuz ve olası olan yazıyor; yapılandırma
       // tavsiyesi ikinci satırda, kablo takılıyken hâlâ sorun varsa diye.
-      ustDurum.dataset.state = "waiting";
+      ustDurum.dataset.hal = "bekle";
       ustDurum.textContent = "ağ yok — kablo/modem?";
       sifirlaBtn.disabled = true;
-      ipucu.dataset.state = "error";
+      ipucu.dataset.hal = "hata";
       const t = d.pc.problems?.[0]?.tr;
       ustDurum.textContent = t?.baslik ?? "ağ yok — kablo/modem?";
       ipucu.textContent = t?.neYap ?? "Modemin LAN kablosunu tak ve modemi aç.";
       return;
     }
-    ipucu.removeAttribute("data-state");
+    ipucu.removeAttribute("data-hal");
     // Sıfırlanacak bir şey yoksa (modem yok / başka iş sürüyor) düğme kapalı.
-    sifirlaBtn.disabled = !d.modem.location || d.busy || !d.canReset;
-    if (d.modem.location) {
-      ustDurum.dataset.state = d.modem.location;
-      ustDurum.textContent = `modem ${d.modem.host} (${d.modem.location})`;
+    sifirlaBtn.disabled = !d.modem.konum || d.mesgul || !d.sifirlanabilir;
+    if (d.modem.konum) {
+      ustDurum.dataset.hal = d.modem.konum;
+      ustDurum.textContent = `modem ${d.modem.host} (${d.modem.konum})`;
       if (!okunuyor && !degerlendirmeSonucu) {
-        ipucu.textContent = d.modem.location === "field" ? "Zaten kurulmuş." : "Modem hazır.";
+        ipucu.textContent = d.modem.konum === "saha" ? "Zaten kurulmuş." : "Modem hazır.";
       }
       degerlendirmeyiTetikle(d);
     } else {
-      ustDurum.dataset.state = "waiting";
+      ustDurum.dataset.hal = "bekle";
       ustDurum.textContent = "modem yok";
       ipucu.textContent = "Modemi tak.";
       // Cihaz gitti: bir sonraki modem KENDI okumasini hak eder.
@@ -229,7 +229,7 @@ async function durumuTazele() {
       }
     }
   } catch {
-    ustDurum.dataset.state = "error";
+    ustDurum.dataset.hal = "hata";
     ustDurum.textContent = "sunucuya ulaşılamıyor";
   }
 }
@@ -252,16 +252,16 @@ const DENEME_ARASI_MS = 15000;    // başarısız okumadan sonra bekleme
 function tekrariAyarla(o) {
   clearTimeout(tekrarZamani);
   tekrarZamani = null;
-  if (!o?.retry?.retry) return;
+  if (!o?.tekrar?.tekrar) return;
   tekrarZamani = setTimeout(() => {
     degerlendirilenHost = null;    // aynı modem için yeniden bakılacak
     sonDenemeZamani = 0;
     durumuTazele();
-  }, o.retry.delaySec * 1000);
+  }, o.tekrar.sonra_sn * 1000);
 }
 
 function degerlendirmeyiTetikle(d) {
-  if (okunuyor || d.busy) return;
+  if (okunuyor || d.mesgul) return;
   if (degerlendirilenHost === d.modem.host) return;      // bu modem okundu
   if (Date.now() - sonDenemeZamani < DENEME_ARASI_MS) return;
   degerlendir(d.modem.host);
@@ -270,7 +270,7 @@ function degerlendirmeyiTetikle(d) {
 async function degerlendir(host) {
   okunuyor = true;
   sonDenemeZamani = Date.now();
-  ipucu.removeAttribute("data-state");
+  ipucu.removeAttribute("data-hal");
   ipucu.textContent = "SIM'den numara okunuyor…";
   haneleriBoya();                 // BAŞLAT'ı okuma bitene kadar kapatır
   // SADECE AĞ/AYRIŞTIRMA bu try'da. Çizim kodu AYRI: ekranı çizen bir hata
@@ -289,9 +289,9 @@ async function degerlendir(host) {
     okunuyor = false;
   }
   if (!o) {
-    ipucu.dataset.state = "error";
+    ipucu.dataset.hal = "hata";
     ipucu.textContent = "Sunucuya ulaşılamadı.";
-    tekrariAyarla({ retry: { retry: true, delaySec: 5 } });
+    tekrariAyarla({ tekrar: { tekrar: true, sonra_sn: 5 } });
     haneleriBoya();
     return;
   }
@@ -305,25 +305,25 @@ async function degerlendir(host) {
 // Okuma sonucunu ekrana çevirir. KARAR YOK: `eksik` çekirdekten geliyor,
 // burası yalnızca hangi cümlenin yazılacağını seçiyor.
 function okumayiUygula(o) {
-  if (o.phone?.input) {
-    numarayiYerlestir(o.phone.input);
+  if (o.telefon?.girdi) {
+    numarayiYerlestir(o.telefon.girdi);
     pinAlaniniGizle();
-    ipucu.removeAttribute("data-state");
-    ipucu.textContent = o.canStart ? "" : `eksik: ${o.missing.join(", ")}`;
+    ipucu.removeAttribute("data-hal");
+    ipucu.textContent = o.baslatilabilir ? "" : `eksik: ${o.eksik.join(", ")}`;
     return;
   }
   // Numara gelmedi — sebebe göre ayrılıyoruz.
   numarayiSifirla();
-  ipucu.dataset.state = "error";
-  if (o.missing?.includes("sim")) {
+  ipucu.dataset.hal = "hata";
+  if (o.eksik?.includes("sim")) {
     ipucu.textContent = "SIM takılı değil.";
     return;
   }
-  if (o.missing?.includes("pin")) {
+  if (o.eksik?.includes("pin")) {
     // KİLİTLİ SIM: numara okunamaz, çünkü PIN kilidi abone verisini açmıyor.
     // Çözüm elle numara yazmak DEĞİL — kilidi SIM'den kaldırmak. Kaldırınca
     // numara zaten kendiliğinden gelir ve SIM her cihazda açık olur.
-    pinKilidiIste(o.sim, o.pinRemovable);
+    pinKilidiIste(o.sim, o.pin_kaldirilabilir);
     return;
   }
   ipucu.textContent = "Numara SIM'de yok — elle gir.";
@@ -333,30 +333,30 @@ function okumayiUygula(o) {
 // SIM kilitli: PIN alanini ACAR. Kalan hak yaziyor — operator neyi riske
 // attigini denemeden gorsun.
 function pinKilidiIste(sim, uygunluk) {
-  const remaining = sim?.pinRemaining;
+  const kalan = sim?.pin_kalan;
   pinAlan.hidden = false;
   ipucu.textContent = "SIM PIN kilitli";
-  pinEtiketNot.textContent = remaining === null || remaining === undefined
-    ? "— kalan hak okunamadı" : `— kalan hak: ${remaining}`;
+  pinEtiketNot.textContent = kalan === null || kalan === undefined
+    ? "— kalan hak okunamadı" : `— kalan hak: ${kalan}`;
 
   // KARAR ÇEKİRDEKTEN: burada yeniden hesaplanmıyor. Uygun değilse düğme
   // hiç görünmez — "yanlışlıkla basılabilecek" bir kapı bırakmıyoruz.
   // Uygun degilse dugme yok: yanlislikla basilacak kapi birakmiyoruz.
-  if (uygunluk && uygunluk.eligible === false) {
+  if (uygunluk && uygunluk.uygun === false) {
     pinKaldirBtn.hidden = true;
     pinGiris.disabled = true;
     pinNot.textContent = {
       PIN_LAST_ATTEMPT: "Son hak — araç denemez. SIM'i telefonda aç.",
       SIM_PUK_LOCKED: "PUK kilitli. Telefondan PUK ile aç.",
-    }[uygunluk.reason] ?? "Denenmeyecek.";
+    }[uygunluk.sebep] ?? "Denenmeyecek.";
     return;
   }
 
   pinGiris.disabled = false;
   // Hak yanmissa SOYLE ama ENGELLEME: dogru PIN'i bilen operator.
-  const total = sim?.pinTotal ?? 3;
-  pinNot.textContent = (remaining != null && remaining < total)
-    ? `Daha önce bir deneme yanmış. Kalan ${remaining}. PIN'den emin ol.`
+  const toplam = sim?.pin_toplam ?? 3;
+  pinNot.textContent = (kalan != null && kalan < toplam)
+    ? `Daha önce bir deneme yanmış. Kalan ${kalan}. PIN'den emin ol.`
     : "Tek deneme. Kilit SIM'den kalıcı kalkar.";
   pinKaldirBtn.hidden = false;
   pinKaldirBtn.disabled = !/^\d{4,8}$/.test(pinGiris.value);
@@ -383,41 +383,41 @@ function pinKilidiniKaldir() {
   if (pinAkim) { pinAkim.close(); pinAkim = null; }
   pinKaldirBtn.disabled = true;
   pinAkis.hidden = false;
-  pinAkis.removeAttribute("data-state");
+  pinAkis.removeAttribute("data-hal");
   pinAkis.textContent = "başlıyor…";
   okunuyor = true;                 // BAŞLAT kapalı kalsın, durum yoklaması araya girmesin
   haneleriBoya();
 
   const yaz = (m) => { pinAkis.textContent = m; };
   pinAkim = new EventSource(`/api/pin-kaldir?pin=${encodeURIComponent(p)}`);
-  pinAkim.addEventListener("progress", (e) => yaz(JSON.parse(e.data).message));
-  pinAkim.addEventListener("simLock", (e) => {
+  pinAkim.addEventListener("ilerleme", (e) => yaz(JSON.parse(e.data).mesaj));
+  pinAkim.addEventListener("sim_kilit", (e) => {
     const o = JSON.parse(e.data);
-    if (o.lock === "puk") {
-      yaz(`SIM PUK kilitli (kalan ${o.pukRemaining ?? "?"}) — telefondan PUK ile aç.`);
+    if (o.kilit === "puk") {
+      yaz(`SIM PUK kilitli (kalan ${o.puk_kalan ?? "?"}) — telefondan PUK ile aç.`);
     } else {
-      yaz(`${o.status} · kalan hak: ${o.pinRemaining ?? "?"}`);
+      yaz(`${o.durum} · kalan hak: ${o.pin_kalan ?? "?"}`);
     }
   });
-  pinAkim.addEventListener("pinDisableResult", (e) => {
+  pinAkim.addEventListener("pin_kaldir_sonuc", (e) => {
     const o = JSON.parse(e.data);
-    pinBitir(o.lockRemoved, o);
+    pinBitir(o.kilit_kaldirildi, o);
   });
-  pinAkim.addEventListener("error", (e) => {
+  pinAkim.addEventListener("hata", (e) => {
     const o = JSON.parse(e.data);
-    pinBitir(false, { problems: [{ message: o.message, check: o.fix }] });
+    pinBitir(false, { problems: [{ message: o.mesaj, check: o.cozum }] });
   });
   pinAkim.onerror = () => {
     if (pinAkim && pinAkim.readyState === EventSource.CLOSED) pinBitir(false, null);
   };
 }
 
-function pinBitir(succeeded, o) {
+function pinBitir(basarili, o) {
   if (pinAkim) { pinAkim.close(); pinAkim = null; }
   okunuyor = false;
   pinGiris.value = "";             // PIN hiçbir yerde durmaz, ekranda da
-  if (succeeded) {
-    pinAkis.dataset.state = "ok";
+  if (basarili) {
+    pinAkis.dataset.hal = "tamam";
     pinAkis.textContent = "kilit kaldırıldı · numara okunuyor…";
     pinAlaniniGizle();
     // Zincirin son halkası: kilit kalktı → SIM artık abone verisini veriyor →
@@ -428,18 +428,18 @@ function pinBitir(succeeded, o) {
     durumuTazele();
     return;
   }
-  pinAkis.dataset.state = "error";
+  pinAkis.dataset.hal = "hata";
   // SADECE tr: ham problems[].message/check GELISTIRICI metni ve Ingilizce,
   // ekrana asla basilmaz (sozluk src/report.js'te, tek yer).
-  const first = o?.problems?.[0]?.tr;
+  const ilk = o?.problems?.[0]?.tr;
   // Deneme GERÇEKTEN harcandı mı? Yalnızca PIN_REJECTED bir hak yakar.
   // Biçim hatası, "son hak" reddi ya da port sorunu hak yakmaz — onlarda
   // tekrar denemeyi kapatmak operatörü boşuna kilitler.
-  const yandi = (o?.problems || []).some((p) => p.code === "PIN_REJECTED");
-  pinAkis.textContent = o?.opened
+  const yandi = (o?.problems || []).some((p) => p.kod === "PIN_REJECTED");
+  pinAkis.textContent = o?.acildi
     ? "SIM açıldı, kilit kalıcı kalkmadı."
-    : (first?.baslik || "PIN kilidi kaldırılamadı")
-      + (first?.neYap ? `\n${first.neYap}` : "");
+    : (ilk?.baslik || "PIN kilidi kaldırılamadı")
+      + (ilk?.neYap ? `\n${ilk.neYap}` : "");
   // Dugme ACIK kalir; PIN alani temizlendigi icin zaten yeni PIN bekliyor.
   pinKaldirBtn.disabled = true;
   pinGiris.focus();
@@ -457,97 +457,97 @@ durumuIzle(true);
 
 // ---------------- EKRAN 2: kurulum ----------------
 
-const lines = new Map();   // nvram anahtarı -> { sol, sag, halKutu }
+const satirlar = new Map();   // nvram anahtarı -> { sol, sag, halKutu }
 
-function izgaraKur(rows) {
+function izgaraKur(satirListesi) {
   izgara.textContent = "";
-  lines.clear();
+  satirlar.clear();
   let sonSayfa = null;
 
-  for (const s of rows) {
-    if (s.page && s.page !== sonSayfa) {
-      sonSayfa = s.page;
-      const group = document.createElement("div");
-      group.className = "grup";
+  for (const s of satirListesi) {
+    if (s.sayfa && s.sayfa !== sonSayfa) {
+      sonSayfa = s.sayfa;
+      const grup = document.createElement("div");
+      grup.className = "grup";
       const a = document.createElement("span");
-      a.textContent = s.page;
+      a.textContent = s.sayfa;
       const b = document.createElement("span");
-      b.textContent = s.page;
-      group.append(a, b);
-      izgara.appendChild(group);
+      b.textContent = s.sayfa;
+      grup.append(a, b);
+      izgara.appendChild(grup);
     }
 
-    const sol = makeCell(s.name, s.before, false, s.willChange);
-    const sag = makeCell(s.name, s.after, true, s.willChange);
-    sag.dataset.state = s.willChange ? "pending" : "unchanged";
+    const sol = hucreYap(s.ad, s.once, false, s.degisecek);
+    const sag = hucreYap(s.ad, s.sonra, true, s.degisecek);
+    sag.dataset.hal = s.degisecek ? "bekliyor" : "sabit";
     const halKutu = document.createElement("span");
     halKutu.className = "h-hal";
-    halKutu.textContent = s.willChange ? "bekliyor" : "değişmedi";
+    halKutu.textContent = s.degisecek ? "bekliyor" : "değişmedi";
     sag.appendChild(halKutu);
 
     izgara.append(sol, sag);
-    lines.set(s.key, { sol, sag, halKutu });
+    satirlar.set(s.anahtar, { sol, sag, halKutu });
   }
 }
 
-function makeCell(name, value, sagMi, willChange) {
+function hucreYap(ad, deger, sagMi, degisecek) {
   const h = document.createElement("div");
-  h.className = "hucre" + (sagMi ? " hucre-sonra" : "") + (willChange ? "" : " sabit");
+  h.className = "hucre" + (sagMi ? " hucre-sonra" : "") + (degisecek ? "" : " sabit");
   const a = document.createElement("span");
   a.className = "h-ad";
-  a.textContent = name;
+  a.textContent = ad;
   const d = document.createElement("span");
   d.className = "h-deger";
-  d.textContent = value;
+  d.textContent = deger;
   h.append(a, d);
   return h;
 }
 
-function halYaz(keys, state, label) {
-  for (const k of keys || []) {
-    const s = lines.get(k);
-    if (!s || s.sag.dataset.state === "sabit") continue;
-    s.sag.dataset.state = state;
-    s.halKutu.textContent = label;
+function halYaz(anahtarlar, hal, etiket) {
+  for (const k of anahtarlar || []) {
+    const s = satirlar.get(k);
+    if (!s || s.sag.dataset.hal === "sabit") continue;
+    s.sag.dataset.hal = hal;
+    s.halKutu.textContent = etiket;
   }
 }
 
 const akisSatirlari = [];
-function akisaYaz(message) {
-  akisSatirlari.push(message);
-  const last = akisSatirlari.slice(-4);
+function akisaYaz(mesaj) {
+  akisSatirlari.push(mesaj);
+  const son = akisSatirlari.slice(-4);
   akis.textContent = "";
-  last.forEach((m, i) => {
+  son.forEach((m, i) => {
     const p = document.createElement("span");
     p.textContent = m;
-    if (i < last.length - 1) p.className = "akis-gecmis";
+    if (i < son.length - 1) p.className = "akis-gecmis";
     akis.append(p, document.createElement("br"));
   });
 }
 
-function kimlikBas(target, k) {
-  const fields = [
-    ["Telefon", k.phone], ["ICCID", k.iccid], ["IMEI", k.imei],
-    ["IMSI", k.imsi], ["MAC", k.lanMac], ["Operatör", k.operator],
+function kimlikBas(hedef, k) {
+  const alanlar = [
+    ["Telefon", k.telefon], ["ICCID", k.iccid], ["IMEI", k.imei],
+    ["IMSI", k.imsi], ["MAC", k.lan_mac], ["Operatör", k.operator],
   ].filter(([, v]) => v);
   const dl = document.createElement("dl");
   dl.className = "kimlik-liste";
-  for (const [name, value] of fields) {
+  for (const [ad, deger] of alanlar) {
     const sar = document.createElement("div");
     const dt = document.createElement("dt");
-    dt.textContent = name;
+    dt.textContent = ad;
     const dd = document.createElement("dd");
-    dd.textContent = value;
+    dd.textContent = deger;
     sar.append(dt, dd);
     dl.appendChild(sar);
   }
-  target.textContent = "";
-  target.appendChild(dl);
+  hedef.textContent = "";
+  hedef.appendChild(dl);
 }
 
 let akim = null;
 let akisTuru = null;   // "kurulum" | "sifirlama" — bitişte ne yapılacağını belirler
-let simLock = null;   // cihazın bildirdiği PIN/PUK kilidi (varsa)
+let simKilit = null;   // cihazın bildirdiği PIN/PUK kilidi (varsa)
 
 // --- Süre ölçümü (TEST) ---
 // "Başlat"a bastığımdan bitişe kadar kaç saniye? Ölçüm noktası olayın EKRANA
@@ -557,7 +557,7 @@ const OLCUM_ETIKET = {
   algilandi: "modem algılandı",
   plan: "ayarlar okundu (plan hazır)",
   yaziliyor: "yazma başladı",
-  written: "yazma bitti",
+  yazildi: "yazma bitti",
   reboot: "reboot gönderildi",
   dogrulandi: "cihaz geri geldi, doğrulandı",
   kimlik: "kimlik okundu (ICCID/IMEI)",
@@ -573,8 +573,8 @@ const olcumler = [];
 // iddiası için araç süresinden ayrı tutulması şart.
 let girisHazirMs = performance.now();
 
-const elapsedSec = () => (performance.now() - baslangicMs) / 1000;
-const sec = (x) => x.toFixed(1);
+const gecenSn = () => (performance.now() - baslangicMs) / 1000;
+const sn = (x) => x.toFixed(1);
 
 let girisSn = null;
 
@@ -586,14 +586,14 @@ function olcumBasla() {
   olcumTablo.textContent = "";
   altSure.textContent = "0.0 sn";
   clearInterval(sayacZamani);
-  sayacZamani = setInterval(() => { altSure.textContent = `${sec(elapsedSec())} sn`; }, 250);
+  sayacZamani = setInterval(() => { altSure.textContent = `${sn(gecenSn())} sn`; }, 250);
 }
 
 // Olay geldiğinde damgala. `ek` varsa etikete eklenir (örn. kaç ayar yazıldı).
-function olcumKaydet(kind, ek = "") {
-  const label = OLCUM_ETIKET[kind];
-  if (!label) return;
-  olcumler.push({ label: ek ? `${label} — ${ek}` : label, elapsedSec: elapsedSec() });
+function olcumKaydet(tur, ek = "") {
+  const etiket = OLCUM_ETIKET[tur];
+  if (!etiket) return;
+  olcumler.push({ etiket: ek ? `${etiket} — ${ek}` : etiket, anSn: gecenSn() });
 }
 
 // Ölçüm tablosunu basar: her adımın kendi süresi + kümülatif + toplam.
@@ -601,49 +601,49 @@ function olcumKaydet(kind, ek = "") {
 function olcumBitir() {
   clearInterval(sayacZamani);
   sayacZamani = null;
-  const total = elapsedSec();
-  altSure.textContent = `${sec(total)} sn`;
+  const toplam = gecenSn();
+  altSure.textContent = `${sn(toplam)} sn`;
 
   const satirDizi = olcumler.map((o, i) => ({
-    label: o.label,
-    duration: o.elapsedSec - (i === 0 ? 0 : olcumler[i - 1].elapsedSec),
-    an: o.elapsedSec,
+    etiket: o.etiket,
+    sure: o.anSn - (i === 0 ? 0 : olcumler[i - 1].anSn),
+    an: o.anSn,
   }));
-  const enUzun = Math.max(0, ...satirDizi.map((s) => s.duration));
+  const enUzun = Math.max(0, ...satirDizi.map((s) => s.sure));
 
   olcumTablo.textContent = "";
-  const cell = (text, sinif) => {
+  const hucre = (metin, sinif) => {
     const s = document.createElement("span");
-    s.textContent = text;
+    s.textContent = metin;
     if (sinif) s.className = sinif;
     return s;
   };
   olcumTablo.append(
-    cell("adım", "olcum-baslik"), cell("süre", "olcum-baslik"), cell("an", "olcum-baslik"),
+    hucre("adım", "olcum-baslik"), hucre("süre", "olcum-baslik"), hucre("an", "olcum-baslik"),
   );
   for (const s of satirDizi) {
-    const uzunMu = s.duration === enUzun && satirDizi.length > 1 ? "olcum-uzun" : "";
+    const uzunMu = s.sure === enUzun && satirDizi.length > 1 ? "olcum-uzun" : "";
     olcumTablo.append(
-      cell(s.label, uzunMu), cell(`${sec(s.duration)} sn`, uzunMu), cell(`${sec(s.an)} sn`),
+      hucre(s.etiket, uzunMu), hucre(`${sn(s.sure)} sn`, uzunMu), hucre(`${sn(s.an)} sn`),
     );
   }
   olcumTablo.append(
-    cell("TOPLAM (başlat → bitiş)", "olcum-toplam"),
-    cell(`${sec(total)} sn`, "olcum-toplam"),
-    cell("", "olcum-toplam"),
+    hucre("TOPLAM (başlat → bitiş)", "olcum-toplam"),
+    hucre(`${sn(toplam)} sn`, "olcum-toplam"),
+    hucre("", "olcum-toplam"),
   );
   olcumBolum.hidden = false;
-  return { total, satirDizi };
+  return { toplam, satirDizi };
 }
 
 // Ölçümü sunucuya yolla (data/olcumler.jsonl). Metrik iddiası için süreler
 // ekranda kaybolmamalı. Başarısız gönderim akışı bozmaz — ölçüm, işin kendisi
 // değil.
-function olcumGonder(body) {
+function olcumGonder(govde) {
   fetch("/api/olcum", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(govde),
   }).catch(() => { /* olcum kaydi kritik degil */ });
 }
 
@@ -652,15 +652,15 @@ function olcumGonder(body) {
 // kaynağıydı. Yeni alan eklenirse SADECE buraya eklenir.
 function panelleriTemizle() {
   izgara.textContent = "";
-  lines.clear();
+  satirlar.clear();
   akisSatirlari.length = 0;
   akis.textContent = "";
-  simLock = null;
+  simKilit = null;
   el("kimlikOnce").textContent = "";
   el("konumOnce").textContent = "—";
   el("konumSonra").textContent = "—";
   onayBtn.hidden = true;
-  altBar.removeAttribute("data-state");
+  altBar.removeAttribute("data-hal");
   altDurum.textContent = "";
   pinIstek.hidden = true;
   olcumBolum.hidden = true;
@@ -697,11 +697,11 @@ function anaEkrana(duyuruMetni = "") {
 // Kurulum ve sıfırlama AYNI ekranı kullanır — ikisi de "öncesi → sonrası"
 // karşılaştırması. Fark: hangi uca bağlandığı, panel etiketleri ve bitişte
 // ne olacağı (kurulum onay bekler, sıfırlama ana ekrana döner).
-function akisiBaslat({ path, kind, phone = null, onceEtiket, sonraEtiket, calisirkenMetin }) {
+function akisiBaslat({ yol, tur, telefon = null, onceEtiket, sonraEtiket, calisirkenMetin }) {
   if (akim) { akim.close(); akim = null; }   // çift başlatmaya karşı
   durumuIzle(false);
   onayiKapat();
-  akisTuru = kind;
+  akisTuru = tur;
   sifirlaAlan.hidden = true;      // iş sürerken sıfırlama teklif edilmez
   duyuru.hidden = true;           // önceki işin duyurusu yeni işle silinir
   panelleriTemizle();
@@ -713,40 +713,40 @@ function akisiBaslat({ path, kind, phone = null, onceEtiket, sonraEtiket, calisi
   akisaYaz("başlatıldı");
 
   olcumBasla();
-  akim = new EventSource(path);
+  akim = new EventSource(yol);
 
   // Ölçüm: her damgalanan olay için ayrı dinleyici — mevcut işleyicilere
   // dokunmaz, biri eklenip çıkarılınca ölçüm bozulmaz.
-  for (const kind of Object.keys(OLCUM_ETIKET)) {
-    akim.addEventListener(kind, (e) => {
+  for (const tur of Object.keys(OLCUM_ETIKET)) {
+    akim.addEventListener(tur, (e) => {
       const o = JSON.parse(e.data);
-      olcumKaydet(kind, o.keys ? `${o.keys.length} ayar` : "");
+      olcumKaydet(tur, o.anahtarlar ? `${o.anahtarlar.length} ayar` : "");
     });
   }
 
-  akim.addEventListener("progress", (e) => akisaYaz(JSON.parse(e.data).message));
+  akim.addEventListener("ilerleme", (e) => akisaYaz(JSON.parse(e.data).mesaj));
 
-  akim.addEventListener("identityBefore", (e) => {
-    kimlikBas(el("kimlikOnce"), { ...JSON.parse(e.data), phone });
+  akim.addEventListener("kimlik_once", (e) => {
+    kimlikBas(el("kimlikOnce"), { ...JSON.parse(e.data), telefon });
   });
 
   akim.addEventListener("plan", (e) => {
-    izgaraKur(JSON.parse(e.data).lines);
+    izgaraKur(JSON.parse(e.data).satirlar);
   });
 
-  akim.addEventListener("detected", (e) => {
+  akim.addEventListener("algilandi", (e) => {
     const o = JSON.parse(e.data);
-    el("konumOnce").textContent = o.location || "modem yok";
-    ustDurum.dataset.state = o.action === "provisionFromFactory" ? "factory" : "field";
-    ustDurum.textContent = o.action.replace(/_/g, " ");
+    el("konumOnce").textContent = o.konum || "modem yok";
+    ustDurum.dataset.hal = o.eylem === "provizyon_fabrika" ? "fabrika" : "saha";
+    ustDurum.textContent = o.eylem.replace(/_/g, " ");
   });
 
-  akim.addEventListener("yaziliyor", (e) => halYaz(JSON.parse(e.data).keys, "yaziliyor", "yazılıyor"));
-  akim.addEventListener("yazildi", (e) => halYaz(JSON.parse(e.data).keys, "written", "yazıldı"));
+  akim.addEventListener("yaziliyor", (e) => halYaz(JSON.parse(e.data).anahtarlar, "yaziliyor", "yazılıyor"));
+  akim.addEventListener("yazildi", (e) => halYaz(JSON.parse(e.data).anahtarlar, "yazildi", "yazıldı"));
 
-  akim.addEventListener("writeFailed", (e) => {
-    const a = JSON.parse(e.data).keys || [];
-    halYaz(a, "error", "yazılamadı");
+  akim.addEventListener("yazma_hatasi", (e) => {
+    const a = JSON.parse(e.data).anahtarlar || [];
+    halYaz(a, "hata", "yazılamadı");
     akisaYaz(`yazılamadı: ${a.length} ayar`);
   });
 
@@ -757,61 +757,61 @@ function akisiBaslat({ path, kind, phone = null, onceEtiket, sonraEtiket, calisi
   akim.addEventListener("internet_bekleniyor", (e) => {
     const o = JSON.parse(e.data);
     altDurum.textContent = "SIM doğrulanıyor — internet bekleniyor "
-      + `(${o.elapsedSec}/${o.maxSec} sn)`;
+      + `(${o.gecen_sn}/${o.max_sn} sn)`;
   });
 
   akim.addEventListener("internet", (e) => {
     const o = JSON.parse(e.data);
-    akisaYaz(o.online
-      ? `internet VAR: ${o.wanIp} (${o.durationSec} sn) — SIM çalışıyor`
-      : `internet YOK (${o.durationSec} sn) — SIM durumu: ${o.simStatus || "?"}`);
+    akisaYaz(o.var
+      ? `internet VAR: ${o.wan_ip} (${o.sure_sn} sn) — SIM çalışıyor`
+      : `internet YOK (${o.sure_sn} sn) — SIM durumu: ${o.sim_durumu || "?"}`);
   });
 
   // Kurulum akışında PIN otomatik denenirse (baştan girilmişse) haber ver.
-  akim.addEventListener("pinAttempting", () => akisaYaz("SIM PIN yazılıyor (tek deneme)"));
+  akim.addEventListener("pin_deneniyor", () => akisaYaz("SIM PIN yazılıyor (tek deneme)"));
 
   // Cihaz PIN/PUK kilidini kendisi söylüyor ("Need verification PIN code
   // (PIN: 3/3, PUK: 10/10)") — internet beklemeye gerek yok, anında bildir.
-  akim.addEventListener("simLock", (e) => {
+  akim.addEventListener("sim_kilit", (e) => {
     const o = JSON.parse(e.data);
-    simLock = o;
-    akisaYaz(`SIM ${o.lock.toUpperCase()} KİLİTLİ — kalan hak: PIN ${o.pinRemaining ?? "?"}`
-      + `, PUK ${o.pukRemaining ?? "?"}`);
+    simKilit = o;
+    akisaYaz(`SIM ${o.kilit.toUpperCase()} KİLİTLİ — kalan hak: PIN ${o.pin_kalan ?? "?"}`
+      + `, PUK ${o.puk_kalan ?? "?"}`);
   });
 
   // Provizyon adımının bitişi (nihai sonuç değil — o `sonuc`). Yalnız
   // başarısızlıkta bilgi taşır: doğrulama neden tamamlanmadı.
   akim.addEventListener("bitti", (e) => {
     const o = JSON.parse(e.data);
-    if (!o.ok && o.verification?.reason) akisaYaz(o.verification.reason);
+    if (!o.ok && o.dogrulama?.sebep) akisaYaz(o.dogrulama.sebep);
   });
 
-  akim.addEventListener("verification", (e) => {
+  akim.addEventListener("dogrulama", (e) => {
     const o = JSON.parse(e.data);
-    akisaYaz(o.status === "waitingForDevice"
-      ? `modem bekleniyor (${o.attempt})`
-      : `oturmayan ayar: ${o.remaining.length}`);
+    akisaYaz(o.durum === "cihaz_bekleniyor"
+      ? `modem bekleniyor (${o.deneme})`
+      : `oturmayan ayar: ${o.kalan.length}`);
   });
 
   akim.addEventListener("dogrulandi", (e) => {
     const o = JSON.parse(e.data);
-    halYaz([...lines.keys()], "verified", "doğrulandı");
-    akisaYaz(`doğrulandı (${o.waitSec} sn)`);
+    halYaz([...satirlar.keys()], "dogrulandi", "doğrulandı");
+    akisaYaz(`doğrulandı (${o.bekleme_sn} sn)`);
   });
 
   akim.addEventListener("kimlik", (e) => {
     const k = JSON.parse(e.data).kimlik_bilgi || {};
-    if (k.iccid) kimlikBas(el("kimlikOnce"), { ...k, phone });
+    if (k.iccid) kimlikBas(el("kimlikOnce"), { ...k, telefon });
   });
 
-  akim.addEventListener("result", (e) => {
+  akim.addEventListener("sonuc", (e) => {
     const o = JSON.parse(e.data);
-    finish(o.ok, o);
+    bitir(o.ok, o);
   });
 
-  akim.addEventListener("error", (e) => {
+  akim.addEventListener("hata", (e) => {
     const o = JSON.parse(e.data);
-    finish(false, { status: o.message, fix: o.fix });
+    bitir(false, { durum: o.mesaj, cozum: o.cozum });
   });
 
   // Akış kapanırsa EventSource kendiliğinden YENİDEN BAĞLANIR — kurulumu
@@ -823,14 +823,14 @@ function akisiBaslat({ path, kind, phone = null, onceEtiket, sonraEtiket, calisi
 }
 
 baslatBtn.addEventListener("click", () => {
-  const phone = gizliGiris.value;
-  if (!isValid(phone)) return;
+  const telefon = gizliGiris.value;
+  if (!gecerliMi(telefon)) return;
   const pin = pinGiris.value.trim();
   akisiBaslat({
-    path: `/api/hazirla?telefon=${encodeURIComponent(phone)}`
+    yol: `/api/hazirla?telefon=${encodeURIComponent(telefon)}`
       + (pin ? `&pin=${encodeURIComponent(pin)}` : ""),
-    kind: "kurulum",
-    phone,
+    tur: "kurulum",
+    telefon,
     onceEtiket: "Kurulum öncesi",
     sonraEtiket: "Kurulum sonrası",
     calisirkenMetin: "Kurulum sürüyor…",
@@ -858,8 +858,8 @@ el("sifirlaHayir").addEventListener("click", () => {
 el("sifirlaEvet").addEventListener("click", () => {
   onayiKapat();
   akisiBaslat({
-    path: "/api/fabrikaya-dondur",
-    kind: "sifirlama",
+    yol: "/api/fabrikaya-dondur",
+    tur: "sifirlama",
     onceEtiket: "Şimdiki hali",
     sonraEtiket: "Fabrika hali",
     calisirkenMetin: "Fabrikaya döndürülüyor…",
@@ -874,73 +874,73 @@ document.addEventListener("click", (e) => {
   if (!onayBalon.hidden && !e.target.closest(".sifirla-alan")) onayiKapat();
 });
 
-function finish(ok, o) {
+function bitir(ok, o) {
   if (akim) { akim.close(); akim = null; }
-  const { total, satirDizi } = olcumBitir();
+  const { toplam, satirDizi } = olcumBitir();
 
   olcumGonder({
-    kind: akisTuru,
-    status: o.status ?? null,
+    tur: akisTuru,
+    durum: o.durum ?? null,
     ok: Boolean(ok),
-    attempt: o.attempt ?? null,
-    totalSec: Number(sec(total)),
-    entrySec: girisSn,
-    steps: satirDizi.map((s) => ({ name: s.label, durationSec: Number(sec(s.duration)),
-      an_sn: Number(sec(s.an)) })),
-    changedSettings: [...lines.values()].filter((s) => s.sag.dataset.state !== "sabit").length,
-    unchangedSettings: [...lines.values()].filter((s) => s.sag.dataset.state === "sabit").length,
-    phone: o.record?.phone ?? null,
-    iccid: o.record?.iccid ?? null,
-    imei: o.record?.imei ?? null,
-    lanMac: o.record?.lanMac ?? null,
-    modemIp: o.record?.modemIp ?? null,
+    deneme: o.deneme ?? null,
+    toplam_sn: Number(sn(toplam)),
+    giris_sn: girisSn,
+    adimlar: satirDizi.map((s) => ({ ad: s.etiket, sure_sn: Number(sn(s.sure)),
+      an_sn: Number(sn(s.an)) })),
+    degisen_ayar: [...satirlar.values()].filter((s) => s.sag.dataset.hal !== "sabit").length,
+    ayni_ayar: [...satirlar.values()].filter((s) => s.sag.dataset.hal === "sabit").length,
+    telefon: o.kayit?.telefon ?? null,
+    iccid: o.kayit?.iccid ?? null,
+    imei: o.kayit?.imei ?? null,
+    lan_mac: o.kayit?.lan_mac ?? null,
+    modem_ip: o.kayit?.modem_ip ?? null,
   });
 
   // Sıfırlama BAŞARILIYSA oturum burada biter: modem sıfırlandı, ekran da
   // sıfırdan başlamalı. Sonuç ekranında bekletip fazladan tıklama istemek
   // yanlıştı — sonuç ana ekranda duyuru olarak görünür.
   if (ok && akisTuru === "sifirlama") {
-    anaEkrana(`Modem fabrikaya döndürüldü · ${o.record?.modemIp || "192.168.1.1"}`
-      + ` · ${sec(total)} sn — sıradaki kurulum için hazır.`);
+    anaEkrana(`Modem fabrikaya döndürüldü · ${o.kayit?.modem_ip || "192.168.1.1"}`
+      + ` · ${sn(toplam)} sn — sıradaki kurulum için hazır.`);
     return;
   }
 
-  const record = o.record;
-  if (record) {
-    el("konumSonra").textContent = record.modemIp || "—";
-    kimlikBas(el("kimlikOnce"), record);
+  const kayit = o.kayit;
+  if (kayit) {
+    el("konumSonra").textContent = kayit.modem_ip || "—";
+    kimlikBas(el("kimlikOnce"), kayit);
   }
-  altBar.dataset.state = ok ? "ready" : "error";
-  const net = o.record?.wanIp
-    ? ` · internet ${o.record.wanIp}`
-    : (o.status || "").includes("noInternet") ? " · ⚠ İNTERNET YOK (SIM/PIN kontrol et)" : "";
+  altBar.dataset.hal = ok ? "hazir" : "hata";
+  const net = o.kayit?.wan_ip
+    ? ` · internet ${o.kayit.wan_ip}`
+    : (o.durum || "").includes("internet_yok") ? " · ⚠ İNTERNET YOK (SIM/PIN kontrol et)" : "";
   altDurum.textContent = ok
-    ? `HAZIR — ${o.status}${o.attempt ? ` (deneme ${o.attempt})` : ""} · ${sec(total)} sn`
+    ? `HAZIR — ${o.durum}${o.deneme ? ` (deneme ${o.deneme})` : ""} · ${sn(toplam)} sn`
       + `${net} · deftere yazıldı`
-    : `BAŞARISIZ — ${o.status || "bilinmeyen"}${o.fix ? ` · ${o.fix}` : ""}`;
+    : `BAŞARISIZ — ${o.durum || "bilinmeyen"}${o.cozum ? ` · ${o.cozum}` : ""}`;
   // Internet yoksa alt bar UYARI rengine gecsin: gozden kacmasin.
-  if (ok && (o.status || "").includes("noInternet")) altBar.dataset.state = "warning";
+  if (ok && (o.durum || "").includes("internet_yok")) altBar.dataset.hal = "uyari";
   if (!ok && o.problems?.length) {
-    akisaYaz(o.problems.map((p) => (p.tr?.baslik ?? p.code)).join(" · "));
+    akisaYaz(o.problems.map((p) => (p.tr?.baslik ?? p.kod)).join(" · "));
   }
   // SIM kilidi cihazdan geldiyse BİRİNCİL çözümü söyle: PIN'i telefondan kapat.
   // Proje kararı PIN saklamak değil, PIN'i ortadan kaldırmak.
-  const code = (k) => (o.problems || []).some((p) => p.code === k);
-  if (simLock?.lock === "puk") {
-    altBar.dataset.state = "error";
-    altDurum.textContent = `SIM PUK KİLİTLİ (kalan ${simLock.pukRemaining ?? "?"})`
+  const kod = (k) => (o.problems || []).some((p) => p.kod === k);
+  if (simKilit?.kilit === "puk") {
+    altBar.dataset.hal = "hata";
+    altDurum.textContent = `SIM PUK KİLİTLİ (kalan ${simKilit.puk_kalan ?? "?"})`
       + " — telefonla PUK ile aç; PIN yazmak işe yaramaz";
-  } else if (simLock?.lock === "pin") {
-    altBar.dataset.state = "warning";
-    altDurum.textContent = `SIM PIN KİLİTLİ (kalan ${simLock.pinRemaining ?? "?"} hak)`
+  } else if (simKilit?.kilit === "pin") {
+    altBar.dataset.hal = "uyari";
+    altDurum.textContent = `SIM PIN KİLİTLİ (kalan ${simKilit.pin_kalan ?? "?"} hak)`
       + " — SIM'i telefona takıp PIN'i KAPAT, sonra geri tak";
   }
 
   // PIN kilidi VE PIN denenmedi -> operatörü ana ekrana atmadan burada sor.
   // Kurtarma yolu: provizyon tekrarlanmaz, yalnızca PIN yazılır (ayrı iş).
   // Son hak korumasına takıldıysa da sor: kararı insan verecek.
-  const pinGerekli = (code("PIN_REQUIRED") || code("SIM_PIN_LOCKED")
-    || code("PIN_LAST_ATTEMPT")) && simLock?.lock !== "puk";
+  const pinGerekli = (kod("PIN_REQUIRED") || kod("SIM_PIN_LOCKED")
+    || kod("PIN_LAST_ATTEMPT")) && simKilit?.kilit !== "puk";
   pinIstek.hidden = !pinGerekli;
   if (pinGerekli) {
     pinIstekGiris.value = "";
@@ -958,50 +958,50 @@ pinDeneBtn.addEventListener("click", () => {
   const p = pinIstekGiris.value.trim();
   if (!/^\d{4,8}$/.test(p)) return;
   pinDeneBtn.disabled = true;
-  altBar.removeAttribute("data-state");
+  altBar.removeAttribute("data-hal");
   altDurum.textContent = "SIM PIN deneniyor…";
   akisaYaz("PIN deneniyor");
   if (akim) { akim.close(); akim = null; }
   akim = new EventSource(`/api/pin?pin=${encodeURIComponent(p)}`);
-  for (const kind of ["progress", "internet_bekleniyor", "internet", "reboot",
-    "pinAttempting", "pinResult", "error"]) {
-    akim.addEventListener(kind, (e) => pinOlayi(kind, JSON.parse(e.data)));
+  for (const tur of ["ilerleme", "internet_bekleniyor", "internet", "reboot",
+    "pin_deneniyor", "pin_sonuc", "hata"]) {
+    akim.addEventListener(tur, (e) => pinOlayi(tur, JSON.parse(e.data)));
   }
 });
 
-function pinOlayi(kind, o) {
-  if (kind === "progress") return akisaYaz(o.message);
-  if (kind === "reboot") return akisaYaz("modem yeniden başlatılıyor");
-  if (kind === "pinAttempting") return akisaYaz("SIM PIN yazılıyor");
-  if (kind === "internet_bekleniyor") {
-    altDurum.textContent = `PIN sonrası internet bekleniyor (${o.elapsedSec}/${o.maxSec} sn)`;
+function pinOlayi(tur, o) {
+  if (tur === "ilerleme") return akisaYaz(o.mesaj);
+  if (tur === "reboot") return akisaYaz("modem yeniden başlatılıyor");
+  if (tur === "pin_deneniyor") return akisaYaz("SIM PIN yazılıyor");
+  if (tur === "internet_bekleniyor") {
+    altDurum.textContent = `PIN sonrası internet bekleniyor (${o.gecen_sn}/${o.max_sn} sn)`;
     return undefined;
   }
-  if (kind === "internet") {
-    return akisaYaz(o.online ? `internet VAR: ${o.wanIp} (${o.durationSec} sn)`
-      : `internet YOK (${o.durationSec} sn)`);
+  if (tur === "internet") {
+    return akisaYaz(o.var ? `internet VAR: ${o.wan_ip} (${o.sure_sn} sn)`
+      : `internet YOK (${o.sure_sn} sn)`);
   }
-  if (kind === "error") {
+  if (tur === "hata") {
     if (akim) { akim.close(); akim = null; }
-    altBar.dataset.state = "error";
-    altDurum.textContent = `PIN denenemedi — ${o.message}`;
+    altBar.dataset.hal = "hata";
+    altDurum.textContent = `PIN denenemedi — ${o.mesaj}`;
     pinDeneBtn.disabled = false;
     return undefined;
   }
   // pin_sonuc
   if (akim) { akim.close(); akim = null; }
-  if (!o.attempted) {
-    akisaYaz(`PIN denenmedi (${o.skipped})`);
+  if (!o.denendi) {
+    akisaYaz(`PIN denenmedi (${o.atlandi})`);
     const t = o.problems?.[0]?.tr;
-    altDurum.textContent = `PIN DENENMEDİ — ${t ? `${t.baslik}. ${t.neYap}` : o.skipped}`;
+    altDurum.textContent = `PIN DENENMEDİ — ${t ? `${t.baslik}. ${t.neYap}` : o.atlandi}`;
     pinDeneBtn.disabled = false;
     return undefined;
   }
   pinIstek.hidden = true;
-  altBar.dataset.state = o.internet?.online ? "ready" : "warning";
-  altDurum.textContent = o.internet?.online
-    ? `PIN KABUL EDİLDİ — internet ${o.internet.wanIp} (${o.internet.durationSec} sn)`
-    : `PIN yazıldı ama internet gelmedi (${o.internet?.durationSec} sn) — kapsama/data paketi?`;
+  altBar.dataset.hal = o.internet?.var ? "hazir" : "uyari";
+  altDurum.textContent = o.internet?.var
+    ? `PIN KABUL EDİLDİ — internet ${o.internet.wan_ip} (${o.internet.sure_sn} sn)`
+    : `PIN yazıldı ama internet gelmedi (${o.internet?.sure_sn} sn) — kapsama/data paketi?`;
   onayBtn.hidden = false;
   onayBtn.focus();
   return undefined;

@@ -14,7 +14,7 @@ import { parsePairs, simView } from "./ddwrt.js";
 import { problem, isOk } from "./problems.js";
 
 const now = () => new Date().toISOString();
-const SIM_ENDPOINT = "/asp/status/Status_Internet.live.asp";
+const SIM_UC = "/asp/status/Status_Internet.live.asp";
 
 // PURE: "Status of SIM" metnini çözer. Cihazın verdiği metin (2026-08-27
 // canlı, PIN kilitli SIM):
@@ -31,32 +31,32 @@ const SIM_ENDPOINT = "/asp/status/Status_Internet.live.asp";
 //
 // Doner: { ham, kilit: "pin"|"puk"|null, hazir, pin_kalan, pin_toplam,
 //          puk_kalan, puk_toplam }
-export function parseSimStatus(raw) {
-  const text = String(raw ?? "").trim();
-  const counter = (name) => {
-    const m = text.match(new RegExp(`${name}:\\s*(\\d+)\\s*/\\s*(\\d+)`, "i"));
-    return m ? { remaining: Number(m[1]), total: Number(m[2]) } : { remaining: null, total: null };
+export function parseSimStatus(ham) {
+  const metin = String(ham ?? "").trim();
+  const sayac = (ad) => {
+    const m = metin.match(new RegExp(`${ad}:\\s*(\\d+)\\s*/\\s*(\\d+)`, "i"));
+    return m ? { kalan: Number(m[1]), toplam: Number(m[2]) } : { kalan: null, toplam: null };
   };
-  const pin = counter("PIN");
-  const puk = counter("PUK");
-  let lock = null;
-  if (/verification\s+puk|puk\s+(code\s+)?required|puk\s+lock/i.test(text)) lock = "puk";
-  else if (/verification\s+pin|pin\s+(code\s+)?required|pin\s+lock/i.test(text)) lock = "pin";
+  const pin = sayac("PIN");
+  const puk = sayac("PUK");
+  let kilit = null;
+  if (/verification\s+puk|puk\s+(code\s+)?required|puk\s+lock/i.test(metin)) kilit = "puk";
+  else if (/verification\s+pin|pin\s+(code\s+)?required|pin\s+lock/i.test(metin)) kilit = "pin";
   return {
-    raw: text || null,
-    lock,
+    ham: metin || null,
+    kilit,
     // "hazir": SIM kullanıma hazır. Kilit varsa ya da metin boş/OK değilse hayır.
-    ready: lock === null && /^ok$/i.test(text),
-    pinRemaining: pin.remaining, pinTotal: pin.total,
-    pukRemaining: puk.remaining, pukTotal: puk.total,
+    hazir: kilit === null && /^ok$/i.test(metin),
+    pin_kalan: pin.kalan, pin_toplam: pin.toplam,
+    puk_kalan: puk.kalan, puk_toplam: puk.toplam,
   };
 }
 
 // Turkiye mobil numarasini 5xxxxxxxxx (10 hane) olarak normalize eder.
 // Gecersizse null. (+90 / 0 / bosluk-tire kabul.)
-export function normalizePhone(raw) {
-  if (!raw) return null;
-  const d = String(raw).replace(/[\s.\-()]/g, "").replace(/^\+?90/, "").replace(/^0/, "");
+export function normalizePhone(ham) {
+  if (!ham) return null;
+  const d = String(ham).replace(/[\s.\-()]/g, "").replace(/^\+?90/, "").replace(/^0/, "");
   return /^5\d{9}$/.test(d) ? d : null;
 }
 
@@ -67,37 +67,37 @@ export function normalizePhone(raw) {
 // nasil gosterilecegi bir karardir; karar cekirdekte, arayuz hazir degeri
 // basar. Ayni sebeple bir tane daha normalize fonksiyonu yazmiyoruz —
 // normalizePhone tek dogru kaynak, bu onun ustunde ince bir katman.
-export function phoneInputFormat(raw) {
-  const n = normalizePhone(raw);
+export function telefonGirdiBicimi(ham) {
+  const n = normalizePhone(ham);
   return n ? `0${n}` : "";
 }
 
 // SIM/hucresel bilgisini okur. opts: { host, kaynakIp, kimlik, telefon? }
 // Doner: sonuc nesnesi (throw etmez).
-export async function readSim(options) {
-  const { host, sourceIp, kimlik, phone } = options;
-  const report = { timestamp: now(), command: "sim", modemIp: host, problems: [] };
+export async function readSim(opts) {
+  const { host, kaynakIp, kimlik, telefon } = opts;
+  const rapor = { zaman: now(), komut: "sim", modem_ip: host, problems: [] };
   if (!kimlik) {
-    report.problems.push(problem("AUTH_REQUIRED", SIM_ENDPOINT));
-    report.ok = false;
-    return report;
+    rapor.problems.push(problem("AUTH_REQUIRED", SIM_UC));
+    rapor.ok = false;
+    return rapor;
   }
-  const c = new Client({ host, sourceIp, kimlik });
-  const r = await c.get(SIM_ENDPOINT);
-  report.problems.push(...r.problems.filter((p) => p.severity === "error"));
-  const { sim1, sim2 } = simView(parsePairs(r.body || ""));
-  report.sim1 = sim1;
-  report.sim2 = sim2;
+  const c = new Client({ host, kaynakIp, kimlik });
+  const r = await c.get(SIM_UC);
+  rapor.problems.push(...r.problems.filter((p) => p.severity === "error"));
+  const { sim1, sim2 } = simView(parsePairs(r.govde || ""));
+  rapor.sim1 = sim1;
+  rapor.sim2 = sim2;
 
   // MSISDN: cihazdan gelmez; operator/UI girdisi (opts.telefon).
-  const norm = normalizePhone(phone);
-  if (phone && !norm) report.problems.push(problem("MSISDN_INVALID", phone));
-  report.msisdn = norm;
-  report.msisdnSource = norm ? "operator_girisi" : null;
+  const norm = normalizePhone(telefon);
+  if (telefon && !norm) rapor.problems.push(problem("MSISDN_INVALID", telefon));
+  rapor.msisdn = norm;
+  rapor.msisdn_kaynak = norm ? "operator_girisi" : null;
   if (!norm) {
-    report.msisdn_not = "Telefon no cihazdan alinamaz; operator/UI girisi gerekir "
+    rapor.msisdn_not = "Telefon no cihazdan alinamaz; operator/UI girisi gerekir "
       + "(--telefon 05xxxxxxxxx) ya da operatorden ICCID->numara listesi.";
   }
-  report.ok = isOk(report.problems);
-  return report;
+  rapor.ok = isOk(rapor.problems);
+  return rapor;
 }

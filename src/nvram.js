@@ -18,12 +18,12 @@ const IMZA = "ROUTER";
 // Doner: { degerler, sayi, problems }  (throw etmez)
 export function parseNvram(buf) {
   const problems = [];
-  const values = Object.create(null);
+  const degerler = Object.create(null);
 
   if (!buf || buf.length < IMZA.length ||
       buf.subarray(0, IMZA.length).toString("latin1") !== IMZA) {
     problems.push(problem("NVRAM_BAD_HEADER"));
-    return { values, count: 0, problems };
+    return { degerler, sayi: 0, problems };
   }
 
   // Basluk boyutu firmware'e gore degisebilir; imza sonrasindan itibaren
@@ -31,31 +31,31 @@ export function parseNvram(buf) {
   const start = baslangicBul(buf);
   if (start === -1) {
     problems.push(problem("NVRAM_BAD_HEADER"));
-    return { values, count: 0, problems };
+    return { degerler, sayi: 0, problems };
   }
 
   let off = start;
-  let count = 0;
+  let sayi = 0;
   while (off < buf.length) {
     const kl = buf.readUInt8(off); off += 1;
     const key = buf.subarray(off, off + kl).toString("latin1"); off += kl;
     const vl = buf.readUInt16LE(off); off += 2;
     const val = buf.subarray(off, off + vl).toString("latin1"); off += vl;
-    values[key] = val;
-    count += 1;
+    degerler[key] = val;
+    sayi += 1;
   }
-  return { values, count, problems };
+  return { degerler, sayi, problems };
 }
 
 // Imzadan sonra, dosya sonuna tam oturan ve anahtarlari ASCII olan offset.
 function baslangicBul(buf) {
   for (let start = IMZA.length; start <= IMZA.length + 10; start += 1) {
-    if (parsesCleanly(buf, start)) return start;
+    if (temizAyrisiyorMu(buf, start)) return start;
   }
   return -1;
 }
 
-function parsesCleanly(buf, start) {
+function temizAyrisiyorMu(buf, start) {
   let off = start;
   let n = 0;
   while (off < buf.length) {
@@ -75,31 +75,31 @@ function parsesCleanly(buf, start) {
 
 // Iki nvram dokumunun farki — Faz 2/3 icin. Doner:
 //   { eklenen:{k:v}, silinen:{k:v}, degisen:{k:{eski,yeni}} }
-export function diffNvram(previous, next) {
+export function diffNvram(eski, yeni) {
   const eklenen = Object.create(null);
   const silinen = Object.create(null);
-  const changed = Object.create(null);
-  for (const k of Object.keys(next)) {
-    if (!(k in previous)) eklenen[k] = next[k];
-    else if (previous[k] !== next[k]) changed[k] = { previous: previous[k], next: next[k] };
+  const degisen = Object.create(null);
+  for (const k of Object.keys(yeni)) {
+    if (!(k in eski)) eklenen[k] = yeni[k];
+    else if (eski[k] !== yeni[k]) degisen[k] = { eski: eski[k], yeni: yeni[k] };
   }
-  for (const k of Object.keys(previous)) {
-    if (!(k in next)) silinen[k] = previous[k];
+  for (const k of Object.keys(eski)) {
+    if (!(k in yeni)) silinen[k] = eski[k];
   }
-  return { eklenen, silinen, changed };
+  return { eklenen, silinen, degisen };
 }
 
 // Zaman damgasi — sonuc nesnesi "bu okuma ne zaman yapildi" tasir.
 const now = () => new Date().toISOString();
 
 // --- fark: iki nvram nesnesini karsilastir (saf, cihaza gitmez) ---
-export function computeNvramDiff(before, after) {
-  const f = diffNvram(before, after);
+export function computeNvramDiff(once, sonra) {
+  const f = diffNvram(once, sonra);
   return {
-    timestamp: now(), command: "fark",
-    changed: f.changed, eklenen: f.eklenen, silinen: f.silinen,
-    summary: {
-      changed: Object.keys(f.changed).length,
+    zaman: now(), komut: "fark",
+    degisen: f.degisen, eklenen: f.eklenen, silinen: f.silinen,
+    ozet: {
+      degisen: Object.keys(f.degisen).length,
       eklenen: Object.keys(f.eklenen).length,
       silinen: Object.keys(f.silinen).length,
     },

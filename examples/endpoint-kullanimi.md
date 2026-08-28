@@ -36,23 +36,23 @@ curl -s http://127.0.0.1:8080/api/degerlendir
 
 ```json
 { "ok": true,
-  "modem": { "location": "factory", "host": "192.168.1.1" },
-  "phone": { "number": "5350634830", "source": "device", "input": "05350634830" },
-  "sim": { "present": true, "lock": null, "pinRemaining": null },
-  "missing": [], "canStart": true,
-  "retry": { "retry": false, "delaySec": null, "reason": "canStart" },
-  "pinRemovable": null, "problems": [] }
+  "modem": { "konum": "fabrika", "host": "192.168.1.1" },
+  "telefon": { "numara": "5350634830", "kaynak": "cihaz", "girdi": "05350634830" },
+  "sim": { "takili": true, "kilit": null, "pin_kalan": null },
+  "eksik": [], "baslatilabilir": true,
+  "tekrar": { "tekrar": false, "sonra_sn": null, "sebep": "baslatilabilir" },
+  "pin_kaldirilabilir": null, "problems": [] }
 ```
 
-`retry` çekirdeğin kararı: geçici hatada `{retry:true, delaySec:5}`, insan
-beklenirken `{retry:false}`. Tüketici bu süreye uyar, kendi politikasını
+`tekrar` çekirdeğin kararı: geçici hatada `{tekrar:true, sonra_sn:5}`, insan
+beklenirken `{tekrar:false}`. Tüketici bu süreye uyar, kendi politikasını
 yazmaz.
 
 ### `GET /api/pin-kaldir?pin=1234` — SIM PIN kilidini KALICI kaldır (SSE)
 
 `/api/pin`'in **tersi**: PIN'i cihaza yazmaz, SIM'in kendisinden kaldırır.
 Korumalar çekirdekte: biçim, PUK, hak yanmışsa denemez, son hakkı yakmaz,
-tek deneme. Olaylar: `progress`, `simLock`, `pinDisableResult`, `error`.
+tek deneme. Olaylar: `ilerleme`, `sim_kilit`, `pin_kaldir_sonuc`, `hata`.
 
 ### `GET /api/hazirla?pin=1234` — provizyon (SSE akışı)
 
