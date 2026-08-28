@@ -119,6 +119,25 @@ export function atKabukKomutu(port, komut, okumaSn = 3) {
     + `while read -t ${okumaSn} l <&3; do echo "ATL:$l"; done; exec 3<&-`;
 }
 
+// DENENDI VE VAZGECILDI — portu komuttan once bosaltmak (`read -t 1` dongusu).
+//
+// Fikir: bayat cevap portta bekliyorsa gondermeden once yutulsun. OLCUM
+// (2026-08-28, ayni sorgu 8'er kez) fayda GOSTERMEDI:
+//     temizlemesiz 0/8 karisik · 24.9 sn
+//     temizlemeli  1/8 karisik · 35.1 sn   (komut basina +1.3 sn)
+// Sebebi de anlasilir: bayat cevap portu ACARKEN orada degil, biz OKURKEN
+// geliyor — acilista bosaltmak onu yakalayamaz. Olculmus maliyeti olan,
+// olculmemis faydasi olan mekanizmayi tasimiyoruz. Yerine gecen cozum:
+// karismayi TESPIT edip yeniden okumak (atKarismisMi + atSorgu).
+
+// Cevap KARISMIS mi? Tek komut TEK sonlandirici doner (OK ya da ERROR).
+// Birden fazlasi, portta baska bir komutun cevabinin kaldigini gosterir —
+// yani elimizdeki metin hangi komuta ait, emin olamayiz.
+export function atKarismisMi(cevap) {
+  const sonlandirici = String(cevap || "").match(/^\s*(OK|ERROR|\+CME ERROR.*)\s*$/gm) || [];
+  return sonlandirici.length > 1;
+}
+
 // Kabuk ciktisindan yalnizca modul cevabini ayiklar (ATL: onekli satirlar).
 export function atCevabiAyikla(ham) {
   return String(ham || "").split(/\r?\n/)
@@ -227,6 +246,28 @@ function simYoluAcik(kilit) {
   return null;
 }
 
+// SALT OKUNUR sorgu — cevap KARISMISSA bir kez yeniden okur.
+//
+// Okuma bedava ve PIN harcamaz; kararin girdisi olan bir sorguda karisik
+// veriyle devam etmektense tekrar sormak dogru. Karisma sebebi: onceki
+// komutun cevabi gec gelip bizim okuma penceremize dusuyor.
+async function atSorgu(atOpts, komut, secenek = {}) {
+  const ilk = await atKomut(atOpts, komut, secenek);
+  if (!atKarismisMi(ilk.cevap)) return ilk;
+  return atKomut(atOpts, komut, secenek);
+}
+
+// Kilit sorgusu (AT+CLCK="SC",2). Parola istemez, hak HARCAMAZ.
+// Doner: true (acik) | false (kapali) | null (BILMIYORUZ)
+//
+// null iki halde doner: cevap okunamadi ya da cevap KARISMIS. Ikisinde de
+// "bilmiyoruz" demek dogru cevap — cagiran buna gore PIN gondermemeyi secer.
+async function kilitSorgusu(atOpts) {
+  const r = await atSorgu(atOpts, 'AT+CLCK="SC",2');
+  if (atKarismisMi(r.cevap)) return null;   // tekrar okundu, hala karisik
+  return parseClck(r.cevap);
+}
+
 // SIM PIN KILIDINI KALICI OLARAK KALDIRIR — projenin hedefi tam bu.
 //
 // NEDEN NVRAM'A PIN YAZMAKTAN IYI: nvram yolu SIM'i PIN'li BIRAKIR ve parolayi
@@ -264,7 +305,7 @@ export async function simPinKaldir(opts, pin, { elleOnay = false, kaliciKapat = 
     rapor.ok = true;
     rapor.acildi = true;
     if (!kaliciKapat) return rapor;
-    const acikMi = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap);
+    const acikMi = await kilitSorgusu(atOpts);
     if (acikMi === false) {
       rapor.kilit_kaldirildi = true;   // istenen durum: kilit kapali
       return rapor;
@@ -308,7 +349,7 @@ export async function simPinKaldir(opts, pin, { elleOnay = false, kaliciKapat = 
     rapor.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
     return rapor;
   }
-  const dogrula = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap);
+  const dogrula = await kilitSorgusu(atOpts);
   rapor.kilit_kaldirildi = dogrula === false;
   if (!rapor.kilit_kaldirildi) rapor.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
   return rapor;
@@ -349,7 +390,7 @@ export async function simPinKilitle(opts, pin, { elleOnay = false } = {}) {
   }
   // Acik SIM: kilit sorgusu ZATEN 1 mi? (sorgu hak harcamaz)
   if (kilit.hazir) {
-    const acikMi = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap);
+    const acikMi = await kilitSorgusu(atOpts);
     if (acikMi === true) {
       rapor.ok = true;
       rapor.kilit_acik = true;
@@ -374,7 +415,7 @@ export async function simPinKilitle(opts, pin, { elleOnay = false } = {}) {
     return rapor;   // TEKRAR DENEMEZ
   }
   rapor.ok = true;
-  rapor.kilit_acik = parseClck((await atKomut(atOpts, 'AT+CLCK="SC",2')).cevap) === true;
+  rapor.kilit_acik = (await kilitSorgusu(atOpts)) === true;
   if (!rapor.kilit_acik) rapor.problems.push(problem("PIN_LOCK_NOT_ENABLED"));
   return rapor;
 }
@@ -387,10 +428,12 @@ export async function readSimLock(opts) {
   if (!port) return { durum: "UNKNOWN", hazir: false, pin_kalan: null, puk_kalan: null, problems: portSorun };
 
   const atOpts = { ...opts, atPort: port };
-  const durum = parseCpin((await atKomut(atOpts, "AT+CPIN?")).cevap);
+  // Kilit durumu ve kalan hak, PIN harcama kararinin GIRDISI — temiz portta
+  // okunur, karisan cevaptan karar cikarilmaz.
+  const durum = parseCpin((await atSorgu(atOpts, "AT+CPIN?")).cevap);
   let sayac = null;
   for (const komut of ['AT+QPINC="SC"', "AT+CPINC"]) {
-    sayac = parsePinCounter((await atKomut(atOpts, komut)).cevap);
+    sayac = parsePinCounter((await atSorgu(atOpts, komut)).cevap);
     if (sayac) break;
   }
   return {

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
-  atTamam, atKabukKomutu, atCevabiAyikla, atYazanMi,
+  atTamam, atKabukKomutu, atCevabiAyikla, atYazanMi, atKarismisMi,
 } from "../src/at.js";
 
 test("parseCnum: SIM'e yazili numarayi BIZIM kanonik bicime cevirir", () => {
@@ -123,4 +123,34 @@ test("atYazanMi: salt okunur sorgular serbest", () => {
   for (const k of ["AT", "AT+CNUM", "AT+CPIN?", 'AT+QPINC="SC"', "AT+CPINC", "AT+CCID"]) {
     assert.equal(atYazanMi(k), false, k);
   }
+});
+
+// --- Port temizleme ve KARISMIS cevap ---
+//
+// Canli goruldu (2026-08-28, ~10 okumanin 2'sinde): bir komutun cevabi, o
+// komutun okuma penceresi kapandiktan SONRA gelirse portta kaliyor ve BIR
+// SONRAKI komut onu okuyor. Belirtisi cift OK. Kayma bir cevap kadar olursa
+// dogrulama BIR ONCEKININ cevabini okur — PIN yolunda "kilit kalkti" yalanina
+// kadar gidebilir.
+// Port bosaltma DENENDI VE KALDIRILDI: olcum fayda gostermedi, maliyeti
+// gercekti (komut basina +1.3 sn). Kalan koruma karismayi TESPIT etmek.
+test("atKabukKomutu: fazladan bekleme YOK (bosaltma kaldirildi)", () => {
+  const k = atKabukKomutu("/dev/ttyUSB0", "AT+CNUM", 3);
+  assert.ok(!k.includes("read -t 1"), "olculmemis faydasi olan bekleme tasinmaz");
+  assert.equal(k.split("printf").length - 1, 1, "tek gonderim");
+});
+
+test("atKarismisMi: tek sonlandirici temiz, ikisi KARISMIS", () => {
+  assert.equal(atKarismisMi("\n+CLCK: 0\n\nOK"), false);
+  assert.equal(atKarismisMi("\n+CLCK: 0\n\nOK\n\nOK"), true, "canli gorulen bicim");
+  assert.equal(atKarismisMi("\n+CPIN: READY\n\nOK\n\nOK"), true, "canli gorulen bicim");
+  assert.equal(atKarismisMi("ERROR"), false);
+  assert.equal(atKarismisMi("OK\nERROR"), true, "iki farkli sonlandirici da karisiktir");
+  assert.equal(atKarismisMi(""), false);
+  assert.equal(atKarismisMi(null), false);
+});
+
+test("atKarismisMi: OK gecen METIN sonlandirici sayilmaz", () => {
+  // "+CNUM: \"OK hat\",..." gibi bir deger yanlislikla sonlandirici olmasin.
+  assert.equal(atKarismisMi('+CNUM: "OK hat","+905350634747",145\n\nOK'), false);
 });
