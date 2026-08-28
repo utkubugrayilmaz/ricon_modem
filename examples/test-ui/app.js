@@ -492,7 +492,7 @@ function buildGrid(rows) {
 
 function makeCell(name, value, sagMi, willChange) {
   const h = document.createElement("div");
-  h.className = "cell" + (sagMi ? " cell-after" : "") + (willChange ? "" : " unchanged");
+  h.className = "cell" + (sagMi ? " cell-after" : "") + (willChange ? "" : " sabit");
   const a = document.createElement("span");
   a.className = "r-name";
   a.textContent = name;
@@ -503,17 +503,10 @@ function makeCell(name, value, sagMi, willChange) {
   return h;
 }
 
-// DEGISMEYEN satirin durumu yazilmaz. Kontrol SINIF uzerinden: "unchanged"
-// bir CSS sinifi (makeCell koyuyor), `data-state` DEGERI degil. Eskiden
-// `dataset.state === "sabit"` diye bakiliyordu — "sabit" hicbir zaman bir
-// data-state degeri olmadi, yani bu kontrol HIC tutmuyordu (rename oncesi de
-// boyleydi). Ayni hata olcum sayimini da bozuyordu.
-const isUnchangedRow = (s) => s.sag.classList.contains("unchanged");
-
 function setRowState(keys, state, label) {
   for (const k of keys || []) {
     const s = lines.get(k);
-    if (!s || isUnchangedRow(s)) continue;
+    if (!s || s.sag.dataset.state === "unchanged") continue;
     s.sag.dataset.state = state;
     s.stateCell.textContent = label;
   }
@@ -894,10 +887,8 @@ function finish(ok, o) {
     entrySec: entrySec,
     steps: metricRows.map((s) => ({ name: s.label, durationSec: Number(sec(s.duration)),
       an_sn: Number(sec(s.an)) })),
-    // SINIF uzerinden sayiliyor (bkz. isUnchangedRow). data-state ile
-    // sayan eski hal her satiri "degisti" gosteriyordu, unchanged SIFIR kaliyordu.
-    changedSettings: [...lines.values()].filter((s) => !isUnchangedRow(s)).length,
-    unchangedSettings: [...lines.values()].filter(isUnchangedRow).length,
+    changedSettings: [...lines.values()].filter((s) => s.sag.dataset.state !== "unchanged").length,
+    unchangedSettings: [...lines.values()].filter((s) => s.sag.dataset.state === "unchanged").length,
     phone: o.record?.phone ?? null,
     iccid: o.record?.iccid ?? null,
     imei: o.record?.imei ?? null,
