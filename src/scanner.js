@@ -12,51 +12,51 @@ import { TCP_PORTS, TCP_PROBE_MS } from "./constants.js";
 
 // Tek portun acik olup olmadigina bakar; acilsa banner'i (ilk baytlar) alir.
 // Throw etmez. Doner: { kapi, acik, banner|null }
-export function probePort(host, kapi, kaynakIp, zamanAsimi = TCP_PROBE_MS) {
+export function probePort(host, port, sourceIp, timeout = TCP_PROBE_MS) {
   return new Promise((resolve) => {
-    const soket = new net.Socket();
+    const socket = new net.Socket();
     let banner = "";
-    let bitti = false;
-    const kapat = (acik) => {
-      if (bitti) return;
-      bitti = true;
-      soket.destroy();
-      resolve({ kapi, acik, banner: banner.trim() || null });
+    let done = false;
+    const close = (isOpen) => {
+      if (done) return;
+      done = true;
+      socket.destroy();
+      resolve({ port, isOpen, banner: banner.trim() || null });
     };
-    soket.setTimeout(zamanAsimi);
-    const baglantiSecenek = { host, port: kapi };
-    if (kaynakIp) baglantiSecenek.localAddress = kaynakIp;
-    soket.connect(baglantiSecenek, () => {
+    socket.setTimeout(timeout);
+    const connectOptions = { host, port: port };
+    if (sourceIp) connectOptions.localAddress = sourceIp;
+    socket.connect(connectOptions, () => {
       // Bazi servisler (SSH/telnet) baglaninca banner yollar; kisa bekle.
-      soket.setTimeout(600);
+      socket.setTimeout(600);
     });
-    soket.on("data", (d) => {
+    socket.on("data", (d) => {
       banner += d.toString("latin1").slice(0, 200);
-      kapat(true);
+      close(true);
     });
-    soket.on("timeout", () => kapat(banner ? true : soket.connecting ? false : true));
-    soket.on("error", () => kapat(false));
+    socket.on("timeout", () => close(banner ? true : socket.connecting ? false : true));
+    socket.on("error", () => close(false));
   });
 }
 
 // Bir hedefte kapi listesini tarar (sinirli es zamanlilik). Doner: [{kapi,acik,banner}]
-export async function scanPorts(host, kaynakIp, kapilar = TCP_PORTS, esZaman = 6) {
-  const liste = kapilar.map((k) => (typeof k === "number" ? k : k.kapi));
-  const sonuc = [];
-  for (let i = 0; i < liste.length; i += esZaman) {
-    const dilim = liste.slice(i, i + esZaman);
+export async function scanPorts(host, sourceIp, ports = TCP_PORTS, concurrency = 6) {
+  const list = ports.map((k) => (typeof k === "number" ? k : k.port));
+  const result = [];
+  for (let i = 0; i < list.length; i += concurrency) {
+    const slice = list.slice(i, i + concurrency);
     const parca = await Promise.all(
-      dilim.map((kapi) => probePort(host, kapi, kaynakIp)),
+      slice.map((port) => probePort(host, port, sourceIp)),
     );
-    sonuc.push(...parca);
+    result.push(...parca);
   }
-  return sonuc;
+  return result;
 }
 
 // Cihaz ayakta mi? Yaygin kapilara TCP connect (ICMP yerine).
 //
 // ⚠ KAYNAK IP VERMEK SART. Olculdu (2026-08-28, kurumsal ag): kaynak IP
-// BAGLANMADAN yapilan connect bu makinede HER adrese aninda "basarili"
+// BAGLANMADAN yapilan connect bu makinede HER adrese aninda "success"
 // donuyor (guvenlik ajani/proxy yerelde kabul ediyor) — TEST-NET dahil.
 // Yani kaynaksiz cagri "her cihaz ayakta" der ve teshis coker.
 //   isReachable("192.0.2.1")                -> true   (YANLIS)
@@ -64,8 +64,8 @@ export async function scanPorts(host, kaynakIp, kapilar = TCP_PORTS, esZaman = 6
 // Kaynak IP baglandiginda cekirdek yol dogru: rota yoksa connect timeout'a
 // dusuyor. Bu yuzden cagiranlar kaynagi pcPreflight'tan alir; alamiyorsa
 // yoklama YAPMAZ (bkz. provisionModem).
-export async function isReachable(host, kaynakIp) {
-  const oncelikli = [80, 443, 22, 8080, 23];
-  const r = await scanPorts(host, kaynakIp, oncelikli, 5);
-  return r.some((x) => x.acik);
+export async function isReachable(host, sourceIp) {
+  const priority = [80, 443, 22, 8080, 23];
+  const r = await scanPorts(host, sourceIp, priority, 5);
+  return r.some((x) => x.isOpen);
 }

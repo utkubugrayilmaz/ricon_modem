@@ -17,25 +17,25 @@ import { join } from "node:path";
 const KOK = new URL("../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 
 function metinDosyalari() {
-  const cikti = [];
+  const output = [];
   for (const dizin of ["src", "tests", "examples", "examples/test-ui", "."]) {
-    const yol = join(KOK, dizin);
-    for (const ad of readdirSync(yol, { withFileTypes: true })) {
-      if (!ad.isFile()) continue;
-      if (!/\.(js|json|md|html|css)$/.test(ad.name)) continue;
-      cikti.push({ ad: `${dizin}/${ad.name}`, bayt: readFileSync(join(yol, ad.name)) });
+    const path = join(KOK, dizin);
+    for (const name of readdirSync(path, { withFileTypes: true })) {
+      if (!name.isFile()) continue;
+      if (!/\.(js|json|md|html|css)$/.test(name.name)) continue;
+      output.push({ name: `${dizin}/${name.name}`, bayt: readFileSync(join(path, name.name)) });
     }
   }
-  return cikti;
+  return output;
 }
 
 test("tum kaynak dosyalar GECERLI UTF-8", () => {
   const kotu = [];
-  for (const { ad, bayt } of metinDosyalari()) {
+  for (const { name, bayt } of metinDosyalari()) {
     try {
       new TextDecoder("utf-8", { fatal: true }).decode(bayt);
     } catch {
-      kotu.push(ad);
+      kotu.push(name);
     }
   }
   assert.deepEqual(kotu, [], `gecersiz UTF-8: ${kotu.join(", ")}`);
@@ -51,7 +51,7 @@ test("kaynakta BOZUK KARAKTER (U+FFFD) yok", () => {
   const DEGISTIRME = String.fromCharCode(0xFFFD);
   const kotu = metinDosyalari()
     .filter(({ bayt }) => new TextDecoder().decode(bayt).includes(DEGISTIRME))
-    .map(({ ad }) => ad);
+    .map(({ name }) => name);
   assert.deepEqual(kotu, []);
 });
 

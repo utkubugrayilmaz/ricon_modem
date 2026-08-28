@@ -19,49 +19,49 @@ export {
   FIELD_PROFILE, FACTORY_PROFILE, PROFILES, DEVICE_NAME_KEY, SIM_PIN_KEY,
 } from "./profile.js";
 export {
-  provisionModem, provisionLoop, nextAction, provisionRecord, simPinHedefi,
+  provisionModem, provisionLoop, nextAction, provisionRecord, simPinTarget,
 } from "./pipeline.js";
 // Cihaz temel okumalari + PC on-kontrolu — en alt katman. Okuma yolu da
 // yazma yolu da buna bakiyor (aralarinda bagimlilik yok).
 export {
-  readIdentity, simTakiliMi, waitForInternet, pcPreflight,
+  readIdentity, isSimPresent, waitForInternet, pcPreflight,
 } from "./cihaz.js";
 // Cihaz DEGERLENDIRME — "ne durumda, ne eksik, tekrar bakmali miyim?"
 // yenidenDenemeKarari PURE: tekrar politikasi cekirdekte, arayuzde degil.
 export {
-  assessDevice, provisionEksikleri, yenidenDenemeKarari, degerlendirmeyiIzle,
+  assessDevice, provisioningGaps, retryDecision, watchAssessment,
 } from "./degerlendirme.js";
-export { readSim, normalizePhone, telefonGirdiBicimi, parseSimStatus } from "./sim.js";
+export { readSim, normalizePhone, phoneInputFormat, parseSimStatus } from "./sim.js";
 // PIN denemesi kararlari — PURE, TEK YER. nvram yolu, AT yolu ve
 // internet-sonrasi deneme yolu ucu de buraya soruyor.
 export {
-  pinDenemesiUygunMu, hakDurumu, hakYakilmisMi, PIN_TOPLAM_VARSAYILAN,
+  canSpendPinAttempt, attemptBudget, hasBurnedAttempt, PIN_TOTAL_DEFAULT,
 } from "./pin-karar.js";
 // AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
 export {
-  readMsisdn, readSimLock, simPinKaldir, simPinKilitle,
-  simKilitKaldirmaKarari, simKilidiUygunMu,
-  atPortBul, atKomut, atYazanMi, AT_PORT,
+  readMsisdn, readSimLock, disableSimPin, enableSimPin,
+  simUnlockDecision, isSimLockEligible,
+  findAtPort, atCommand, isAtWriteCommand, AT_PORT,
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
 } from "./at.js";
 // Konsol katmani — telnet root shell. Kendi komutunu calistirmak isteyen
 // tuketici icin acik: runConsole(opts, ["uname -a"]).
 export {
-  runConsole, consoleNvram, consoleRecon, konsolKimligi, parseNvramShow,
+  runConsole, consoleNvram, consoleRecon, consoleCredentials, parseNvramShow,
 } from "./console.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
 export { settingLabel } from "./report.js";
 // Sorun metinleri — kod -> operatore gosterilecek TURKCE. TEK sozluk.
-export { sorunTr, problemleriTurkcelestir, SORUN_TR } from "./sorun-metni.js";
+export { problemText, withProblemText, PROBLEM_TEXT_TR } from "./sorun-metni.js";
 export { PROBLEM_CODES } from "./problems.js";
 // Cihaz OKUMA islemleri (dogrula/oku/kesif/konsol) ve IZLEME. Govdeleri ayri
 // modullerde: bu dosya KAPI, uygulama degil.
 export {
   checkDevice, readDevice, systemView, discoverDevice, readConsole,
 } from "./okuma.js";
-export { watchDevice, kesintileriBul } from "./izleme.js";
+export { watchDevice, findOutages } from "./izleme.js";
 // nvram: ikili tam yedek cozumleyici + saf diff.
 export { parseNvram, diffNvram, computeNvramDiff } from "./nvram.js";
 // Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.
-export { summarizeMetrics, dagilim } from "./metrics.js";
+export { summarizeMetrics, distribution } from "./metrics.js";
 export { SETTING_LABELS } from "./constants.js";

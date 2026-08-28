@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
-  atTamam, atKabukKomutu, atCevabiAyikla, atYazanMi, atKarismisMi,
+  atOk, atShellCommand, extractAtResponse, isAtWriteCommand, isAtResponseMixed,
 } from "../src/at.js";
 
 test("parseCnum: SIM'e yazili numarayi BIZIM kanonik bicime cevirir", () => {
@@ -59,14 +59,14 @@ test("parseCcid: sondaki dolgu F atilir", () => {
 });
 
 test("atTamam: OK varsa ve ERROR yoksa basarili", () => {
-  assert.equal(atTamam("+CNUM: ...\nOK"), true);
-  assert.equal(atTamam("OK\n+CME ERROR: 10"), false, "ERROR varsa basarisiz");
-  assert.equal(atTamam("ERROR"), false);
-  assert.equal(atTamam(""), false);
+  assert.equal(atOk("+CNUM: ...\nOK"), true);
+  assert.equal(atOk("OK\n+CME ERROR: 10"), false, "ERROR varsa basarisiz");
+  assert.equal(atOk("ERROR"), false);
+  assert.equal(atOk(""), false);
 });
 
 test("atKabukKomutu: portu ACIK TUTAN bicim (DTR dusmesin)", () => {
-  const k = atKabukKomutu("/dev/ttyUSB0", "AT+CNUM", 3);
+  const k = atShellCommand("/dev/ttyUSB0", "AT+CNUM", 3);
   assert.match(k, /exec 3<>\/dev\/ttyUSB0/, "port tek fd ile acik tutulur");
   // String.raw: kacis karisikligi olmasin. Kabuga giden metin TAM olarak bu.
   assert.ok(k.includes(String.raw`printf 'AT+CNUM\r' >&3`),
@@ -76,7 +76,7 @@ test("atKabukKomutu: portu ACIK TUTAN bicim (DTR dusmesin)", () => {
 });
 
 test("atCevabiAyikla: kabuk gurultusunu atar, yalniz ATL: satirlarini alir", () => {
-  const ham = [
+  const raw = [
     "exec 3<>/dev/ttyUSB0; printf ...",   // kabuk yankisi
     "ATL:",
     "ATL:+CNUM: \"\",\"+905350634756\",145",
@@ -84,15 +84,15 @@ test("atCevabiAyikla: kabuk gurultusunu atar, yalniz ATL: satirlarini alir", () 
     "ATL:OK",
     "root@Router:/#",                      // prompt
   ].join("\n");
-  const c = atCevabiAyikla(ham);
+  const c = extractAtResponse(raw);
   assert.equal(parseCnum(c), "5350634756");
   assert.ok(!c.includes("exec 3<>"), "kabuk yankisi ciktiya karismaz");
   assert.ok(!c.includes("root@"), "prompt ciktiya karismaz");
 });
 
 test("atCevabiAyikla: bos girdi patlamaz", () => {
-  assert.equal(atCevabiAyikla(null), "");
-  assert.equal(atCevabiAyikla(""), "");
+  assert.equal(extractAtResponse(null), "");
+  assert.equal(extractAtResponse(""), "");
 });
 
 // --- Yazma filtresi: SORGU ile YAZMA ayrimi ---
@@ -104,24 +104,24 @@ test("atCevabiAyikla: bos girdi patlamaz", () => {
 // Sorgu engellenince simPinKaldir'in DOGRULAMA adimi bos cevap aliyor ve
 // kilit gercekten kalksa bile "kaldirilamadi" deniyordu.
 test("atYazanMi: CLCK SORGUSU (mode 2) yazma DEGIL", () => {
-  assert.equal(atYazanMi('AT+CLCK="SC",2'), false);
-  assert.equal(atYazanMi('AT+CLCK="SC",2 '), false);
+  assert.equal(isAtWriteCommand('AT+CLCK="SC",2'), false);
+  assert.equal(isAtWriteCommand('AT+CLCK="SC",2 '), false);
 });
 
 test("atYazanMi: CLCK kilit acma/kapama (mode 0/1) YAZMA", () => {
-  assert.equal(atYazanMi('AT+CLCK="SC",0,"1234"'), true);
-  assert.equal(atYazanMi('AT+CLCK="SC",1,"1234"'), true);
+  assert.equal(isAtWriteCommand('AT+CLCK="SC",0,"1234"'), true);
+  assert.equal(isAtWriteCommand('AT+CLCK="SC",1,"1234"'), true);
 });
 
 test("atYazanMi: PIN harcayan ve cihazi degistiren komutlar YAZMA", () => {
   for (const k of ['AT+CPIN="1234"', "AT+CFUN=1", "AT&W", "ATZ", 'AT+CUSD=1,"*101#"']) {
-    assert.equal(atYazanMi(k), true, k);
+    assert.equal(isAtWriteCommand(k), true, k);
   }
 });
 
 test("atYazanMi: salt okunur sorgular serbest", () => {
   for (const k of ["AT", "AT+CNUM", "AT+CPIN?", 'AT+QPINC="SC"', "AT+CPINC", "AT+CCID"]) {
-    assert.equal(atYazanMi(k), false, k);
+    assert.equal(isAtWriteCommand(k), false, k);
   }
 });
 
@@ -135,22 +135,22 @@ test("atYazanMi: salt okunur sorgular serbest", () => {
 // Port bosaltma DENENDI VE KALDIRILDI: olcum fayda gostermedi, maliyeti
 // gercekti (komut basina +1.3 sn). Kalan koruma karismayi TESPIT etmek.
 test("atKabukKomutu: fazladan bekleme YOK (bosaltma kaldirildi)", () => {
-  const k = atKabukKomutu("/dev/ttyUSB0", "AT+CNUM", 3);
+  const k = atShellCommand("/dev/ttyUSB0", "AT+CNUM", 3);
   assert.ok(!k.includes("read -t 1"), "olculmemis faydasi olan bekleme tasinmaz");
   assert.equal(k.split("printf").length - 1, 1, "tek gonderim");
 });
 
 test("atKarismisMi: tek sonlandirici temiz, ikisi KARISMIS", () => {
-  assert.equal(atKarismisMi("\n+CLCK: 0\n\nOK"), false);
-  assert.equal(atKarismisMi("\n+CLCK: 0\n\nOK\n\nOK"), true, "canli gorulen bicim");
-  assert.equal(atKarismisMi("\n+CPIN: READY\n\nOK\n\nOK"), true, "canli gorulen bicim");
-  assert.equal(atKarismisMi("ERROR"), false);
-  assert.equal(atKarismisMi("OK\nERROR"), true, "iki farkli sonlandirici da karisiktir");
-  assert.equal(atKarismisMi(""), false);
-  assert.equal(atKarismisMi(null), false);
+  assert.equal(isAtResponseMixed("\n+CLCK: 0\n\nOK"), false);
+  assert.equal(isAtResponseMixed("\n+CLCK: 0\n\nOK\n\nOK"), true, "canli gorulen bicim");
+  assert.equal(isAtResponseMixed("\n+CPIN: READY\n\nOK\n\nOK"), true, "canli gorulen bicim");
+  assert.equal(isAtResponseMixed("ERROR"), false);
+  assert.equal(isAtResponseMixed("OK\nERROR"), true, "iki farkli sonlandirici da karisiktir");
+  assert.equal(isAtResponseMixed(""), false);
+  assert.equal(isAtResponseMixed(null), false);
 });
 
 test("atKarismisMi: OK gecen METIN sonlandirici sayilmaz", () => {
   // "+CNUM: \"OK hat\",..." gibi bir deger yanlislikla sonlandirici olmasin.
-  assert.equal(atKarismisMi('+CNUM: "OK hat","+905350634747",145\n\nOK'), false);
+  assert.equal(isAtResponseMixed('+CNUM: "OK hat","+905350634747",145\n\nOK'), false);
 });

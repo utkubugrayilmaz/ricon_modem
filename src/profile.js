@@ -45,12 +45,12 @@ export const WRITE_GROUPS = [
   {
     // Cihaz adı = telefon numarası. En başta: en zararsız yazma, sorun çıkarsa
     // gerisi hiç denenmemiş olur.
-    ad: "Cihaz",
-    anahtarlar: ["router_name"],
+    name: "Cihaz",
+    keys: ["router_name"],
   },
   {
-    ad: "Modem/WAN",
-    anahtarlar: [
+    name: "Modem/WAN",
+    keys: [
       "w1_wan_proto", "m1simswtch", "mullinkfail",
       "m1s1wanapn", "m1s1pppuser", "m1s1ppppwd", "m1s2pppuser", "m1s2ppppwd",
       "m1s1simpin",
@@ -61,13 +61,13 @@ export const WRITE_GROUPS = [
     ],
   },
   {
-    ad: "DHCP",
+    name: "DHCP",
     // lan_proto: dhcp = DHCP sunucusu acik, static = kapali (diff ile teyitli).
-    anahtarlar: ["lan_proto"],
+    keys: ["lan_proto"],
   },
   {
-    ad: "LAN",
-    anahtarlar: [
+    name: "LAN",
+    keys: [
       "lan_ipaddr_ex1", "lan_netmask_ex1",
       "lan_ipaddr_ex2", "lan_netmask_ex2",
       "lan_ipaddr_ex3", "lan_netmask_ex3",
@@ -77,8 +77,8 @@ export const WRITE_GROUPS = [
 ];
 
 export const FIELD_PROFILE = {
-  ad: "saha",
-  aciklama: "ACO RVM saha profili — Ricon S9922M44",
+  name: "field",
+  description: "ACO RVM saha profili — Ricon S9922M44",
 
   // nvram anahtar -> hedef değer (hepsi string; nvram string tutar).
   nvram: {
@@ -145,8 +145,8 @@ export const FIELD_PROFILE = {
 // da bir kez pristine /nvrambak.bin yedegi alip `nvram restore` etmek
 // (golden-backup yaklasimi — ileride, pristine yedek gerektirir).
 export const FACTORY_PROFILE = {
-  ad: "fabrika",
-  aciklama: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
+  name: "factory",
+  description: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
   nvram: {
     // Modem/WAN Main Link defaults
     w1_wan_proto: "m13gdhcp",  // Connection Type M1-DHCP

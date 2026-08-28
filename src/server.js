@@ -24,9 +24,9 @@ import { extname, join } from "node:path";
 import {
   provisionModem, applyProvisioning, applyPin, provisionRecord, pcPreflight,
   readIdentity, waitForInternet, normalizePhone, settingLabel, SETTING_LABELS,
-  simPinHedefi, assessDevice, yenidenDenemeKarari,
-  telefonGirdiBicimi, simPinKaldir, readSimLock,
-  problemleriTurkcelestir, sorunTr,
+  simPinTarget, assessDevice, retryDecision,
+  phoneInputFormat, disableSimPin, readSimLock,
+  withProblemText, problemText,
 } from "./index.js";
 import { isReachable } from "./scanner.js";
 
@@ -48,87 +48,87 @@ const MIME = {
 // SETTING_LABELS tam o sirada yazildi.
 export function planRows(plan) {
   const sozlukSirasi = Object.keys(SETTING_LABELS);
-  const anahtarlar = Object.keys(plan.hedef || {}).sort((a, b) => {
+  const keys = Object.keys(plan.target || {}).sort((a, b) => {
     const ia = sozlukSirasi.indexOf(a);
     const ib = sozlukSirasi.indexOf(b);
     return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
   });
-  return anahtarlar.map((k) => {
-    const once = settingLabel(k, plan.onceki?.[k]);
-    const sonra = settingLabel(k, plan.hedef[k]);
+  return keys.map((k) => {
+    const before = settingLabel(k, plan.onceki?.[k]);
+    const after = settingLabel(k, plan.target[k]);
     return {
-      anahtar: k,
-      ad: once.ad,
-      sayfa: once.sayfa,
-      once: once.gosterim,
-      sonra: sonra.gosterim,
-      degisecek: Boolean(plan.degisecek && k in plan.degisecek),
+      key: k,
+      name: before.name,
+      page: before.page,
+      before: before.gosterim,
+      after: after.gosterim,
+      willChange: Boolean(plan.willChange && k in plan.willChange),
     };
   });
 }
 
-// SSE "hata" olayi — metin KATALOGDAN gelir, sunucu kendi cumlesini YAZMAZ.
+// SSE "error" olayi — metin KATALOGDAN gelir, sunucu kendi cumlesini YAZMAZ.
 // Eskiden burada 5 uydurma kod ve 9 ayri elle yazilmis Turkce cumle vardi
-// (MESGUL/MODEM_YOK/MSISDN/PC_HAZIR_DEGIL/PROFIL_YOK). Dordunun katalogda
+// (MESGUL/MODEM_YOK/MSISDN/PC_HAZIR_DEGIL/PROFILE_UNKNOWN). Dordunun katalogda
 // zaten karsiligi vardi; ayni durumun metni iki yerde durunca biri eskiyor.
-const hataYolla = (gonder, kod) => {
-  const t = sorunTr(kod);
-  gonder("hata", { kod, mesaj: t.baslik, cozum: t.neYap });
+const sendError = (send, code) => {
+  const t = problemText(code);
+  send("error", { code, message: t.baslik, fix: t.neYap });
 };
 
 // Ayni anda tek provizyon — cihaz tek baglantili, ikinci akis zarar verir.
-let mesgul = false;
+let busy = false;
 // Degerlendirme de cihaza gider (HTTP + telnet). Provizyondan ayri bir bayrak:
 // "mesgul" provizyon demek ve arayuzde dugmeleri kapatiyor; degerlendirme
 // 5 saniyelik salt-okunur bir istir, onu ayni bayrakla isaretlemek arayuze
 // yanlis sey soylerdi.
-let degerlendiriliyor = false;
+let assessing = false;
 
-export function createServer(opts = {}) {
+export function createServer(options = {}) {
   const {
-    fabrikaHost = "192.168.1.1", sahaHost = "5.5.5.1",
-    kimlik, profil, sifirlamaProfil, kayit, olcumKayit, ilerle,
+    factoryHost = "192.168.1.1", fieldHost = "5.5.5.1",
+    kimlik, profile, resetProfile, record, metricRecord, onProgress,
     // Internet dogrulamasi ust siniri (sn) — 0 kapatir.
-    internetBekle = 150,
+    internetWaitSec = 150,
     // Arayuz dizini. VERILMEZSE sunucu SALT API olur; arayuz urunun parcasi
     // degil (bizim test arayuzu examples/test-ui altinda bir ORNEKTIR).
     staticDir = null,
-  } = opts;
+  } = options;
 
-  return http.createServer(async (istek, yanit) => {
-    const url = new URL(istek.url, "http://yerel");
+  return http.createServer(async (request, response) => {
+    const url = new URL(request.url, "http://yerel");
     try {
-      if (url.pathname === "/api/durum") return await durumVer(yanit);
-      if (url.pathname === "/api/degerlendir") return await degerlendirVer(yanit);
-      if (url.pathname === "/api/hazirla") return await hazirlaAkit(url, istek, yanit);
-      if (url.pathname === "/api/fabrikaya-dondur") return await sifirlaAkit(istek, yanit);
-      if (url.pathname === "/api/pin") return await pinAkit(url, istek, yanit);
-      if (url.pathname === "/api/pin-kaldir") return await pinKaldirAkit(url, istek, yanit);
-      if (url.pathname === "/api/olcum") return await olcumAl(istek, yanit);
-      return await statikVer(url.pathname, yanit);
+      if (url.pathname === "/api/durum") return await serveStatus(response);
+      if (url.pathname === "/api/degerlendir") return await serveAssessment(response);
+      if (url.pathname === "/api/hazirla") return await streamProvision(url, request, response);
+      if (url.pathname === "/api/fabrikaya-dondur") return await streamFactoryReset(request, response);
+      if (url.pathname === "/api/pin") return await streamPinAttempt(url, request, response);
+      if (url.pathname === "/api/pin-kaldir") return await streamPinDisable(url, request, response);
+      if (url.pathname === "/api/olcum") return await receiveMetric(request, response);
+      return await serveStatic(url.pathname, response);
     } catch (e) {
       // Beklenmeyen istisna: TEKNIK metin gunluge (stderr), ekrana TURKCE.
       // Tarayiciya `${e.name}: ${e.message}` basmak operatore hicbir sey
       // anlatmiyor; sunucu gunlugunde ise tam metin gerekli.
       process.stderr.write(`[sunucu] ${url.pathname} ${e.name}: ${e.message}
 `);
-      jsonVer(yanit, 500, { ok: false,
-        hata: "Araçta beklenmeyen bir hata oluştu",
-        cozum: "Sayfayı yenile ve tekrar dene. Sürerse bilgi işleme haber ver." });
+      sendJson(response, 500, { ok: false,
+        error: "Araçta beklenmeyen bir hata oluştu",
+        fix: "Sayfayı yenile ve tekrar dene. Sürerse bilgi işleme haber ver." });
     }
   });
 
   // --- GET /api/durum : modem nerede, PC hazir mi (salt okunur) ---
-  async function durumVer(yanit) {
-    const { konum, ad, on } = await modemiBul();
-    jsonVer(yanit, 200, {
+  async function serveStatus(response) {
+    const { location, name, on } = await findModem();
+    sendJson(response, 200, {
       ok: true,
-      pc: { hazir: on.hazir, fabrika_kaynak: on.fabrikaKaynak,
-        saha_kaynak: on.sahaKaynak, problems: problemleriTurkcelestir(on.problems) },
-      modem: { konum: ad, host: konum?.host ?? null },
-      profil: profil?.ad ?? null,
-      sifirlanabilir: Boolean(sifirlamaProfil),
-      mesgul,
+      pc: { ready: on.ready, factorySource: on.factorySource,
+        fieldSource: on.fieldSource, problems: withProblemText(on.problems) },
+      modem: { location: name, host: location?.host ?? null },
+      profile: profile?.name ?? null,
+      canReset: Boolean(resetProfile),
+      busy,
     });
   }
 
@@ -142,32 +142,32 @@ export function createServer(opts = {}) {
   // Karar burada URETILMEZ: eksik/baslatilabilir dahil her sey assessDevice'ten
   // gelir. Tek eklenen sey `telefon.girdi` — kanonik numaranin ekran bicimi,
   // o da cekirdekteki telefonGirdiBicimi ile.
-  async function degerlendirVer(yanit) {
-    if (mesgul || degerlendiriliyor) {
-      return jsonVer(yanit, 409, { ok: false, hata: "Cihazla baska bir islem surüyor." });
+  async function serveAssessment(response) {
+    if (busy || assessing) {
+      return sendJson(response, 409, { ok: false, error: "Cihazla baska bir islem surüyor." });
     }
-    degerlendiriliyor = true;
+    assessing = true;
     try {
-      const r = await assessDevice({ fabrikaHost, sahaHost, kimlik });
-      jsonVer(yanit, 200, {
+      const r = await assessDevice({ factoryHost, fieldHost, kimlik });
+      sendJson(response, 200, {
         ok: r.ok,
         // TEKRAR KARARI CEKIRDEKTEN. Arayuz "ne zaman yeniden bakayim?"
         // sorusunu kendi cevaplamiyor — yoksa politika iki yerde olurdu.
-        tekrar: yenidenDenemeKarari(r),
+        retry: retryDecision(r),
         modem: r.modem,
         sim: r.sim,
-        telefon: { ...r.telefon, girdi: telefonGirdiBicimi(r.telefon.numara) },
-        at_port: r.at_port ?? null,
+        phone: { ...r.phone, input: phoneInputFormat(r.phone.number) },
+        atPort: r.atPort ?? null,
         // Kilit kaldirmaya uygun mu (PIN girilmeden once bilinir). Yalnizca
         // kilitli SIM'de dolu; karar cekirdekten geliyor, burada uretilmiyor.
-        pin_kaldirilabilir: r.pin_kaldirilabilir ?? null,
+        pinRemovable: r.pinRemovable ?? null,
         internet: r.internet,
-        eksik: r.eksik,
-        baslatilabilir: r.baslatilabilir,
-        problems: problemleriTurkcelestir(r.problems),
+        missing: r.missing,
+        canStart: r.canStart,
+        problems: withProblemText(r.problems),
       });
     } finally {
-      degerlendiriliyor = false;
+      assessing = false;
     }
   }
 
@@ -176,61 +176,61 @@ export function createServer(opts = {}) {
   // Adim sureleri TARAYICIDA olculur (olayin ekrana geldigi an = operatorun
   // gercekten bekledigi sure), o yuzden veri tarayicidan gelir. Sunucu
   // yalnizca zamani damgalar ve satiri yazar; yorum yapmaz.
-  async function olcumAl(istek, yanit) {
-    if (istek.method !== "POST") return jsonVer(yanit, 405, { ok: false, hata: "POST bekleniyor" });
-    if (typeof olcumKayit !== "function") {
-      return jsonVer(yanit, 200, { ok: true, yazildi: false, not: "olcum kaydi kapali" });
+  async function receiveMetric(request, response) {
+    if (request.method !== "POST") return sendJson(response, 405, { ok: false, error: "POST bekleniyor" });
+    if (typeof metricRecord !== "function") {
+      return sendJson(response, 200, { ok: true, written: false, not: "olcum kaydi kapali" });
     }
     const parcalar = [];
     let boyut = 0;
-    for await (const p of istek) {
+    for await (const p of request) {
       boyut += p.length;
-      if (boyut > 64 * 1024) return jsonVer(yanit, 413, { ok: false, hata: "govde cok buyuk" });
+      if (boyut > 64 * 1024) return sendJson(response, 413, { ok: false, error: "govde cok buyuk" });
       parcalar.push(p);
     }
     let gelen;
     try {
       gelen = JSON.parse(Buffer.concat(parcalar).toString("utf8"));
     } catch {
-      return jsonVer(yanit, 400, { ok: false, hata: "gecersiz JSON" });
+      return sendJson(response, 400, { ok: false, error: "gecersiz JSON" });
     }
-    const satir = { zaman: new Date().toISOString(), ...gelen };
-    olcumKayit(satir);
-    jsonVer(yanit, 200, { ok: true, yazildi: true });
+    const line = { timestamp: new Date().toISOString(), ...gelen };
+    metricRecord(line);
+    sendJson(response, 200, { ok: true, written: true });
   }
 
   // SSE akisini acar. Doner: { gonder, kopukMu, bitir }
   //
   // Tarayici sekmeyi kapatirsa cihaza YAZMA YARIDA KESILMEZ (kesmek nvram'i
   // yarim birakir). Akis susar, is cekirdekte tamamlanir, defter yine yazilir.
-  function sseAc(istek, yanit) {
-    yanit.writeHead(200, {
+  function openSse(request, response) {
+    response.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     });
     let kopuk = false;
-    istek.on("close", () => { kopuk = true; });
+    request.on("close", () => { kopuk = true; });
     return {
-      gonder: (tur, veri) => {
-        if (yanit.writableEnded) return;
-        yanit.write(`event: ${tur}\ndata: ${JSON.stringify(veri)}\n\n`);
+      send: (kind, veri) => {
+        if (response.writableEnded) return;
+        response.write(`event: ${kind}\ndata: ${JSON.stringify(veri)}\n\n`);
       },
-      kopukMu: () => kopuk,
-      bitir: () => { if (!kopuk) yanit.end(); },
+      isClosed: () => kopuk,
+      finish: () => { if (!kopuk) response.end(); },
     };
   }
 
   // Modem nerede? Doner: { konum:{host,kaynakIp}|null, ad, on }
-  async function modemiBul() {
-    const on = pcPreflight(onek(fabrikaHost), onek(sahaHost));
-    if (!on.hazir) return { konum: null, ad: null, on };
-    const fabrikaVar = await isReachable(fabrikaHost, on.fabrikaKaynak);
-    const sahaVar = fabrikaVar ? false : await isReachable(sahaHost, on.sahaKaynak);
-    if (fabrikaVar) return { konum: { host: fabrikaHost, kaynakIp: on.fabrikaKaynak }, ad: "fabrika", on };
-    if (sahaVar) return { konum: { host: sahaHost, kaynakIp: on.sahaKaynak }, ad: "saha", on };
-    return { konum: null, ad: null, on };
+  async function findModem() {
+    const on = pcPreflight(prefix(factoryHost), prefix(fieldHost));
+    if (!on.ready) return { location: null, name: null, on };
+    const factoryReachable = await isReachable(factoryHost, on.factorySource);
+    const fieldReachable = factoryReachable ? false : await isReachable(fieldHost, on.fieldSource);
+    if (factoryReachable) return { location: { host: factoryHost, sourceIp: on.factorySource }, name: "factory", on };
+    if (fieldReachable) return { location: { host: fieldHost, sourceIp: on.fieldSource }, name: "field", on };
+    return { location: null, name: null, on };
   }
 
   // --- GET /api/fabrikaya-dondur : SSE ile fabrika profiline geri al ---
@@ -239,58 +239,58 @@ export function createServer(opts = {}) {
   // reboot eder, 192.168.1.1'de dogrular. Telefon ISTEMEZ — hat kaydetmiyoruz,
   // geri aliyoruz. DIKKAT: bu GERCEK factory reset DEGIL, bizim dokundugumuz
   // anahtarlari default'a dondurur (bkz. profile.js FACTORY_PROFILE).
-  async function sifirlaAkit(istek, yanit) {
-    const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
-    if (mesgul) {
-      hataYolla(gonder, "DEVICE_BUSY");
-      return bitir();
+  async function streamFactoryReset(request, response) {
+    const { send, isClosed, finish } = openSse(request, response);
+    if (busy) {
+      sendError(send, "DEVICE_BUSY");
+      return finish();
     }
-    if (!sifirlamaProfil) {
-      hataYolla(gonder, "PROFIL_YOK");
-      return bitir();
+    if (!resetProfile) {
+      sendError(send, "PROFILE_UNKNOWN");
+      return finish();
     }
-    mesgul = true;
+    busy = true;
     try {
-      gonder("ilerleme", { mesaj: "modem araniyor" });
-      const { konum, ad, on } = await modemiBul();
-      if (!on.hazir) {
+      send("progress", { message: "modem araniyor" });
+      const { location, name, on } = await findModem();
+      if (!on.ready) {
         // Ekrana TURKCE gider; message/check gunluge/gelistiriciye ait.
-        hataYolla(gonder, on.problems[0]?.kod);
-        return bitir();
+        sendError(send, on.problems[0]?.code);
+        return finish();
       }
-      if (!konum) {
-        hataYolla(gonder, "DEVICE_UNREACHABLE");
-        return bitir();
+      if (!location) {
+        sendError(send, "DEVICE_UNREACHABLE");
+        return finish();
       }
-      gonder("algilandi", { tur: "algilandi", eylem: `sifirlama_${ad}`, konum: konum.host });
-      gonder("kimlik_once", await readIdentity({ ...konum, kimlik }));
+      send("detected", { kind: "detected", action: `sifirlama_${name}`, location: location.host });
+      send("identityBefore", await readIdentity({ ...location, kimlik }));
 
       const r = await applyProvisioning({
-        ...konum, kimlik, uygula: true,
-        yeniHost: fabrikaHost, yeniKaynakIp: on.fabrikaKaynak,
-        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
-        olay: (o) => {
-          if (o.tur === "plan") gonder("plan", { satirlar: planRows(o.plan) });
-          else if (o.tur !== "sonuc") gonder(o.tur, o);
+        ...location, kimlik, apply: true,
+        newHost: factoryHost, newSourceIp: on.factorySource,
+        onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); },
+        event: (o) => {
+          if (o.kind === "plan") send("plan", { lines: planRows(o.plan) });
+          else if (o.kind !== "result") send(o.kind, o);
         },
-      }, sifirlamaProfil);
+      }, resetProfile);
 
       // Defter: sifirlama da kayda gecer — yoksa defter "hazir" derken cihaz
       // fabrikada olur, kayit YALAN SOYLER.
-      const yeniKonum = r.durum === "basarili"
-        ? { host: fabrikaHost, kaynakIp: on.fabrikaKaynak } : konum;
-      const kimlikBilgi = kimlik ? await readIdentity({ ...yeniKonum, kimlik }) : {};
-      const satir = provisionRecord({
-        sonuc: { ...r, durum: r.ok ? "fabrikaya_dondu" : `sifirlama_${r.durum}` },
-        telefon: null, kimlikBilgi,
-        profilAd: sifirlamaProfil.ad, host: yeniKonum.host,
+      const newLocation = r.status === "success"
+        ? { host: factoryHost, sourceIp: on.factorySource } : location;
+      const identity = kimlik ? await readIdentity({ ...newLocation, kimlik }) : {};
+      const line = provisionRecord({
+        result: { ...r, status: r.ok ? "fabrikaya_dondu" : `sifirlama_${r.status}` },
+        phone: null, identity,
+        profileName: resetProfile.name, host: newLocation.host,
       });
-      if (typeof kayit === "function") { try { kayit(satir); } catch { /* akisi bozmaz */ } }
-      gonder("sonuc", { durum: satir.durum, ok: r.ok, deneme: null,
-        kayit: satir, problems: problemleriTurkcelestir(r.problems) });
+      if (typeof record === "function") { try { record(line); } catch { /* akisi bozmaz */ } }
+      send("result", { status: line.status, ok: r.ok, attempt: null,
+        record: line, problems: withProblemText(r.problems) });
     } finally {
-      mesgul = false;
-      bitir();
+      busy = false;
+      finish();
     }
   }
 
@@ -316,188 +316,188 @@ export function createServer(opts = {}) {
   // zorlama olmadan DENEMEZ, TEK deneme, yanlissa TEKRAR DENEMEZ. Burada
   // yeni bir karar URETILMIYOR; PIN yalnizca gecip gidiyor, hicbir yere
   // (log, olay, defter) yazilmiyor.
-  async function pinKaldirAkit(url, istek, yanit) {
-    const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
-    if (mesgul || degerlendiriliyor) {
-      hataYolla(gonder, "DEVICE_BUSY");
-      return bitir();
+  async function streamPinDisable(url, request, response) {
+    const { send, isClosed, finish } = openSse(request, response);
+    if (busy || assessing) {
+      sendError(send, "DEVICE_BUSY");
+      return finish();
     }
     const pin = url.searchParams.get("pin");
-    mesgul = true;
+    busy = true;
     try {
-      const { konum, on } = await modemiBul();
-      if (!on.hazir || !konum) {
-        hataYolla(gonder, "DEVICE_UNREACHABLE");
+      const { location, on } = await findModem();
+      if (!on.ready || !location) {
+        sendError(send, "DEVICE_UNREACHABLE");
         return;
       }
-      const atOpts = { ...konum, kimlik,
-        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); } };
+      const atOptions = { ...location, kimlik,
+        onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); } };
 
       // Kalan hakki ONCE bildir: operator ne riske girdigini denemeden gorsun.
-      gonder("ilerleme", { mesaj: "SIM kilidi modulden okunuyor (kalan hak)" });
-      const kilit = await readSimLock(atOpts);
-      gonder("sim_kilit", { durum: kilit.durum, kilit: kilit.kilit,
-        pin_kalan: kilit.pin_kalan, puk_kalan: kilit.puk_kalan });
-      if (!kilit.at_port) {
-        hataYolla(gonder, "AT_PORT_YOK");
+      send("progress", { message: "SIM kilidi modulden okunuyor (kalan hak)" });
+      const lock = await readSimLock(atOptions);
+      send("simLock", { status: lock.status, lock: lock.lock,
+        pinRemaining: lock.pinRemaining, pukRemaining: lock.pukRemaining });
+      if (!lock.atPort) {
+        sendError(send, "AT_PORT_NOT_FOUND");
         return;
       }
 
       // Bulunmus portu GECIRIYORUZ: cekirdek kendi icinde durumu yeniden
       // okuyacak (kararini taze veriye dayandirmali), ama port TARAMASINI
       // bir daha yapmasin — cihaz tek baglantili, her tur pahali.
-      gonder("ilerleme", { mesaj: "PIN kilidi kaldiriliyor (TEK deneme)" });
+      send("progress", { message: "PIN kilidi kaldiriliyor (TEK deneme)" });
       // elleOnay:true — bu uca yalniz OPERATOR PIN yazip dugmeye basinca
       // gelinir. "Bir hak yakildiysa bir daha deneme" OTOMATIK yolun kurali;
       // insani engellemez. SON HAK korumasi elleOnay'a bakmadan calisir.
-      const r = await simPinKaldir({ ...atOpts, atPort: kilit.at_port }, pin,
-        { elleOnay: true });
-      gonder("pin_kaldir_sonuc", {
-        ok: r.ok, acildi: r.acildi, kilit_kaldirildi: r.kilit_kaldirildi,
-        durum: r.durum, pin_kalan: r.pin_kalan,
-        problems: problemleriTurkcelestir(r.problems),
+      const r = await disableSimPin({ ...atOptions, atPort: lock.atPort }, pin,
+        { humanApproved: true });
+      send("pinDisableResult", {
+        ok: r.ok, opened: r.opened, lockRemoved: r.lockRemoved,
+        status: r.status, pinRemaining: r.pinRemaining,
+        problems: withProblemText(r.problems),
       });
     } finally {
-      mesgul = false;
-      if (!kopukMu()) yanit.end();
+      busy = false;
+      if (!isClosed()) response.end();
     }
   }
 
-  async function pinAkit(url, istek, yanit) {
-    const { gonder, kopukMu, bitir } = sseAc(istek, yanit);
-    if (mesgul) {
-      hataYolla(gonder, "DEVICE_BUSY");
-      return bitir();
+  async function streamPinAttempt(url, request, response) {
+    const { send, isClosed, finish } = openSse(request, response);
+    if (busy) {
+      sendError(send, "DEVICE_BUSY");
+      return finish();
     }
     const pin = url.searchParams.get("pin");
-    mesgul = true;
+    busy = true;
     try {
-      const { konum, on } = await modemiBul();
-      if (!on.hazir || !konum) {
-        hataYolla(gonder, "DEVICE_UNREACHABLE");
+      const { location, on } = await findModem();
+      if (!on.ready || !location) {
+        sendError(send, "DEVICE_UNREACHABLE");
         return;
       }
       // KARAR TEK YERDE: elle denemede de simPinHedefi'ne soruyoruz. Fark
       // yalnizca elleOnay:true — insan kalan hakki gorup bilincli onayladi.
       // Son hakki elle onay bile yakamaz (bkz. simPinHedefi).
-      gonder("ilerleme", { mesaj: "SIM durumu okunuyor (kalan hak)" });
-      const kimlikBilgi = await readIdentity({ ...konum, kimlik });
-      const { hedef, problems } = simPinHedefi(kimlikBilgi.sim, pin, { elleOnay: true });
-      if (typeof hedef !== "string" || hedef === "") {
-        gonder("pin_sonuc", { denendi: false,
-          atlandi: problems[0]?.kod ?? "karar_yok",
-          problems: problemleriTurkcelestir(problems) });
+      send("progress", { message: "SIM durumu okunuyor (kalan hak)" });
+      const identity = await readIdentity({ ...location, kimlik });
+      const { target, problems } = simPinTarget(identity.sim, pin, { humanApproved: true });
+      if (typeof target !== "string" || target === "") {
+        send("pinResult", { attempted: false,
+          skipped: problems[0]?.code ?? "noDecision",
+          problems: withProblemText(problems) });
         return;
       }
-      const p = await applyPin({ ...konum, kimlik,
-        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
-        olay: (o) => gonder(o.tur, o) }, hedef);
+      const p = await applyPin({ ...location, kimlik,
+        onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); },
+        event: (o) => send(o.kind, o) }, target);
 
-      if (!p.denendi) {
-        gonder("pin_sonuc", { denendi: false, atlandi: p.atlandi,
-          problems: problemleriTurkcelestir(p.problems) });
+      if (!p.attempted) {
+        send("pinResult", { attempted: false, skipped: p.skipped,
+          problems: withProblemText(p.problems) });
         return;
       }
       // PIN yazildi + reboot edildi: cihaz yeni bastan gelecek, interneti bekle.
-      const net = await waitForInternet({ ...konum, kimlik }, internetBekle, {
-        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
-        olay: (o) => gonder(o.tur, o),
+      const net = await waitForInternet({ ...location, kimlik }, internetWaitSec, {
+        onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); },
+        event: (o) => send(o.kind, o),
       });
-      gonder("pin_sonuc", { denendi: true, internet: net,
-        problems: problemleriTurkcelestir(p.problems) });
+      send("pinResult", { attempted: true, internet: net,
+        problems: withProblemText(p.problems) });
     } finally {
-      mesgul = false;
-      if (!kopukMu()) yanit.end();
+      busy = false;
+      if (!isClosed()) response.end();
     }
   }
 
   // --- GET /api/hazirla?telefon=05xx : SSE ile canli provizyon ---
-  async function hazirlaAkit(url, istek, yanit) {
-    const telefon = url.searchParams.get("telefon");
-    const { gonder, kopukMu } = sseAc(istek, yanit);
+  async function streamProvision(url, request, response) {
+    const phone = url.searchParams.get("phone");
+    const { send, isClosed } = openSse(request, response);
 
-    if (mesgul) {
-      hataYolla(gonder, "DEVICE_BUSY");
-      return yanit.end();
+    if (busy) {
+      sendError(send, "DEVICE_BUSY");
+      return response.end();
     }
-    const n = normalizePhone(telefon);
+    const n = normalizePhone(phone);
     if (!n) {
       // Cekirdek de reddeder; burada erken donuyoruz ki cihaza hic gidilmesin.
-      hataYolla(gonder, telefon ? "MSISDN_INVALID" : "MSISDN_REQUIRED");
-      return yanit.end();
+      sendError(send, phone ? "MSISDN_INVALID" : "MSISDN_REQUIRED");
+      return response.end();
     }
-    mesgul = true;
+    busy = true;
     try {
-      gonder("ilerleme", { mesaj: "modem araniyor" });
+      send("progress", { message: "modem araniyor" });
       // Kurulum ONCESI kimlik: sol panel modemin o anki halini gostersin.
-      const { konum, on } = await modemiBul();
-      if (!on.hazir) {
+      const { location, on } = await findModem();
+      if (!on.ready) {
         // Ekrana TURKCE gider; message/check gunluge/gelistiriciye ait.
-        hataYolla(gonder, on.problems[0]?.kod);
+        sendError(send, on.problems[0]?.code);
         return;
       }
       // Kimligi BURADA okuyoruz (sol panel + SIM durumu). Ayni okumayi
       // cekirdege GECIYORUZ ki cihaza iki kez gidilmesin — tek baglantili
       // cihazda bu ~4 sn demek.
-      let kimlikBilgi = null;
-      if (konum && kimlik) {
-        gonder("ilerleme", { mesaj: `modem ${konum.host} — kimlik/SIM okunuyor` });
-        kimlikBilgi = await readIdentity({ ...konum, kimlik });
-        gonder("kimlik_once", kimlikBilgi);
+      let identity = null;
+      if (location && kimlik) {
+        send("progress", { message: `modem ${location.host} — kimlik/SIM okunuyor` });
+        identity = await readIdentity({ ...location, kimlik });
+        send("identityBefore", identity);
       }
 
       const r = await provisionModem({
-        fabrikaHost, fabrikaKaynak: on.fabrikaKaynak,
-        sahaHost, sahaKaynak: on.sahaKaynak,
-        kimlik, profil, telefon: n, kayit, kimlikBilgi,
-        internetBekle,
+        factoryHost, factorySource: on.factorySource,
+        fieldHost, fieldSource: on.fieldSource,
+        kimlik, profile, phone: n, record, identity,
+        internetWaitSec,
         // PIN OPSIYONEL: yalnizca internet gelmezse denenir (cekirdek karari).
         pin: url.searchParams.get("pin") || null,
-        ilerle: (m) => { if (ilerle) ilerle(m); gonder("ilerleme", { mesaj: m }); },
-        olay: (o) => {
-          if (o.tur === "plan") gonder("plan", { satirlar: planRows(o.plan) });
-          // Cekirdegin "sonuc" olayini gecmiyoruz: nihai sonucu asagida BIR
+        onProgress: (m) => { if (onProgress) onProgress(m); send("progress", { message: m }); },
+        event: (o) => {
+          if (o.kind === "plan") send("plan", { lines: planRows(o.plan) });
+          // Cekirdegin "result" olayini gecmiyoruz: nihai sonucu asagida BIR
           // kez biz yolluyoruz (yoksa tarayici bitisi iki kez isler).
-          else if (o.tur !== "sonuc") gonder(o.tur, o);
+          else if (o.kind !== "result") send(o.kind, o);
         },
       });
-      gonder("sonuc", { durum: r.durum, ok: r.ok, deneme: r.deneme ?? null,
-        kayit: r.kayit, problems: problemleriTurkcelestir(r.problems) });
+      send("result", { status: r.status, ok: r.ok, attempt: r.attempt ?? null,
+        record: r.record, problems: withProblemText(r.problems) });
     } finally {
-      mesgul = false;
-      if (!kopukMu()) yanit.end();
+      busy = false;
+      if (!isClosed()) response.end();
     }
   }
 
   // --- Statik dosyalar — YALNIZCA staticDir verilmisse ---
   // staticDir yoksa bu sunucu salt API'dir: arayuz urunun parcasi degil.
-  async function statikVer(yol, yanit) {
+  async function serveStatic(path, response) {
     if (!staticDir) {
-      return jsonVer(yanit, 404, { ok: false,
-        hata: "arayuz sunulmuyor (salt API)",
-        cozum: "createServer({ staticDir }) ver ya da /api/* uclarini kullan" });
+      return sendJson(response, 404, { ok: false,
+        error: "arayuz sunulmuyor (salt API)",
+        fix: "createServer({ staticDir }) ver ya da /api/* uclarini kullan" });
     }
-    const ad = yol === "/" ? "index.html" : yol.replace(/^\/+/, "");
+    const name = path === "/" ? "index.html" : path.replace(/^\/+/, "");
     // Dizin kacisi yok: yalnizca verilen dizindeki duz dosya adlari.
-    if (ad.includes("..") || ad.includes("/") || ad.includes("\\")) {
-      return jsonVer(yanit, 400, { ok: false, hata: "gecersiz yol" });
+    if (name.includes("..") || name.includes("/") || name.includes("\\")) {
+      return sendJson(response, 400, { ok: false, error: "gecersiz yol" });
     }
-    const tur = MIME[extname(ad).toLowerCase()];
-    if (!tur) return jsonVer(yanit, 404, { ok: false, hata: "bulunamadi" });
+    const kind = MIME[extname(name).toLowerCase()];
+    if (!kind) return sendJson(response, 404, { ok: false, error: "bulunamadi" });
     try {
-      const govde = await readFile(join(staticDir, ad));
-      yanit.writeHead(200, { "Content-Type": tur, "Cache-Control": "no-store" });
-      yanit.end(govde);
+      const body = await readFile(join(staticDir, name));
+      response.writeHead(200, { "Content-Type": kind, "Cache-Control": "no-store" });
+      response.end(body);
     } catch {
-      jsonVer(yanit, 404, { ok: false, hata: `bulunamadi: ${ad}` });
+      sendJson(response, 404, { ok: false, error: `bulunamadi: ${name}` });
     }
   }
 }
 
-function jsonVer(yanit, kod, nesne) {
-  const govde = JSON.stringify(nesne);
-  yanit.writeHead(kod, { "Content-Type": "application/json; charset=utf-8" });
-  yanit.end(govde);
+function sendJson(response, code, nesne) {
+  const body = JSON.stringify(nesne);
+  response.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
+  response.end(body);
 }
 
-const onek = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
+const prefix = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
