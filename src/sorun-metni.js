@@ -29,6 +29,8 @@ const SORUN_TR = {
   CONSOLE_KIMLIK_YOK: { baslik: "Modem parolası tanımlı değil", neYap: "Bilgi işleme haber ver." },
   HTTP_ERROR: { baslik: "Modem beklenmeyen cevap verdi", neYap: "Kapat-aç ve tekrar dene." },
   EMPTY_BODY: { baslik: "Modem boş cevap verdi", neYap: "Bilgi amaçlı, akışı durdurmaz." },
+  KILIT_DURUMU_OKUNAMADI: { baslik: "SIM kilidi okunamadı",
+    neYap: "PIN gönderilmedi. Tekrar dene; sürerse modemi kapat-aç." },
   PROFIL_YOK: { baslik: "Profil tanımlı değil", neYap: "Bilgi işleme haber ver." },
   NVRAM_BAD_HEADER: { baslik: "Yedek dosyası tanınmadı", neYap: "Bilgi işleme haber ver." },
   WRITE_BLOCKED_READONLY: { baslik: "Yazma izni yok", neYap: "Modemde hiçbir şey değişmedi." },

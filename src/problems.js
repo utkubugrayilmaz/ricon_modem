@@ -101,6 +101,13 @@ const KATALOG = {
   }),
 
   // --- Icerik / ayristirma ---
+  KILIT_DURUMU_OKUNAMADI: () => ({
+    message: "The SIM lock state could not be read, so the tool does not know"
+      + " whether the PIN prompt is on or off; no PIN was sent.",
+    check: "Sending a PIN blind risks one of the SIM's attempts. Retry — the"
+      + " read is usually transient. If it persists, power-cycle the modem."
+      + " Override with zorla/--zorla only if you are sure of the PIN.",
+  }),
   PROFIL_YOK: (ad) => ({
     message: `No profile named "${ad}" is configured, so there is nothing to apply.`,
     check: "Pass --profil with a known name (see profile.js PROFILES), or start"

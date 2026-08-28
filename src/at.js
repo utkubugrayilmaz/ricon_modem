@@ -269,6 +269,13 @@ export async function simPinKaldir(opts, pin, { zorla = false, kaliciKapat = tru
       rapor.kilit_kaldirildi = true;   // istenen durum: kilit kapali
       return rapor;
     }
+    // SORGU OKUNAMADI (null): kilidin acik mi kapali mi oldugunu BILMIYORUZ.
+    // Bilmeden devam etmek PIN gondermek demek ve yanlis PIN bir hak yakar.
+    // Bilmedigimiz icin harcamayiz — zorla ile gecilebilir.
+    if (acikMi === null && !zorla) {
+      rapor.problems.push(problem("KILIT_DURUMU_OKUNAMADI"));
+      return rapor;
+    }
   }
 
   // (3) KARAR — PURE, test edilmis, tek yer (bkz. simKilitKaldirmaKarari):
@@ -347,6 +354,11 @@ export async function simPinKilitle(opts, pin, { zorla = false } = {}) {
       rapor.ok = true;
       rapor.kilit_acik = true;
       rapor.zaten = true;
+      return rapor;
+    }
+    // SORGU OKUNAMADI: durumu bilmeden PIN gondermek bir hak riske atmaktir.
+    if (acikMi === null && !zorla) {
+      rapor.problems.push(problem("KILIT_DURUMU_OKUNAMADI"));
       return rapor;
     }
   }
