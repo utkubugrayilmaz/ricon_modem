@@ -36,7 +36,7 @@ import {
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
   normalizePhone, summarizeMetrics, assessDevice, degerlendirmeyiIzle,
   readMsisdn, readSimLock, simPinKaldir,
-  simPinKilitle,
+  simPinKilitle, atKomut, parseClck,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report.js";
 import { isOk } from "./src/problems.js";
@@ -181,11 +181,16 @@ async function komutuCalistir() {
       const gercek = argv.includes("--uygula");
       if (!gercek) {
         const k = await sonucOk(readSimLock(opts));
+        const kaldirKilitAcik = k.at_port
+          ? parseClck((await atKomut({ ...opts, atPort: k.at_port }, 'AT+CLCK="SC",2')).cevap)
+          : null;
         return { zaman: new Date().toISOString(), komut: "sim-pin-kaldir",
-          kuru: true, modem_ip: opts.host, ...k,
+          kuru: true, modem_ip: opts.host, ...k, kilit_acik: kaldirKilitAcik,
           yapilacak: k.kilit === "pin"
             ? "PIN kilidi kaldirilacak (TEK deneme) — onaylamak icin --uygula ekle"
-            : k.hazir ? "SIM zaten acik; --uygula kilit sorgusunu KALICI kapatir"
+            : kaldirKilitAcik === false
+              ? "PIN kilidi ZATEN KAPALI — yapilacak is yok"
+              : k.hazir ? "SIM acik; --uygula kilit sorgusunu KALICI kapatir"
               : `kilit durumu: ${k.durum} — mudahale edilmez`,
         };
       }
@@ -202,13 +207,21 @@ async function komutuCalistir() {
       const pin = bayrak("--pin");
       if (!argv.includes("--uygula")) {
         const k = await sonucOk(readSimLock(opts));
+        // Kilit ZATEN acik mi? Sorgu (AT+CLCK="SC",2) hak HARCAMAZ. Bunu
+        // sormadan "ACILACAK" demek yaniltiyordu: kilit acikken de ayni
+        // cumle yaziliyordu (2026-08-28 canli goruldu).
+        const acikMi = k.at_port
+          ? parseClck((await atKomut({ ...opts, atPort: k.at_port }, 'AT+CLCK="SC",2')).cevap)
+          : null;
         return { zaman: new Date().toISOString(), komut: "sim-pin-kilitle",
-          kuru: true, modem_ip: opts.host, ...k,
+          kuru: true, modem_ip: opts.host, ...k, kilit_acik: acikMi,
           yapilacak: k.kilit === "pin"
             ? "SIM zaten kilitli — yapilacak is yok"
-            : k.hazir ? "PIN kilidi ACILACAK (TEK deneme). Etkisi SONRAKI ACILISTA:"
-              + " modemi kapat-ac, SIM PIN soracak. Onaylamak icin --uygula ekle"
-              : `kilit durumu: ${k.durum} — mudahale edilmez`,
+            : acikMi === true
+              ? "PIN kilidi ZATEN ACIK — yapilacak is yok (etkisi sonraki acilista)"
+              : k.hazir ? "PIN kilidi ACILACAK (TEK deneme). Etkisi SONRAKI ACILISTA:"
+                + " modemi kapat-ac, SIM PIN soracak. Onaylamak icin --uygula ekle"
+                : `kilit durumu: ${k.durum} — mudahale edilmez`,
         };
       }
       return { zaman: new Date().toISOString(), komut: "sim-pin-kilitle",
