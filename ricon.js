@@ -34,7 +34,8 @@ import { findSourceIp } from "./src/network.js";
 import {
   checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
-  normalizePhone, summarizeMetrics, assessDevice, readMsisdn, readSimLock, simPinKaldir,
+  normalizePhone, summarizeMetrics, assessDevice, degerlendirmeyiIzle,
+  readMsisdn, readSimLock, simPinKaldir,
   simPinKilitle,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report.js";
@@ -145,13 +146,26 @@ async function komutuCalistir() {
     case "sim": return readSim({ ...opts, telefon: bayrak("--telefon") });
     // Cihazin O ANKI durumu + ne eksik. Sunucudaki /api/degerlendir ile AYNI
     // cekirdek cagrisi — endpoint bir tuketici, burasi digeri.
-    case "degerlendir": return assessDevice({
-      ...opts,
-      fabrikaHost: bayrak("--host") || undefined,
-      sahaHost: bayrak("--saha-host") || undefined,
-      telefon: bayrak("--telefon") || null,
-      pin: bayrak("--pin") || null,
-    });
+    case "degerlendir": {
+      const dOpts = {
+        ...opts,
+        fabrikaHost: bayrak("--host") || undefined,
+        sahaHost: bayrak("--saha-host") || undefined,
+        telefon: bayrak("--telefon") || null,
+        pin: bayrak("--pin") || null,
+      };
+      // --izle: cekirdek KENDI KENDINE tekrar bakar. Ne zaman tekrar
+      // bakilacagina yenidenDenemeKarari karar veriyor — burada politika YOK.
+      // Ayni yetenegi arayuz de kullaniyor; kural: her yetenek her tuketiciden.
+      if (!argv.includes("--izle")) return assessDevice(dOpts);
+      return degerlendirmeyiIzle({
+        ...dOpts,
+        enFazlaTur: Number(bayrak("--tur")) || Infinity,
+        olay: (o) => ilerle(`modem=${o.modem.konum ?? "yok"}`
+          + ` telefon=${o.telefon.numara ?? "-"} eksik=[${o.eksik}]`
+          + ` tekrar=${o.tekrar.tekrar ? `${o.tekrar.sonra_sn} sn (${o.tekrar.sebep})` : "yok"}`),
+      });
+    }
     // SADECE telefon numarasi. "Bu araci sadece numara okumak icin kullanmak
     // istiyorum" diyen icin tek komut; provizyon/degerlendirme gerekmez.
     case "numara": return { zaman: new Date().toISOString(), komut: "numara",
@@ -382,6 +396,7 @@ async function main() {
       + "  konsol [--nvram]             telnet root shell / tam nvram\n"
       + "  sim [--telefon 05xxxxxxxxx]  SIM/hucresel ozet (+MSISDN girisi)\n"
       + "  degerlendir                  cihaz durumu + NE EKSIK (numara dahil, ~5 sn)\n"
+      + "         [--izle] [--tur N]    eksik giderilene kadar KENDI KENDINE tekrar bak\n"
       + "  numara                       SADECE SIM telefon numarasi (AT+CNUM)\n"
       + "  sim-kilit                    SADECE kilit durumu + KALAN HAK (hak harcamaz)\n"
       + "  sim-pin-kaldir --pin 1234    SIM PIN kilidini KALICI kaldir\n"

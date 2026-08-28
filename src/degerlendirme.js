@@ -13,7 +13,8 @@ import { isReachable } from "./scanner.js";
 import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
 import { readMsisdn, readSimLock, simKilidiUygunMu } from "./at.js";
 import { problem, isOk } from "./problems.js";
-import { readIdentity, simTakiliMi, pcPreflight } from "./pipeline.js";
+// Alt katman: OKUMA yolu da YAZMA yolu da buraya bakiyor (bkz. cihaz.js).
+import { readIdentity, simTakiliMi, pcPreflight } from "./cihaz.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";

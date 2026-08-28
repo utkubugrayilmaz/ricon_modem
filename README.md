@@ -195,6 +195,7 @@ terminalden de (`ricon.js numara`) HTTP ucundan da çağrılabilir — endpoint'
 | `ricon.js` | İnce CLI — argv + .env + `index` çağrısı |
 | `src/index.js` | **Public API — TEK KAPI.** Uygulama yok, yalnız ne dışa açıldığı (58 satır) |
 | `src/okuma.js` | Cihaz okuma işlemleri: `dogrula` / `oku` / `kesif` / `konsol` |
+| `src/cihaz.js` | ⭐ **En alt katman:** `readIdentity`, `simTakiliMi`, `waitForInternet`, `pcPreflight`. Okuma yolu da yazma yolu da buna bakar |
 | `src/izleme.js` | Dönemsel örnekleme + zaman çizelgesi (canlı alan tespiti) |
 | `src/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |
 | `src/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |

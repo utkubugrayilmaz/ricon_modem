@@ -25,7 +25,39 @@ curl -s http://127.0.0.1:8080/api/durum
  "profil":"saha","sifirlanabilir":true,"mesgul":false}
 ```
 
-### `GET /api/hazirla?telefon=05...&pin=1234` — provizyon (SSE akışı)
+### `GET /api/degerlendir` — durum + ne eksik + tekrar kararı (salt okunur)
+
+**Pahalı (~5 sn):** HTTP kimlik okuması + telnet üzerinden `AT+CNUM`. Sürekli
+yoklanmaz — modem algılandığında **bir kez** çağrılır. `mesgul` ise **409**.
+
+```bash
+curl -s http://127.0.0.1:8080/api/degerlendir
+```
+
+```json
+{ "ok": true,
+  "modem": { "konum": "fabrika", "host": "192.168.1.1" },
+  "telefon": { "numara": "5350634830", "kaynak": "cihaz", "girdi": "05350634830" },
+  "sim": { "takili": true, "kilit": null, "pin_kalan": null },
+  "eksik": [], "baslatilabilir": true,
+  "tekrar": { "tekrar": false, "sonra_sn": null, "sebep": "baslatilabilir" },
+  "pin_kaldirilabilir": null, "problems": [] }
+```
+
+`tekrar` çekirdeğin kararı: geçici hatada `{tekrar:true, sonra_sn:5}`, insan
+beklenirken `{tekrar:false}`. Tüketici bu süreye uyar, kendi politikasını
+yazmaz.
+
+### `GET /api/pin-kaldir?pin=1234` — SIM PIN kilidini KALICI kaldır (SSE)
+
+`/api/pin`'in **tersi**: PIN'i cihaza yazmaz, SIM'in kendisinden kaldırır.
+Korumalar çekirdekte: biçim, PUK, hak yanmışsa denemez, son hakkı yakmaz,
+tek deneme. Olaylar: `ilerleme`, `sim_kilit`, `pin_kaldir_sonuc`, `hata`.
+
+### `GET /api/hazirla?pin=1234` — provizyon (SSE akışı)
+
+`telefon` parametresi **artık zorunlu değil**: çekirdek numarayı SIM'den
+okuyor. Verilirse (`&telefon=05...`) operatör bilerek ezer.
 
 `telefon` **zorunlu** (kural çekirdekte). `pin` **opsiyonel** ve yalnızca
 internet gelmezse / SIM PIN kilitli çıkarsa denenir.

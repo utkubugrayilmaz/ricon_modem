@@ -12,12 +12,10 @@
 // ağ değiştirmeye gerek yok — araç öncesi/sonrası doğru kaynaktan gider.
 
 import { isReachable } from "./scanner.js";
-import { findSourceIp } from "./network.js";
 import { applyProvisioning, applyPin } from "./provisioning.js";
 import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./profile.js";
-import { Client } from "./client.js";
-import { parsePairs } from "./ddwrt.js";
-import { readSim, normalizePhone, parseSimStatus } from "./sim.js";
+import { normalizePhone } from "./sim.js";
+import { readIdentity, simTakiliMi, waitForInternet, pcPreflight } from "./cihaz.js";
 import { problem } from "./problems.js";
 import { readMsisdn } from "./at.js";
 import { pinDenemesiUygunMu, hakYakilmisMi } from "./pin-karar.js";
@@ -32,95 +30,6 @@ const olayla = (opts, olay) => {
   if (typeof opts.olay !== "function") return;
   try { opts.olay(olay); } catch { /* dinleyici hatasi akisi kesmez */ }
 };
-
-// Cihaz kimliği — "bu hangi modemdi" sorusunun kalıcı cevabı.
-// NOT: cihazın ETİKET seri numarası ne HTTP'de ne nvram'da YOK (2026-08-27
-// arandı; BULGULAR'daki S/N fiziksel etiketten okundu). Bu yüzden kalıcı
-// kimlik: LAN MAC (cihaza ait, kimliksiz okunur) + IMEI (modül) + ICCID (SIM).
-export async function readIdentity({ host, kaynakIp, kimlik }) {
-  const sonuc = { lan_mac: null, iccid: null, imsi: null, imei: null,
-    operator: null, sim_durumu: null, wan_ip: null };
-  const c = new Client({ host, kaynakIp, kimlik });
-  const bilgi = await c.get("/asp/status/Info.live.htm");
-  sonuc.lan_mac = parsePairs(bilgi.govde || "").lan_mac || null;
-  const s = await readSim({ host, kaynakIp, kimlik });
-  const s1 = s.sim1 || {};
-  sonuc.iccid = s1.iccid_temiz || s1.iccid || null;
-  sonuc.imsi = s1.imsi || null;
-  sonuc.imei = s1.imei || null;
-  sonuc.operator = s1.operator || null;
-  sonuc.sim_durumu = s1.sim_durumu || null;
-  // Durum metnini çöz: kilit var mı, kaç deneme kaldı. PIN kilidini 150 sn
-  // internet bekleyerek anlamak yerine BURADA, ~4 sn'de anlıyoruz.
-  sonuc.sim = parseSimStatus(s1.sim_durumu);
-  // WAN IP zaten bu okumada geliyor — BEDAVA kanıt: "bu SIM o an çevrimiçiydi".
-  // Beklemiyoruz, yoksa yok yazıyoruz; kurulum süresine tek saniye eklemiyor.
-  const wan = (s1.wan_ip || "").trim();
-  sonuc.wan_ip = wan && wan !== "0.0.0.0" ? wan : null;
-  return sonuc;
-}
-
-// SIM gerçekten takılı mı? ICCID yalnızca SIM varken okunabiliyor, o yüzden
-// tek güvenilir ölçüt o. `sim_durumu` ("Not Insert" / "Invalid") teşhis metni
-// olarak taşınır — operatöre ne olduğunu söylemek için.
-//
-// NEDEN ÖNEMLİ (2026-08-27 canlı gözlem): SIM'siz bir modemde provizyon
-// SORUNSUZ tamamlanıyor — 14 ayar yazılıyor, doğrulama TAMAM diyor. Ama cihaz
-// şebekeye kaydolamıyor, ~110 sn'de bir deneyip düşüyor ve deftere ICCID'siz
-// bir satır düşüyor. Yani "hazır" denen modem sahada çalışmaz. Bu yüzden SIM
-// kontrolü EN BASA alındı: 45 saniye harcayıp sonunda anlamak yerine
-// ilk saniyede söylüyoruz.
-export function simTakiliMi(kimlikBilgi = {}) {
-  return Boolean(kimlikBilgi.iccid);
-}
-
-// İNTERNET DOĞRULAMASI — "bu SIM gerçekten çalışıyor mu?"
-//
-// Teknisyen elle süreçte tam bunu yapıyor: işlemden sonra internetin gelmesini
-// bekliyor. O bekleme boş bir duruş DEĞİL, bir kalite kontrolü — bu yüzden
-// kaldırmıyoruz, otomatikleştirip ÖLÇÜYORUZ. Fark: operatör beklemiyor, araç
-// bekliyor.
-//
-// Ölçüm (2026-08-27): provizyon reboot'undan sonra WAN IP ~89 sn'de geldi,
-// sonrasında kesintisiz. Bu yüzden varsayılan üst sınır 150 sn — normalin
-// rahat üstünde ama sonsuza kadar beklemiyor.
-//
-// İnternet gelmemesi provizyonun BAŞARISIZLIĞI değildir: ayarlar doğrulanmış
-// olabilir ama atölyede kapsama olmayabilir, SIM'in data paketi bitmiş olabilir.
-// Bu yüzden AYRI bir sonuç alanı olarak taşınır; operatör kararı verir.
-// Doner: { var, sure_sn, wan_ip, sim_durumu }
-export async function waitForInternet({ host, kaynakIp, kimlik }, maxSn = 150, opts = {}) {
-  const baslangic = Date.now();
-  const gecen = () => Math.round((Date.now() - baslangic) / 100) / 10;
-  // Yoklamada readIdentity DEĞİL readSim kullanıyoruz: readIdentity ayrıca
-  // Info.live.htm'i de çekiyor (yalnızca lan_mac için) ve burada lan_mac'e
-  // ihtiyaç yok. Tek uç = yoklama başına ~2 sn tasarruf, tek bağlantılı
-  // cihazda da yarı yük.
-  const bak = async () => {
-    const s = await readSim({ host, kaynakIp, kimlik });
-    const s1 = s.sim1 || {};
-    const wan = (s1.wan_ip || "").trim();
-    return { wan_ip: wan && wan !== "0.0.0.0" ? wan : null,
-      sim_durumu: s1.sim_durumu || null };
-  };
-  for (;;) {
-    let k = null;
-    try { k = await bak(); } catch { /* cihaz reboot'ta olabilir; yeniden dene */ }
-    if (k?.wan_ip) {
-      const sure = gecen();
-      olayla(opts, { tur: "internet", var: true, sure_sn: sure, wan_ip: k.wan_ip });
-      return { var: true, sure_sn: sure, wan_ip: k.wan_ip, sim_durumu: k.sim_durumu };
-    }
-    if (gecen() >= maxSn) {
-      olayla(opts, { tur: "internet", var: false, sure_sn: gecen(),
-        sim_durumu: k?.sim_durumu ?? null });
-      return { var: false, sure_sn: gecen(), wan_ip: null, sim_durumu: k?.sim_durumu ?? null };
-    }
-    bildir(opts, `internet bekleniyor (${gecen()} sn / ${maxSn} sn)`);
-    olayla(opts, { tur: "internet_bekleniyor", gecen_sn: gecen(), max_sn: maxSn });
-    await bekle(5000);
-  }
-}
 
 // PURE: bir hazırlamanın kalıcı kayıt satırı (JSONL). Cihaza gitmez.
 // Bu satır sahada "bu modem hazırlanmış mıydı, hangi hat takılıydı"
@@ -379,6 +288,24 @@ export async function provisionModem(opts) {
     rapor.problems.push(problem("AUTH_REQUIRED", "modem"));
     rapor.durum = "kimlik_yok"; rapor.ok = false; return bitir(null);
   }
+
+  // KAYNAK IP OLMADAN YOKLAMA YAPILMAZ. Sebebi olculdu: kaynak baglanmadan
+  // yapilan TCP connect bazi aglarda HER adrese basarili donuyor, yani
+  // "modem var" diyip olmayan cihazdan kimlik okumaya calisiyor ve sonunda
+  // "SIM yok" gibi YANLIS TESHIS uretiyor (bkz. scanner.js isReachable).
+  // Cagiran kaynagi vermediyse burada turetiyoruz; turetemiyorsak durup
+  // gercek sebebi soyluyoruz.
+  let kFabrika = fabrikaKaynak;
+  let kSaha = sahaKaynak;
+  if (!kFabrika || !kSaha) {
+    const on = pcPreflight(onekAl(fabrikaHost), onekAl(sahaHost));
+    kFabrika = kFabrika || on.fabrikaKaynak;
+    kSaha = kSaha || on.sahaKaynak;
+    if (!kFabrika && !kSaha) {
+      rapor.problems.push(...on.problems);
+      rapor.durum = "pc_hazir_degil"; rapor.ok = false; return bitir(null);
+    }
+  }
   // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi — kayitsiz modem sahaya
   // cikmasin. AMA artik cihazdan OKUNABILIYOR (AT+CNUM, ~3 sn): verilmediyse
   // asagida SIM'den okunuyor, okunamazsa orada reddediliyor.
@@ -432,11 +359,11 @@ export async function provisionModem(opts) {
 
   for (let deneme = 1; deneme <= denemeler; deneme += 1) {
     bildir(opts, `deneme ${deneme}/${denemeler}: modem algilaniyor`);
-    const fabrikaVar = await isReachable(fabrikaHost, fabrikaKaynak);
-    const sahaVar = fabrikaVar ? false : await isReachable(sahaHost, sahaKaynak);
+    const fabrikaVar = kFabrika ? await isReachable(fabrikaHost, kFabrika) : false;
+    const sahaVar = fabrikaVar || !kSaha ? false : await isReachable(sahaHost, kSaha);
     const konum = fabrikaVar
-      ? { host: fabrikaHost, kaynakIp: fabrikaKaynak }
-      : sahaVar ? { host: sahaHost, kaynakIp: sahaKaynak } : null;
+      ? { host: fabrikaHost, kaynakIp: kFabrika }
+      : sahaVar ? { host: sahaHost, kaynakIp: kSaha } : null;
 
     // SIM KONTROLU — nvram'a bakmadan, HICBIR SEY yazmadan, EN BASTA.
     // Sebep: SIM'siz modemde provizyon "basarili" gorunur ama cihaz sebekeye
@@ -448,11 +375,18 @@ export async function provisionModem(opts) {
         kimlikBilgiOnce = await readIdentity({ ...konum, kimlik });
       } catch { kimlikBilgiOnce = null; }
     }
-    // NUMARAYI CIHAZDAN OKU — verilmediyse. Burada okunuyor cunku SIM'in
-    // hazir oldugu ilk an burasi: kilitli SIM abone verisini (EF_MSISDN)
-    // acmiyor. Bu adim provisionModem'in ICINDE: boylece CLI, HTTP ucu ve
-    // baska bir Node projesi de otomatik numara aliyor — yalniz bizim
-    // arayuzumuz degil. Okunamazsa YEDEK yol asagida (opts.telefonSor).
+    if (konum && kimlikBilgiOnce && !simTakiliMi(kimlikBilgiOnce)) {
+      rapor.problems.push(problem("SIM_MISSING", kimlikBilgiOnce.sim_durumu));
+      rapor.durum = "sim_yok"; rapor.deneme = deneme; rapor.ok = false;
+      return bitir(konum, kimlikBilgiOnce);
+    }
+
+    // NUMARAYI CIHAZDAN OKU — verilmediyse. SIM KONTROLUNDEN SONRA: SIM yoksa
+    // gercek sorun "SIM yok"tur, "telefon yok" demek yanlis teshis olur
+    // (projenin kurali: en temel eksik en basta soylenir).
+    //
+    // Bu adim provisionModem'in ICINDE, arayuzde degil: CLI, HTTP ucu ve
+    // baska bir Node projesi de otomatik numara aliyor.
     if (konum && !telefonNorm && kimlikBilgiOnce?.sim?.hazir) {
       bildir(opts, "telefon numarasi SIM'den okunuyor (AT+CNUM)");
       const n = await readMsisdn({ ...konum, kimlik });
@@ -463,23 +397,27 @@ export async function provisionModem(opts) {
         rapor.problems.push(...n.problems);
       }
     }
-    // YEDEK: numara SIM'de yazili degilse tuketiciye sor (CLI operatore
-    // sorar, arayuz alani acar). Cihaza tekrar gidilmiyor.
+    // YEDEK: tuketiciye sor (CLI operatore sorar, arayuz alani acar).
+    // `deneme` gecilir ki dongude "3. modem" yazsin — sabit 1 yaziyordu.
     if (konum && !telefonNorm && typeof opts.telefonSor === "function") {
-      const elle = normalizePhone(await opts.telefonSor(1));
+      const elle = normalizePhone(await opts.telefonSor(deneme));
       if (elle) { telefonNorm = elle; telefonKaynak = "operator"; }
     }
+    // Numara YOK. Son denemede vazgec; oncesinde DEVAM ET — okuma gecici
+    // olarak da basarisiz olabiliyor (telnet dusmesi olculdu) ve
+    // `denemeler` tam bunun icin var. Ilk turda return etmek retry'i
+    // isletmiyordu.
     if (konum && !telefonNorm) {
+      if (deneme < denemeler) {
+        bildir(opts, "numara okunamadi, yeniden denenecek");
+        await bekle(2000);
+        continue;
+      }
       rapor.problems.push(problem("MSISDN_REQUIRED", "—"));
       rapor.durum = "telefon_yok"; rapor.ok = false;
       return bitir(konum, kimlikBilgiOnce);
     }
 
-    if (konum && kimlikBilgiOnce && !simTakiliMi(kimlikBilgiOnce)) {
-      rapor.problems.push(problem("SIM_MISSING", kimlikBilgiOnce.sim_durumu));
-      rapor.durum = "sim_yok"; rapor.deneme = deneme; rapor.ok = false;
-      return bitir(konum, kimlikBilgiOnce);
-    }
 
     // Kimlik okundu; PIN karari ve etkin profil BURADA kuruluyor (once
     // kuramazdik: kilit bilgisi kimlik okumasindan geliyor).
@@ -492,7 +430,7 @@ export async function provisionModem(opts) {
     let sahaDry = null;
     if (sahaVar) {
       const d = await applyProvisioning(
-        { host: sahaHost, kaynakIp: sahaKaynak, kimlik, uygula: false, olay: opts.olay },
+        { host: sahaHost, kaynakIp: kSaha, kimlik, uygula: false, olay: opts.olay },
         etkinProfil,
       );
       sahaDry = d.durum;
@@ -505,7 +443,7 @@ export async function provisionModem(opts) {
 
     if (eylem === "zaten_hazir") {
       rapor.deneme = deneme; rapor.ok = true;
-      const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
+      const konumSaha = { host: sahaHost, kaynakIp: kSaha };
       const net = await internetiDogrula(konumSaha, simKilit, pinPlanlandi);
       rapor.durum = !net || net.var ? "zaten_hazir"
         : (rapor.sim_kilit?.kilit ? "zaten_hazir_sim_kilitli" : "zaten_hazir_internet_yok");
@@ -522,9 +460,9 @@ export async function provisionModem(opts) {
     const fabrikada = eylem === "provizyon_fabrika";
     const r = await applyProvisioning({
       host: fabrikada ? fabrikaHost : sahaHost,
-      kaynakIp: fabrikada ? fabrikaKaynak : sahaKaynak,
+      kaynakIp: fabrikada ? kFabrika : kSaha,
       kimlik, uygula: true,
-      yeniHost: sahaHost, yeniKaynakIp: sahaKaynak,
+      yeniHost: sahaHost, yeniKaynakIp: kSaha,
       ilerle: opts.ilerle, olay: opts.olay,
     }, etkinProfil);
     rapor.deneme = deneme;
@@ -543,7 +481,7 @@ export async function provisionModem(opts) {
     }
     if (r.ok && (r.durum === "basarili" || r.durum === "zaten_istenen_durumda")) {
       rapor.ok = true;
-      const konumSaha = { host: sahaHost, kaynakIp: sahaKaynak };
+      const konumSaha = { host: sahaHost, kaynakIp: kSaha };
       const net = await internetiDogrula(konumSaha, simKilit, pinPlanlandi);
       rapor.durum = !net || net.var ? "hazir"
         : (rapor.sim_kilit?.kilit ? "hazir_sim_kilitli" : "hazir_internet_yok");
@@ -556,23 +494,12 @@ export async function provisionModem(opts) {
   rapor.durum = "basarisiz"; rapor.ok = false;
   // Basarisiz kayit da KIMLIKLI olsun: cihaz hangi adreste cevap veriyorsa
   // oradan oku (LAN IP yazilmis ama dogrulama tamamlanmamis olabilir).
-  const sahada = await isReachable(sahaHost, sahaKaynak);
-  const fabrikada = sahada ? false : await isReachable(fabrikaHost, fabrikaKaynak);
+  const sahada = await isReachable(sahaHost, kSaha);
+  const fabrikada = sahada ? false : await isReachable(fabrikaHost, kFabrika);
   return bitir(
-    sahada ? { host: sahaHost, kaynakIp: sahaKaynak }
-      : fabrikada ? { host: fabrikaHost, kaynakIp: fabrikaKaynak } : null,
+    sahada ? { host: sahaHost, kaynakIp: kSaha }
+      : fabrikada ? { host: fabrikaHost, kaynakIp: kFabrika } : null,
   );
-}
-
-// PC ön-kontrol: gerekli ikincil kaynak IP'ler var mı?
-// Doner: { hazir, problems, fabrikaKaynak, sahaKaynak }
-export function pcPreflight(fabrikaOnek = "192.168.1.", sahaOnek = "5.5.5.") {
-  const fabrikaKaynak = findSourceIp(fabrikaOnek);
-  const sahaKaynak = findSourceIp(sahaOnek);
-  const problems = [];
-  if (!fabrikaKaynak) problems.push(problem("NO_SOURCE_IP", `${fabrikaOnek}50`));
-  if (!sahaKaynak) problems.push(problem("NO_SOURCE_IP", `${sahaOnek}100`));
-  return { hazir: problems.length === 0, problems, fabrikaKaynak, sahaKaynak };
 }
 
 // Döngü: çok modem için. Bir modem hazırlanınca çıkarılmasını (link/erisim
@@ -617,7 +544,7 @@ export async function provisionLoop(opts) {
 async function modemBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
   sahaHost = "5.5.5.1", sahaKaynak, ilerle } = {}) {
   for (;;) {
-    if (await isReachable(fabrikaHost, fabrikaKaynak)) return;
+    if (await isReachable(fabrikaHost, kFabrika)) return;
     if (await isReachable(sahaHost, sahaKaynak)) return;
     await bekle(3000);
   }
@@ -627,7 +554,7 @@ async function modemBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
 async function modemCikarmaBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
   sahaHost = "5.5.5.1", sahaKaynak } = {}) {
   for (;;) {
-    const f = await isReachable(fabrikaHost, fabrikaKaynak);
+    const f = await isReachable(fabrikaHost, kFabrika);
     const s = f ? true : await isReachable(sahaHost, sahaKaynak);
     if (!f && !s) return;
     await bekle(3000);

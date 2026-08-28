@@ -65,8 +65,9 @@ pinDeneBtn.disabled = true;
 // kalktı değil, YEDEĞE indi: numara SIM'de yazılı olmayabilir ya da SIM
 // PIN kilitliyken abone verisi hiç açılmaz. O durumda ekran bugünkü gibi
 // çalışır — operatör yazar.
-// Numara SALT GORUNTU baslar. Duzenleme tek kapidan acilir: "Degistir".
-let kilitli = true;
+// Numara CIHAZDAN GELDIYSE salt goruntu olur; duzenleme "Degistir"den acilir.
+// Alan bossa kilit YOK — yoksa operator hicbir sey yazamaz.
+let kilitli = false;
 let pinHakYakildi = false;        // bu modemde PIN denemesi harcandı
 let okunuyor = false;             // değerlendirme sürüyor
 let otomatikDolduruldu = false;   // alandaki numara cihazdan mı geldi
@@ -134,6 +135,10 @@ gizliGiris.addEventListener("keydown", (e) => {
 haneleriBoya();
 
 // Duzenlemenin TEK kapisi. Numarayi SILMEZ — genelde tek hane duzeltilir.
+// Alan duzenlemeye acikken hanelere tiklamak odaklar. Kilitliyken HICBIR SEY
+// yapmaz — cihazdan gelen numara tiklayarak bozulmasin.
+haneler.addEventListener("click", () => { if (!kilitli) gizliGiris.focus(); });
+
 degistirBtn.addEventListener("click", () => {
   kilidiAc();
   gizliGiris.focus();
@@ -154,6 +159,7 @@ function numarayiYerlestir(girdi) {
   otomatikDolduruldu = true;
   gizliGiris.readOnly = true;
   kaynakMetin.textContent = "SIM'den okundu";
+  degistirBtn.textContent = "Değiştir";
   degistirBtn.hidden = false;
   haneleriBoya();
 }
@@ -163,10 +169,17 @@ function numarayiYerlestir(girdi) {
 function numarayiSifirla() {
   if (otomatikDolduruldu) gizliGiris.value = "";
   otomatikDolduruldu = false;
-  kilitli = true;
-  gizliGiris.readOnly = true;
+  // KILIT KALKAR. Kilit yalnizca CIHAZDAN GELEN numarayi korumak icin var;
+  // buraya gelindiginde ya o numara silindi (yukarida) ya da alandaki deger
+  // operatorun kendisinin — ikisinde de kilidin anlami yok.
+  //
+  // Ilk yazimda burada KILITLENIYORDU ve hemen ardindan "elle gir" yazip
+  // focus() cagriliyordu; readOnly alana yazilamaz, yani operatore yaz
+  // deyip yazdirmiyorduk.
+  kilitli = false;
+  gizliGiris.readOnly = false;
   kaynakMetin.textContent = "";
-  degistirBtn.hidden = false;
+  degistirBtn.hidden = true;   // alan zaten yazilabilir, kapiya gerek yok
   // PIN durumu MODEME OZEL: yeni cihaz yeni SIM, yanmis hak devrolmaz.
   pinHakYakildi = false;
   pinAkis.hidden = true;

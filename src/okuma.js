@@ -116,7 +116,7 @@ export async function discoverDevice(opts) {
   rapor.mac = rapor.arp[host] || null;
   rapor.mac_uretici = guessVendor(rapor.mac);
   // IPv6 komsu tablosu: cihazin IPv4'u bilinmiyorsa (yanlis alt ag) OUI'den
-  // yine de "orada bir Ricon var" denebilir — yanlis-IP teshisini kolaylastirir.
+  // yine de "orada bir Ricon var" denebilir â€” yanlis-IP teshisini kolaylastirir.
   rapor.ipv6_komsular = (await ipv6Neighbors())
     .map((k) => ({ ...k, uretici: guessVendor(k.mac) }))
     .filter((k) => k.uretici);

@@ -54,6 +54,16 @@ export async function scanPorts(host, kaynakIp, kapilar = TCP_PORTS, esZaman = 6
 }
 
 // Cihaz ayakta mi? Yaygin kapilara TCP connect (ICMP yerine).
+//
+// ⚠ KAYNAK IP VERMEK SART. Olculdu (2026-08-28, kurumsal ag): kaynak IP
+// BAGLANMADAN yapilan connect bu makinede HER adrese aninda "basarili"
+// donuyor (guvenlik ajani/proxy yerelde kabul ediyor) — TEST-NET dahil.
+// Yani kaynaksiz cagri "her cihaz ayakta" der ve teshis coker.
+//   isReachable("192.0.2.1")                -> true   (YANLIS)
+//   isReachable("192.0.2.1", "192.168.1.50") -> false  (dogru, 1.5 sn timeout)
+// Kaynak IP baglandiginda cekirdek yol dogru: rota yoksa connect timeout'a
+// dusuyor. Bu yuzden cagiranlar kaynagi pcPreflight'tan alir; alamiyorsa
+// yoklama YAPMAZ (bkz. provisionModem).
 export async function isReachable(host, kaynakIp) {
   const oncelikli = [80, 443, 22, 8080, 23];
   const r = await scanPorts(host, kaynakIp, oncelikli, 5);

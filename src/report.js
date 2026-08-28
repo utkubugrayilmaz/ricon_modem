@@ -102,7 +102,10 @@ function olcumMetni(r) {
 // Insan-okunur ozet (stderr'a; stdout saf JSON kalir).
 export function summaryText(rapor) {
   const s = [];
-  s.push(`Ricon modem — ${rapor.modem_ip || "?"}  (${rapor.zaman || ""})`);
+  // modem_ip eski komutlarin alani; degerlendirme raporu konumu
+  // `modem.host` icinde tasiyor. Ikisine de bak, yoksa "?" yaz.
+  s.push(`Ricon modem — ${rapor.modem_ip || rapor.modem?.host || "?"}`
+    + `  (${rapor.zaman || ""})`);
   if (rapor.sistem) {
     s.push("\n  Sistem:");
     for (const [k, v] of Object.entries(rapor.sistem)) s.push(`    ${k.padEnd(16)}: ${g(v)}`);
@@ -202,6 +205,46 @@ export function summaryText(rapor) {
       }
     } else {
       s.push("  KESINTI YOK (ne internet ne yonetim erisimi dustu)");
+    }
+  }
+  // Yeni tek-is komutlari: kisa ozet. Uzun metin yok — stdout'taki JSON
+  // zaten tam veri; buradaki satir "bir bakista ne oldu" icin.
+  if (rapor.komut === "degerlendir") {
+    s.push(`
+  konum        : ${rapor.modem?.konum ?? "modem yok"}`);
+    s.push(`  telefon      : ${rapor.telefon?.numara ?? "—"}`
+      + (rapor.telefon?.kaynak ? ` (${rapor.telefon.kaynak})` : ""));
+    if (rapor.sim) {
+      s.push(`  SIM          : ${rapor.sim.takili ? "takili" : "YOK"}`
+        + `${rapor.sim.kilit ? ` · ${rapor.sim.kilit.toUpperCase()} kilitli` : ""}`
+        + `${rapor.sim.pin_kalan != null ? ` · kalan hak ${rapor.sim.pin_kalan}` : ""}`);
+    }
+    if (rapor.internet) {
+      s.push(`  internet     : ${rapor.internet.var ? rapor.internet.wan_ip : "YOK"}`);
+    }
+    s.push(`  eksik        : ${rapor.eksik?.length ? rapor.eksik.join(", ") : "yok"}`);
+    s.push(`  baslatilabilir: ${rapor.baslatilabilir ? "EVET" : "hayir"}`);
+    if (rapor.tekrar) {
+      s.push(`  tekrar       : ${rapor.tekrar.tekrar
+        ? `${rapor.tekrar.sonra_sn} sn sonra (${rapor.tekrar.sebep})` : `yok (${rapor.tekrar.sebep})`}`);
+    }
+  }
+  if (rapor.komut === "numara") {
+    s.push(`
+  telefon      : ${rapor.telefon ?? "okunamadi"} (${rapor.yontem})`);
+    if (rapor.at_port) s.push(`  AT portu     : ${rapor.at_port}`);
+  }
+  if (rapor.komut === "sim-kilit" || rapor.komut?.startsWith("sim-pin-")) {
+    s.push(`
+  SIM durumu   : ${rapor.durum ?? "?"}`);
+    s.push(`  kalan hak    : PIN ${rapor.pin_kalan ?? "?"} · PUK ${rapor.puk_kalan ?? "?"}`);
+    if (rapor.yapilacak) s.push(`  yapilacak    : ${rapor.yapilacak}`);
+    if (rapor.kilit_kaldirildi !== undefined) {
+      s.push(`  kilit        : ${rapor.kilit_kaldirildi ? "KALDIRILDI" : "duruyor"}`);
+    }
+    if (rapor.kilit_acik !== undefined) {
+      s.push(`  kilit        : ${rapor.kilit_acik ? "ACIK" : "kapali"}`
+        + (rapor.zaten ? " (zaten oyleydi)" : ""));
     }
   }
   if (rapor.komut === "olcum") s.push(...olcumMetni(rapor));

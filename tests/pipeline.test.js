@@ -3,9 +3,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  nextAction, pcPreflight, provisionModem, provisionRecord, simTakiliMi,
-} from "../src/pipeline.js";
+import { nextAction, provisionModem, provisionRecord } from "../src/pipeline.js";
+// pcPreflight ve simTakiliMi ALT KATMANDA (cihaz.js): okuma yolu da yazma
+// yolu da onlara bakiyor, pipeline'a ait degiller.
+import { pcPreflight, simTakiliMi } from "../src/cihaz.js";
 import { problem, isOk } from "../src/problems.js";
 import { applyPin } from "../src/provisioning.js";
 import { stripSecrets } from "../src/report.js";
@@ -41,22 +42,37 @@ test("provisionModem: kimliksiz -> kimlik_yok (cihaza gitmez)", async () => {
   assert.equal(r.problems[0].kod, "AUTH_REQUIRED");
 });
 
-test("provisionModem: TELEFON ZORUNLU — yoksa telefon_yok (cihaza gitmez)", async () => {
+// SOZLESME DEGISTI (2026-08-28): telefon artik ZORUNLU GIRDI DEGIL —
+// cekirdek numarayi SIM'den okuyor. Yani "numara yok" tek basina bir hata
+// degil; cihaza bakilir ve GERCEK eksik ne ise o bildirilir. Modem yoksa
+// modem_yok, SIM yoksa sim_yok. Yanlis teshis vermek eski davranisti.
+// KOR YOKLAMA YOK. Olculdu (2026-08-28): kaynak IP baglanmadan yapilan TCP
+// connect bazi aglarda HER adrese basarili donuyor. Eskiden bu, olmayan
+// cihazdan kimlik okunmasina ve sonunda "SIM yok" gibi YANLIS TESHISE yol
+// aciyordu. Artik kaynak turetilemiyorsa yoklama yapilmaz ve gercek sebep
+// bildirilir: o alt aga bu makineden cikilamiyor.
+test("provisionModem: kaynak IP turetilemezse KOR YOKLAMA yapmaz", async () => {
   const r = await provisionModem({
     kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
+    fabrikaHost: "192.0.2.1", sahaHost: "192.0.2.2", denemeler: 1,
   });
   assert.equal(r.ok, false);
-  assert.equal(r.durum, "telefon_yok");
-  assert.equal(r.problems[0].kod, "MSISDN_REQUIRED");
+  assert.equal(r.durum, "pc_hazir_degil");
+  assert.ok(r.problems.some((p) => p.kod === "NO_SOURCE_IP"),
+    "gercek sebep: o alt aga cikilamiyor — 'SIM yok' demek yanlis teshisti");
 });
 
-test("provisionModem: gecersiz telefon -> MSISDN_INVALID (sessizce gecmez)", async () => {
+// GECERSIZ numara AYRI is: bu bir GIRDI hatasi, cihaza gitmeye gerek yok.
+// Testin hizli bitmesi de kaniti — ag beklemesi yok.
+test("provisionModem: gecersiz telefon -> MSISDN_INVALID, CIHAZA GITMEZ", async () => {
+  const t = Date.now();
   const r = await provisionModem({
     kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
     telefon: "1234",
   });
   assert.equal(r.durum, "telefon_yok");
   assert.equal(r.problems[0].kod, "MSISDN_INVALID");
+  assert.ok(Date.now() - t < 500, "girdi hatasi aga cikmadan donmeli");
 });
 
 test("provisionModem: basarisiz cikista da KAYIT uretilir ve bildirilir", async () => {

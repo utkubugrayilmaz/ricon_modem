@@ -18,7 +18,8 @@
     "./sorunlar": "./src/problems.js",
     "./sorun-metni": "./src/sorun-metni.js",
     "./profil": "./src/profile.js",
-    "./olcum": "./src/metrics.js"
+    "./olcum": "./src/metrics.js",
+    "./cihaz": "./src/cihaz.js"
   },
   "bin": {
     "ricon": "./ricon.js"

@@ -4,7 +4,7 @@ Bugün **tam zincir canlı çalıştı**: modem takıldı → numara SIM'den oku
 kurulum → doğrulama. PIN'li SIM kolu da gerçek bir kilitli SIM'de sınandı ve
 **tek bir deneme hakkı yanmadan** kilit kaldırıldı.
 
-Test: **177/177**. Sıradaki iş: **çok modemli seri akış (`--dongu`)**.
+Test: **196/196**. Sıradaki iş: **çok modemli seri akış (`--dongu`)**.
 
 ## Cihazın şu anki fiziksel durumu
 
@@ -106,11 +106,32 @@ göstermiyor. `assessDevice` kilitli SIM'de kalan hakkı **modülden** okuyor
 Ayrıca `simPinKaldir` artık SIM açıksa **önce kilit sorgusu** yapıyor; kilit
 zaten kapalıysa PIN'i hiç göndermiyor.
 
+## 5) Adversaryal denetim (2026-08-28) — kendi işime karşı tez
+
+Kanıtla sınandı, savunulamayan düzeltildi.
+
+| Karşı tez | Sonuç |
+|---|---|
+| `isReachable` kaynak IP olmadan güvenilir değil | **DOĞRU.** Bu ağda kaynak IP bağlanmadan yapılan TCP connect **her adrese** başarılı dönüyor (TEST-NET dahil). `provisionModem` kör yokluyor, olmayan cihazdan kimlik okuyup "SIM yok" diyordu. Artık kaynak türetilemiyorsa yoklama yapmıyor, `pc_hazir_degil` + `NO_SOURCE_IP` diyor |
+| Kaynak dosyalarda kodlama bozulması | **DOĞRU.** `okuma.js`/`izleme.js`'e tek baytlık cp1252 karakterleri sızmış; ikisi **ekrana basılan metnin içindeydi**. Onarıldı + nöbetçi test (`kaynak-kodlama.test.js`) |
+| Arayüz "elle gir" diyor ama alan kilitli | **DOĞRU.** `readOnly` alana yazılamaz; operatöre yaz deyip yazdırmıyorduk. Kilit artık yalnız **cihazdan gelen** numarayı koruyor |
+| Numara kontrolü SIM kontrolünden önce | **DOĞRU.** SIM'siz modem "telefon yok" diyordu — yanlış teşhis. Sıra düzeltildi |
+| Geçici okuma hatası `denemeler=3`'ü işletmiyor | **DOĞRU.** İlk turda `return` ediyordu; artık son turda vazgeçiyor |
+| Katman yönü ters: okuyan modül yazana bağımlı | **DOĞRU.** `degerlendirme.js` → `pipeline.js` bağımlılığı vardı. `cihaz.js` (en alt katman) çıkarıldı; ikisi de ona bakıyor, birbirlerine bakmıyor. Döngüsel bağımlılık yok |
+| `degerlendirmeyiIzle` yalnız import'tan erişilebilir | **DOĞRU** (kendi kuralımızın ihlali). `ricon.js degerlendir --izle` eklendi |
+| Yeni komutların insan-okunur özeti yok | **DOĞRU.** `summaryText`'e eklendi, canlı doğrulandı |
+| `telefonSor(1)` sabit → döngüde "1. modem" | **DOĞRU.** `deneme` geçiliyor |
+| 66 dışa aktarım = API değil çöplük | **SAVUNULDU.** Katmanlara göre yorumlanmış + alt yollarla odaklı görünüm (`ricon-modem/at` gibi). Her ad ayrı bir yetenek |
+| `pin-karar.js` 63 satır = aşırı parçalanma | **SAVUNULDU.** Ölçüt satır değil tek-sorumluluk; o dosya gerçek bir PUK riskini kapattı |
+| Çekirdekte Türkçe = dil bağımlılığı | **SAVUNULDU.** Alternatif her tüketicide sözlük = sızıntının kaynağı. İkinci dil ikinci sözlük modülü olur, çekirdek değişmez |
+| Arayüzde PIN alanı gizli → provizyon PIN'i verilemez | **SAVUNULDU.** Kilitli SIM'de alan açılıyor; kilitsiz SIM'e PIN yazılmaması **istenen** davranış. İnternet gelmezse ekran 2'deki yerinde PIN isteği duruyor |
+| Arayüzde zamanlayıcılar çakışır | **SAVUNULDU.** `tekrariAyarla` önce `clearTimeout` yapıyor; JS tek iş parçacıklı olduğu için iki geri çağırma iç içe girmiyor, `okunuyor` bayrağı zaten kapıyor |
+
 ## 5) Sıradaki işler
 
 | # | İş | Not |
 |---|---|---|
-| 1 | **Çok modemli seri akış (`--dongu`)** | Hiç denenmedi. 400 modem hedefinin önündeki tek büyük bilinmeyen |
+| 1 | `--dongu` canlı test | Artık operatöre sormuyor (numara SIM'den). UI ile aynı işi yapıyor; UI kullanılıyorsa ikincil |
 | 2 | `sahaya_hazir` alanını ekranda göster | Defterde var, UI'da yok. Küçük iş |
 | 3 | Metrik hesabı | En sona; elle taban kayıtlı (12 dk, **beyan**) |
 | ~~4~~ | ~~Authentication 4'lü diff~~ | **Kapandı:** 4 anahtara da aynı değer (`1`) yazılıyor, yani eşleme belirsizliği sonucu değiştirmiyor; ekranda 4'ünün tikli olduğu gözle doğrulandı |
@@ -130,7 +151,7 @@ gerekmez: o yol nvram'a hiçbir şey yazmıyor — 2026-08-28'de `m1s1simpin` bo
 ## Faydalı komutlar
 
 ```bash
-npm test                                      # 177 test, cihaz gerektirmez
+npm test                                      # 196 test, cihaz gerektirmez
 node --env-file=.env ricon.js sunucu          # test arayüzü :8080
 node --env-file=.env ricon.js degerlendir     # durum + ne eksik (~5 sn)
 node --env-file=.env ricon.js numara          # SADECE telefon numarası

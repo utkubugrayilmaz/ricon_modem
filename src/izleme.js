@@ -12,12 +12,12 @@ import { problem, isOk } from "./problems.js";
 // --- izle: DONEMSEL ornekleme + zaman cizelgesi ---
 //
 // Iki isi birden yapar:
-//   1) Alan degisimi tespiti (bir alan gercekten canli mi?) — ardisik
+//   1) Alan degisimi tespiti (bir alan gercekten canli mi?) â€” ardisik
 //      ornekler arasindaki farklar.
-//   2) INTERNET KESINTISI gozlemi — WAN IP'nin gidip geldigi anlar. Provizyon
+//   2) INTERNET KESINTISI gozlemi â€” WAN IP'nin gidip geldigi anlar. Provizyon
 //      sirasinda "internet kesiliyor mu, ne kadar" sorusunun olculmus cevabi.
 //
-// Cihaz cevap vermezse ornek KAYBEDILMEZ: `erisim:false` olarak kaydedilir —
+// Cihaz cevap vermezse ornek KAYBEDILMEZ: `erisim:false` olarak kaydedilir â€”
 // reboot penceresi de veridir (yonetim erisiminin kesildigi sure).
 //
 // Not: modem TEK BAGLANTILI ve her ornek 2 GET (aralarinda bekleme) demek;
@@ -59,8 +59,8 @@ export async function watchDevice(opts) {
       degisen_alan: Object.keys(degisen).length,
       degisen: oncekiAlanlar ? degisen : undefined,
     });
-    bildir(opts, `${anSn} sn · erisim ${erisim ? "var" : "YOK"}`
-      + ` · internet ${internetVarMi(wanIp) ? wanIp : "YOK"}`);
+    bildir(opts, `${anSn} sn Â· erisim ${erisim ? "var" : "YOK"}`
+      + ` Â· internet ${internetVarMi(wanIp) ? wanIp : "YOK"}`);
     if (erisim) oncekiAlanlar = alanlar;
     const kalan = aralik - (Date.now() - baslangic - anSn * 1000);
     if (Date.now() + Math.max(kalan, 0) >= bitis) break;

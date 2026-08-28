@@ -19,9 +19,13 @@ export {
   FIELD_PROFILE, FACTORY_PROFILE, PROFILES, DEVICE_NAME_KEY, SIM_PIN_KEY,
 } from "./profile.js";
 export {
-  provisionModem, provisionLoop, pcPreflight, nextAction, provisionRecord,
-  readIdentity, simTakiliMi, waitForInternet, simPinHedefi,
+  provisionModem, provisionLoop, nextAction, provisionRecord, simPinHedefi,
 } from "./pipeline.js";
+// Cihaz temel okumalari + PC on-kontrolu — en alt katman. Okuma yolu da
+// yazma yolu da buna bakiyor (aralarinda bagimlilik yok).
+export {
+  readIdentity, simTakiliMi, waitForInternet, pcPreflight,
+} from "./cihaz.js";
 // Cihaz DEGERLENDIRME — "ne durumda, ne eksik, tekrar bakmali miyim?"
 // yenidenDenemeKarari PURE: tekrar politikasi cekirdekte, arayuzde degil.
 export {
