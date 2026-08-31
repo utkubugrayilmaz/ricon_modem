@@ -12,7 +12,7 @@ import { Client, findSourceIp } from "./net.js";
 import {
   SIM_FIELD_MAP, SIM2_FIELD_MAP, OPERATORS,
 } from "./settings.js";
-import { problem } from "./problems.js";
+import { problem, isOk } from "./problems.js";
 
 const notify = (opts, m) => { if (typeof opts.progress === "function") opts.progress(m); };
 const emitEvent = (opts, event) => {

@@ -57,7 +57,7 @@ export async function assessDevice(opts) {
     timestamp: now(), command: "degerlendir",
     pc: { ready: on.ready, problems: on.problems },
     modem: { location: null, host: null },
-    credentials: null, sim: null,
+    identity: null, sim: null,
     phone: { number: normalizePhone(phone), source: phone ? "girdi" : "yok" },
     internet: null,
     problems: [...on.problems],
@@ -87,7 +87,7 @@ export async function assessDevice(opts) {
     let k = null;
     try { k = await readIdentity({ ...location, credentials }); } catch { /* kismi sonuc gecerli */ }
     if (k) {
-      report.credentials = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
+      report.identity = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
         lan_mac: k.lan_mac, operator: k.operator };
       report.sim = { present: isSimPresent(k), ...k.sim };
       report.internet = { up: Boolean(k.wan_ip), wan_ip: k.wan_ip };

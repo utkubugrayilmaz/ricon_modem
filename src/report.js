@@ -8,8 +8,8 @@ import { SETTING_LABELS } from "./settings.js";
 
 // Cikti nesnesinden sir tasiyabilecek alanlari ozyinelemeli siler.
 // SIM PIN de sir: nvram anahtar adiyla da gelebilir, alan adiyla da.
-const SECRET_FIELDS = new Set(["sifre", "password", "kimlik", "auth", "authorization",
-  "pin", "m1s1simpin", "m1s2simpin"]);
+const SECRET_FIELDS = new Set(["credentials", "password", "sifre", "kimlik",
+  "auth", "authorization", "pin", "m1s1simpin", "m1s2simpin"]);
 const SECRET_PATTERN = /Basic\s+[A-Za-z0-9+/=]+/g;
 
 export function stripSecrets(value) {

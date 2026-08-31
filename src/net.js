@@ -59,7 +59,7 @@ export class Client {
 
   // GET — sirali kuyruga eklenir. Doner: { ok, kod, govde, problems, yol }
   get(path) {
-    return this._queueğpushInterface("GET", path, null);
+    return this._enqueue("GET", path, null);
   }
 
   // POST — yalnizca yazma modunda. Salt-okunurda reddedilir.
@@ -70,11 +70,11 @@ export class Client {
         problems: [problem("WRITE_BLOCKED_READONLY", path)],
       });
     }
-    return this._queueğpushInterface("POST", path, { body, contentType });
+    return this._enqueue("POST", path, { body, contentType });
   }
 
   // Istegi kuyruga ekler; onceki istek bittikten sonra, aralik bekleyerek calisir.
-  _queueğpushInterface(httpMethod, path, extras) {
+  _enqueue(httpMethod, path, extras) {
     const job = async () => {
       const elapsed = Date.now() - this._lastRequestEndedAt;
       if (this._lastRequestEndedAt && elapsed < this.requestGapMs) {
