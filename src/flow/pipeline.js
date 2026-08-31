@@ -283,6 +283,10 @@ export async function provisionModem(opts) {
   // sart: ikinci denemede ayni numara tekrar bildirilirse ekranda iki kez
   // gorunur ve "numara degisti mi?" izlenimi verir.
   let telefonBildirildi = false;
+  // SIM PIN de CALISTIRMA BASINA BIR KEZ sorulur (ayrintili gerekce asagida,
+  // sorma blogunda). Retry dongusu gecici hatalar icin; yanlis PIN gecici bir
+  // hata degil ve her tekrar bir hak yakabilir.
+  let pinSoruldu = false;
 
   // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
   // kaydiTamamla). Cagri yerleri degismedi.
@@ -429,8 +433,20 @@ export async function provisionModem(opts) {
     //
     // `pin` VERILMISSE sorulmaz: o zaman eski yol islesin (PIN ayarlarla ayni
     // yazma pasina girer, tek reboot). Iki yol birbirinin yerine gecmiyor.
-    if (konum && !pin && kimlikBilgiOnce?.sim?.kilit === "pin"
+    //
+    // ⚠ CALISTIRMA BASINA TEK SORU (pinSoruldu). Bu blok RETRY DONGUSUNUN
+    // ICINDE: bayrak olmadan `denemeler` (varsayilan 3) kadar tekrar soruyordu
+    // ve iki sey birden bozuluyordu:
+    //   1) operatore ayni prompt uc kez cikiyor ve her seferinde AYNI, BAYAT
+    //      "kalan hak" yaziyordu (kimlik yalnizca kilit ACILINCA tazeleniyor)
+    //   2) her tur bir hak daha yakabiliyordu — retry dongusu GECICI hatalar
+    //      icin var; yanlis PIN gecici bir hata degil, insan girdisi hatasi.
+    //      Aracin kendi kendine ayni denemeyi tekrarlamasi projenin acik
+    //      kurallarina aykiri.
+    // Operator yeni bir PIN denemek isterse komutu bilerek yeniden calistirir.
+    if (konum && !pin && !pinSoruldu && kimlikBilgiOnce?.sim?.kilit === "pin"
         && typeof opts.pinSor === "function") {
+      pinSoruldu = true;
       const kilitBilgi = {
         durum: kimlikBilgiOnce.sim_durumu,
         pin_kalan: kimlikBilgiOnce.sim.pin_kalan,
@@ -447,14 +463,24 @@ export async function provisionModem(opts) {
         rapor.problems.push(...k.problems);
         olayla(opts, { tur: "pin_kaldirma_sonuc", acildi: k.acildi,
           kilit_kaldirildi: k.kilit_kaldirildi, pin_kalan: k.pin_kalan });
-        // SIM ACILDIYSA kimligi YENIDEN oku: artik abone verisi geliyor, yani
-        // numara okunabilir ve kilit durumu degisti. Eski okumayla devam etmek
-        // asagida "hala kilitli" varsayimiyla calismak olurdu.
         if (k.acildi) {
+          // SIM ACILDI: kimligi YENIDEN oku. Artik abone verisi geliyor, yani
+          // numara okunabilir ve kilit durumu degisti. Eski okumayla devam
+          // etmek asagida "hala kilitli" varsayimiyla calismak olurdu.
           bildir(opts, "SIM acildi — kimlik yeniden okunuyor");
           try {
             kimlikBilgiOnce = await readIdentity({ ...konum, kimlik });
           } catch { /* kismi sonuc gecerli; asagidaki yollar yine calisir */ }
+        } else if (k.pin_kalan != null) {
+          // ACILMADI: elimizdeki kimlik okumasi artik BAYAT — kalan hak
+          // degismis olabilir. simPinKaldir kendi TAZE okumasini yapmis ve
+          // sayiyi donduruyor; cihaza bir daha gitmeden onu kullaniyoruz.
+          // Yoksa rapor ve asagidaki PIN karari yanlis sayiyla calisirdi.
+          //
+          // Cagirinin nesnesini DEGISTIRMIYORUZ (hazirKimlikBilgi disaridan
+          // gelmis olabilir): yeni nesne kuruluyor.
+          kimlikBilgiOnce = { ...kimlikBilgiOnce,
+            sim: { ...kimlikBilgiOnce.sim, pin_kalan: k.pin_kalan } };
         }
       }
     }

@@ -74,6 +74,48 @@ test("pinSor: SIM PIN kilitliyse cekirdek PIN'i SORAR ve kalan hakki bildirir", 
   assert.match(sorulan[0].durum, /Need verification PIN/);
 });
 
+// BEKCI: PIN, RETRY DONGUSUNE RAGMEN calistirma basina TEK KEZ sorulur.
+//
+// NEDEN VAR — olculmus gercek kusur: sorma blogu retry dongusunun icinde ve
+// bayrak yoktu. `denemeler` VARSAYILANI 3 (bkz. ricon.js) oldugu icin sahada
+// operatore ayni prompt UC KEZ cikiyordu; her turda AYNI, BAYAT "kalan hak"
+// yaziliyordu (kimlik yalnizca kilit ACILINCA tazeleniyor) ve her tur bir hak
+// daha yakabiliyordu. Testler o sirada `denemeler: 1` ile kosuyordu, yani
+// gecerken CLI'nin gercek varsayilanini hic sinamiyorlardi.
+//
+// Retry dongusu GECICI hatalar icin var; yanlis PIN gecici degil, insan girdi
+// hatasi. Aracin kendi kendine deneme tekrarlamasi projenin acik kurali.
+test("pinSor: denemeler=3 (CLI varsayilani) olsa da TEK KEZ sorulur", async () => {
+  const sorulan = [];
+  await provisionModem({
+    ...TEMEL,
+    denemeler: 3,                        // CLI varsayilani — TEMEL'i EZIYOR
+    kimlikBilgi: KILITLI_KIMLIK(3),
+    // PIN veriliyor ki gercekten kaldirma denenip BASARISIZ olsun; kusurlu
+    // surumde tam bu yol her turda yeniden soruyordu.
+    pinSor: (bilgi) => { sorulan.push(bilgi.pin_kalan); return "9999"; },
+  });
+  assert.equal(sorulan.length, 1,
+    `PIN ${sorulan.length} kez soruldu — retry dongusu operatoru tekrar tekrar`
+    + " PIN girmeye zorluyor ve her tur bir hak yakabilir");
+});
+
+test("pinSor: kaldirma basarisizsa kalan hak TAZE deger ile duzeltilir", async () => {
+  // Kaldirma basarisiz olunca elimizdeki kimlik okumasi bayatliyor: cihazdaki
+  // kalan hak degismis olabilir. simPinKaldir kendi TAZE okumasini yapiyor ve
+  // sayiyi donduruyor; rapor onu tasimali, eski sayiyi DEGIL.
+  const r = await provisionModem({
+    ...TEMEL,
+    kimlikBilgi: KILITLI_KIMLIK(3),
+    pinSor: () => "9999",
+  });
+  assert.ok(r.pin_kaldirma, "kaldirma denendi, kayit uretildi");
+  assert.equal(r.pin_kaldirma.kilit_kaldirildi, false);
+  // Cihaza ulasilamadigi icin taze okuma da null doner; onemli olan raporun
+  // simPinKaldir'in DONDURDUGU degeri tasimasi, kendi eski kopyasini degil.
+  assert.equal(r.pin_kaldirma.pin_kalan, null);
+});
+
 test("pinSor: kilit YOKSA hic sorulmaz (PIN'siz akis hedefi)", async () => {
   let soruldu = false;
   await provisionModem({
