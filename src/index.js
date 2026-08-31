@@ -67,4 +67,10 @@ export { parseNvram, diffNvram, computeNvramDiff } from "./nvram.js";
 export { isReachable, findSourceIp, localInterfaces, guessVendor } from "./net.js";
 // Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.
 export { summarizeMetrics, distribution } from "./report.js";
+// Eski defter satirlarini bugunku semaya cevirir. Disa acik, cunku
+// defteri disaridan okuyan her tuketici ayni sinirdan gecmeli.
+export {
+  normalizeMetricRow, normalizeLedgerRow, normalizeStep, normalizeStatus,
+  parseStepLabel, LEGACY_KIND, LEGACY_STATUS, LEGACY_PROFILE,
+} from "./legacy.js";
 export { SETTING_LABELS, DEFAULT_HOST } from "./settings.js";

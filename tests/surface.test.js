@@ -25,6 +25,7 @@ const DOSYALAR = [
   "console.js",    // telnet root shell
   "device.js",     // kimlik / SIM / internet okumalari + dd-wrt ayristirma
   "index.js",      // PUBLIC API — tek kapi
+  "legacy.js",     // eski defter semalarini bugunku sekle ceviren TEK sinir
   "net.js",        // HTTP istemcisi + kaynak IP + erisilebilirlik
   "nvram.js",      // ikili nvram yedegi cozumleyici + diff
   "pipeline.js",   // tak-calistir akisi

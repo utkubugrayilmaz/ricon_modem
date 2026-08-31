@@ -166,18 +166,23 @@ function askPin({ pinRemaining, pinTotal }) {
   })();
 }
 
-// ADIM ETIKETLERI TARIHSEL SATIRLARLA BIREBIR AYNI. data/olcumler.jsonl'de
-// 2026-08-27'den beri bu etiketler yaziyor ve stepSummary kovalari ADA gore
-// topluyor. Yeni bir etiket uydurmak kovayi ikiye boler; medyan
-// karsilastirmasi da o anda anlamini yitirir. Etiketler TURKCE ve OPERATORE
-// gosterilen metin — dil kuralinda cevrilmeyenler tarafinda.
-const ADIM = Object.freeze({
-  algilandi: "modem algılandı",
-  kimlik: "kimlik okundu (ICCID/IMEI)",
-  plan: "ayarlar okundu (plan hazır)",
-  reboot: "reboot gönderildi",
-  dogrulandi: "cihaz geri geldi, doğrulandı",
-  internet: "internet doğrulandı (SIM çalışıyor)",
+// ADIM ADLARI ARTIK YAPILANDIRILMIS: {step, count}.
+//
+// Eskiden serbest metin etiketti ve ayar sayisini ICINE gomuyordu
+// ("yazma bitti — 12 ayar"). stepSummary kovayi etikete gore actigi icin TEK
+// mantiksal adim ALTI kovaya bolunuyordu: 23 satirlik gercek defterde 16
+// kovanin 10'u ayni yazma adimiydi ve medyan karsilastirmasi anlamini
+// yitirmisti. Sayi artik ayri bir alanda (`count`), kova `step`e gore.
+//
+// Tarihsel satirlarin Turkce etiketleri KAYBOLMUYOR: src/legacy.js onlari
+// ayni kanonik adima indiriyor, iki donem ayni kovada bulusuyor.
+const STEP = Object.freeze({
+  detected: "detected",
+  identity: "identity",
+  plan: "plan",
+  reboot: "reboot",
+  verified: "verified",
+  internet: "internet",
 });
 
 // Cekirdegin olay akisini TERMINALE cevirir ve adim surelerini olcer.
@@ -192,15 +197,15 @@ const ADIM = Object.freeze({
 function streamWatcher() {
   const steps = [];
   // Ilk olaya kadar gecen sure de bir adimdir (modem aranmasi/algilanmasi);
-  // etiketsiz baslarsak o sure sessizce kaybolurdu.
-  let lastName = ADIM.algilandi;
+  // adsiz baslarsak o sure sessizce kaybolurdu.
+  let last = { step: STEP.detected };
   let lastAt = Date.now();
-  const stamp = (name) => {
+  const stamp = (next) => {
     const nowMs = Date.now();
-    if (lastName) {
-      steps.push({ name: lastName, durationSec: Number(((nowMs - lastAt) / 1000).toFixed(1)) });
+    if (last) {
+      steps.push({ ...last, durationSec: Number(((nowMs - lastAt) / 1000).toFixed(1)) });
     }
-    lastName = name;
+    last = next;
     lastAt = nowMs;
   };
 
@@ -210,22 +215,22 @@ function streamWatcher() {
       // her modem KENDI adim surelerini alsin diye gerekli.
       case "algilandi":
         steps.length = 0;
-        lastName = ADIM.algilandi;
+        last = { step: STEP.detected };
         lastAt = Date.now();
         break;
-      case "kimlik": stamp(ADIM.kimlik); break;
+      case "kimlik": stamp({ step: STEP.identity }); break;
       case "plan":
-        stamp(ADIM.plan);
+        stamp({ step: STEP.plan });
         // Arayuzdeki iki panelin (once/sonra) terminal karsiligi: ham nvram
         // anahtari degil, sozlukten gelen ad/sayfa/deger.
         process.stderr.write("\n  PLAN — once -> sonra (* = degisecek)\n"
           + planText(planRows(o.planObj)) + "\n\n");
         break;
-      case "yaziliyor": stamp(`yazma başladı — ${o.keys?.length ?? 0} ayar`); break;
-      case "yazildi": stamp(`yazma bitti — ${o.keys?.length ?? 0} ayar`); break;
-      case "reboot": stamp(ADIM.reboot); break;
-      case "dogrulandi": stamp(ADIM.dogrulandi); break;
-      case "internet": stamp(o.up ? ADIM.internet : null); break;
+      case "yaziliyor": stamp({ step: "write_start", count: o.keys?.length ?? 0 }); break;
+      case "yazildi": stamp({ step: "write_done", count: o.keys?.length ?? 0 }); break;
+      case "reboot": stamp({ step: STEP.reboot }); break;
+      case "dogrulandi": stamp({ step: STEP.verified }); break;
+      case "internet": stamp(o.up ? { step: STEP.internet } : null); break;
       case "bitti":
       case "sonuc": stamp(null); break;
       default: break;
@@ -245,9 +250,8 @@ function metricsRow(r, steps) {
   const k = r.record || {};
   const line = {
     timestamp: new Date().toISOString(),
-    // "run" — INGILIZCE yazim kanonik. Eski satirlarda tur:"kurulum" var ve
-    // summarizeMetrics ikisini de okuyor (bkz. TUR_ESLERI); tarihsel taban
-    // korunuyor ama yeni veri tek yazimda birikiyor.
+    // "run" — kanonik yazim. Eski satirlarda tur:"kurulum" var; src/legacy.js
+    // ikisini ayni kovaya indiriyor, tarihsel taban korunuyor.
     kind: "run",
     source: "cli",
     status: r.status ?? null,

@@ -5,6 +5,7 @@
 // alan-adi + regex suzgeci uygulanir. Rapor paylasilabilir olmali.
 
 import { SETTING_LABELS } from "./settings.js";
+import { normalizeMetricRow } from "./legacy.js";
 
 // Cikti nesnesinden sir tasiyabilecek alanlari ozyinelemeli siler.
 // SIM PIN de sir: nvram anahtar adiyla da gelebilir, alan adiyla da.
@@ -114,8 +115,10 @@ function metricsText(r) {
   if (r.steps?.length) {
     s.push("\n    Adim kirilimi (medyan):");
     for (const a of r.steps) {
-      s.push(`      ${a.bottleneck ? "▲" : " "} ${String(a.name).padEnd(34)}`
-        + `${String(a.median).padStart(6)} sn  (${a.min}–${a.max})`);
+      // counts: birlestirilmis kovanin kac ayarlik yazmalari kapsadigi
+      const span = a.counts ? ` ×${a.counts.join("/")}` : "";
+      s.push(`      ${a.bottleneck ? "▲" : " "} ${String(a.step + span).padEnd(34)}`
+        + `${String(a.median).padStart(6)} sn  (${a.min}–${a.max}, n=${a.n})`);
     }
   }
 
@@ -310,38 +313,25 @@ export function distribution(values) {
   };
 }
 
-// CIFT SEMA: defter satirlari iki donemden geliyor. Eski satirlarda alan
-// adlari TURKCE (zaman/tur/toplam_sn/giris_sn/adimlar), yenilerde INGILIZCE.
-// Ikisini de okumak zorundayiz — metrik iddiasinin TABANI eski satirlarda.
+// CIFT SEMA ARTIK BURADA COZULMUYOR: normalizasyon src/legacy.js'te, TEK
+// sinirda. Burasi kanonik satir bekler — dort semanin hangisinden geldigini
+// bilmek zorunda degil.
 //
-// Bu gercek bir kayipti, uydurma bir onlem degil: 2026-08-31'de
-// data/olcumler.jsonl'de 22 satirdan 1'i Ingilizce semadaydi ve `r.tur`
-// filtresi onu SESSIZCE disarida birakiyordu.
-//
-// Adim ETIKETLERI cevrilmez ("modem algılandı", "reboot gönderildi"): onlar
-// operatore gosterilen metin. Cevrilseydi stepSummary'nin kovalari ikiye
-// bolunur ve medyan karsilastirmasi anlamini yitirirdi.
-const alan = (r, yeni, eski) => r[yeni] ?? r[eski];
-// Satir TURU de iki yazimla geliyor: eski satirlarda tur:"kurulum"/"elle"/
-// "sifirlama", Ingilizce donemden kalanlarda kind:"run"/"manual"/"reset".
-// Yeni satirlar INGILIZCE yazilir; okuma ucunu de kabul eder.
-const TUR_ESLERI = Object.freeze({
-  run: ["run", "kurulum"],
-  manual: ["manual", "elle"],
-  reset: ["reset", "sifirlama"],
-});
-const turu = (r) => alan(r, "kind", "tur");
-const turuOlan = (rows, ad) => rows.filter((r) => TUR_ESLERI[ad].includes(turu(r)));
+// Neden tasidik: bu is eskiden asagiya dagilmis alan(r,"yeni","eski")
+// ciftleriyle yapiliyordu ve her yeni kusak bir cift daha ekliyordu. Ucuncu
+// kusak (Ingilizce DEGERLER) gelince dokuz ayri cagri noktasini ayni anda
+// dogru tutmak imkansizlasti.
+const kindIs = (rows, kind) => rows.map(normalizeMetricRow).filter((r) => r.kind === kind);
 
 // Çalıştırma satırlarını özetler.
 // rows: data/olcumler.jsonl satırları (nesne olarak)
 // opts: { manualSec?, manualSource?, manualN?, modemCount? }
 export function summarizeMetrics(rows = [], opts = {}) {
-  const runs = turuOlan(rows, "run");
+  const runs = kindIs(rows, "run");
   const successful = runs.filter((r) => r.ok);
   // Elle olcumler AYNI dosyada, tur:"elle" ile. Boylece comparison tabani
   // da kayitli bir OLCUM olur — komut satirinda tasinan bir sayi degil.
-  const manuals = turuOlan(rows, "manual");
+  const manuals = kindIs(rows, "manual");
 
   const summary = {
     timestamp: new Date().toISOString(),
@@ -353,18 +343,18 @@ export function summarizeMetrics(rows = [], opts = {}) {
       successRate: runs.length
         ? round1((successful.length / runs.length) * 100) : null,
       // İlk denemede biten kurulum oranı — tekrar'a ne sıklıkla düştüğümüz.
-      firstTry: successful.filter((r) => (alan(r, "attempt", "deneme") ?? 1) === 1).length,
+      firstTry: successful.filter((r) => (r.attempt ?? 1) === 1).length,
       distinctDevices: new Set(successful.map((r) => r.lan_mac).filter(Boolean)).size,
     },
     reset: {
-      attemptedCount: turuOlan(rows, "reset").length,
+      attemptedCount: kindIs(rows, "reset").length,
     },
     // Araç süresi: "başlat"a bastıktan bitişe kadar (cihaz işi).
-    toolSec: distribution(successful.map((r) => finiteOrNull(alan(r, "totalSec", "toplam_sn")))),
+    toolSec: distribution(successful.map((r) => finiteOrNull(r.totalSec))),
     // Operatörün numarayı girme süresi = insanın MEŞGUL olduğu tek an.
-    entrySec: distribution(successful.map((r) => finiteOrNull(alan(r, "entrySec", "giris_sn")))),
+    entrySec: distribution(successful.map((r) => finiteOrNull(r.entrySec))),
     steps: stepSummary(successful),
-    manualSec: distribution(manuals.map((r) => finiteOrNull(alan(r, "totalSec", "toplam_sn")))),
+    manualSec: distribution(manuals.map((r) => finiteOrNull(r.totalSec))),
     problems: [],
   };
 
@@ -379,7 +369,7 @@ export function summarizeMetrics(rows = [], opts = {}) {
   // Kayitli satirlarin HEPSI beyan mi? Beyan bir OLCUM DEGILDIR; rapor bunu
   // acikca soylemeli, yoksa "3 kayitli olcum" gibi hak etmedigimiz bir guven
   // uretir.
-  const allDeclared = manuals.length > 0 && manuals.every((r) => alan(r, "declared", "beyan"));
+  const allDeclared = manuals.length > 0 && manuals.every((r) => r.declared);
   const sourceText = () => {
     if (!recordedBaseline) return opts.manualSource || "BEYAN — kayitli olcum yok";
     const who = manuals.map((r) => r.who).filter(Boolean)[0];
@@ -405,21 +395,32 @@ export function summarizeMetrics(rows = [], opts = {}) {
   return summary;
 }
 
-// Adım adı -> süre dağılımı. En yavaş adım ayrıca işaretlenir (darboğaz).
+// Adim -> sure dagilimi. En yavas adim ayrica isaretlenir (darbogaz).
+//
+// Kova artik ETIKETE degil `step`e gore aciliyor. Etiket ayar sayisini icine
+// gomdugu icin ("yazma basladi — 12 ayar") TEK mantiksal adim ALTI kovaya
+// bolunuyordu; 23 satirlik defterde 16 kovanin 10'u ayni yazma adimiydi ve
+// medyan karsilastirmasi anlamini yitirmisti. Sayi artik `counts` alaninda
+// duruyor — birlestirdigimiz kovanin kac ayarlik yazmalari kapsadigi
+// GORUNUR kalsin diye; yoksa birlestirme kendi basina bir bilgi kaybi olurdu.
 function stepSummary(lines) {
   const bucket = new Map();
   for (const r of lines) {
-    // Adim nesnesi de iki semali: eski {ad, sure_sn}, yeni {name, durationSec}.
-    for (const a of alan(r, "steps", "adimlar") || []) {
-      const name = alan(a, "name", "ad");
-      if (name == null) continue;
-      if (!bucket.has(name)) bucket.set(name, []);
-      bucket.get(name).push(finiteOrNull(alan(a, "durationSec", "sure_sn")));
+    for (const a of r.steps || []) {
+      if (a.step == null) continue;
+      if (!bucket.has(a.step)) bucket.set(a.step, { values: [], counts: new Set() });
+      const b = bucket.get(a.step);
+      b.values.push(finiteOrNull(a.durationSec));
+      if (Number.isFinite(a.count)) b.counts.add(a.count);
     }
   }
-  const list = [...bucket].map(([name, values]) => ({ name, ...distribution(values) }));
+  const list = [...bucket].map(([step, b]) => ({
+    step,
+    ...distribution(b.values),
+    counts: b.counts.size ? [...b.counts].sort((x, y) => x - y) : null,
+  }));
   const slowest = list.reduce((e, a) => (a.median > (e?.median ?? -1) ? a : e), null);
-  return list.map((a) => ({ ...a, bottleneck: a.name === slowest?.name }));
+  return list.map((a) => ({ ...a, bottleneck: a.step === slowest?.step }));
 }
 
 // Elle sürece göre kazanç. İki AYRI iddia üretir, çünkü ikisi farklı şey:

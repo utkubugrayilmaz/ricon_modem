@@ -45,7 +45,7 @@ test("summarizeMetrics: farkli cihaz sayisi MAC ile sayilir", () => {
 test("summarizeMetrics: en yavas adim darbogaz isaretlenir", () => {
   const o = summarizeMetrics([line(), line()]);
   const bottleneck = o.steps.find((a) => a.bottleneck);
-  assert.equal(bottleneck.name, "reboot->geri");
+  assert.equal(bottleneck.step, "reboot->geri");
 });
 
 test("summarizeMetrics: karsilastirma iki AYRI iddia uretir", () => {
@@ -151,13 +151,50 @@ test("cift sema: ESKI (Turkce) ve YENI (Ingilizce) satirlarin IKISI de sayilir",
   assert.equal(r.entrySec.n, 2, "giris_sn ve entrySec ayni kovaya girmeli");
 });
 
-test("cift sema: adim ETIKETLERI ayni oldugu icin kova BOLUNMEZ", () => {
-  // Etiket cevrilseydi "modem algılandı" ve "modem detected" iki ayri kova
-  // olur, medyan karsilastirmasi anlamini yitirirdi.
+test("cift sema: iki donemin ayni adimi TEK kovada bulusur", () => {
+  // Kova artik ETIKETE degil `step`e gore aciliyor. Eski satirin Turkce
+  // etiketi ("modem algılandı") ile yeni satirin etiketi legacy.js'te ayni
+  // kanonik adima ("detected") indigi icin bolunme olmuyor.
   const r = summarizeMetrics([ESKI_SATIR, YENI_SATIR]);
   assert.equal(r.steps.length, 1, "tek kova olmali");
-  assert.equal(r.steps[0].name, "modem algılandı");
+  assert.equal(r.steps[0].step, "detected");
   assert.equal(r.steps[0].n, 2);
+});
+
+test("adim kovasi AYAR SAYISINA gore BOLUNMEZ (olculmus kusur)", () => {
+  // Eski etiket sayiyi icine gomuyordu: "yazma bitti — 1 ayar" ile
+  // "yazma bitti — 12 ayar" iki ayri kovaydi. 23 satirlik gercek defterde
+  // 16 kovanin 10'u ayni yazma adimiydi; medyan anlamini yitirmisti.
+  const w = (n, sec) => ({
+    kind: "run", ok: true, totalSec: 10,
+    steps: [{ name: `yazma bitti — ${n} ayar`, durationSec: sec }],
+  });
+  const r = summarizeMetrics([w(1, 0.8), w(12, 1.2), w(3, 1.0)]);
+  assert.equal(r.steps.length, 1, "uc yazma TEK kovada olmali");
+  assert.equal(r.steps[0].step, "write_done");
+  assert.equal(r.steps[0].n, 3);
+  assert.deepEqual(r.steps[0].counts, [1, 3, 12], "birlestirilen sayilar GORUNUR kalmali");
+});
+
+test("yazma BASLADI ve BITTI ayri kalir (birlestirmek medyani seyreltir)", () => {
+  // "basladi" suresi hep ~0; "bitti" gercek yazma suresini tasir. Ikisini
+  // ayni kovaya atmak medyani sifirlarla asagi ceker — yanlis duzeltme.
+  const r = summarizeMetrics([{
+    kind: "run", ok: true, totalSec: 10,
+    steps: [{ name: "yazma başladı — 3 ayar", durationSec: 0 },
+            { name: "yazma bitti — 3 ayar", durationSec: 0.8 }],
+  }]);
+  assert.deepEqual(r.steps.map((a) => a.step), ["write_start", "write_done"]);
+});
+
+test("tanimadigi adim etiketi DUSURULMEZ, kendi kovasinda kalir", () => {
+  // "unknown" tek kovasina yigmak bugun ayri duran kovalari birlestirirdi.
+  const r = summarizeMetrics([{
+    kind: "run", ok: true, totalSec: 10,
+    steps: [{ name: "hic gorulmemis adim", durationSec: 2 }],
+  }]);
+  assert.equal(r.steps[0].step, "hic gorulmemis adim");
+  assert.equal(r.steps[0].n, 1);
 });
 
 test("cift sema: elle olcum iki yazimda da taban olur", () => {
