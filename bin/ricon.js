@@ -45,6 +45,28 @@ const progress = (m) => process.stderr.write(`[${command}] ${m}\n`);
 // IP -> /24 oneki. Kaynak IP turetmek icin; iki komut da ayni seyi kullaniyor.
 const prefixOf = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
 
+// .env'i KENDIMIZ de yukle.
+//
+// Node'un --env-file bayragi yalnizca npm script'lerinde veriliydi; ciplak
+// `node bin/ricon.js sim-lock` cagrisinda .env HIC YUKLENMIYORDU. Kimlik bos
+// kaliyor ve arac "console credentials supplied degil" diye HAKLI ama
+// yaniltici bir hata veriyordu — kullanici .env'in dolu oldugunu biliyor,
+// aracin okumadigini bilmiyor. (2026-08-31 canli goruldu.)
+//
+// process.env HER ZAMAN kazanir: gercek ortam degiskenini ya da --env-file
+// ile gelen degeri EZMEYIZ. Burasi yalnizca BOSLUGU doldurur.
+function loadDotEnv(file = ".env") {
+  let text;
+  try { text = readFileSync(file, "utf8"); } catch { return; }
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;                               // yorum ve bos satir
+    if (process.env[m[1]] !== undefined) continue;  // varsa DOKUNMA
+    process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+  }
+}
+loadDotEnv();
+
 // v0.2.0'da yeniden adlandirilan .env degiskenleri. Eski ad hala OKUNUR:
 // tezgahtaki ve teknisyenlerdeki .env dosyalari repo ile birlikte
 // guncellenmiyor (gitignore'da, herkesin kendi makinesinde). Sessizce

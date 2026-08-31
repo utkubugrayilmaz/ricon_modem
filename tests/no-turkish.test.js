@@ -80,7 +80,13 @@ const TURKISH_WORDS = new RegExp("\\b(" + [
   "basarili", "basarisiz", "sorun", "sorunlar", "sistem", "cihaz", "ayar",
   "elle", "sifirlama", "sifre", "kullanici", "yapilacak", "gerekli",
   "bilinmeyen", "gecerli", "yazilamadi", "belirtilmedi", "sayfasiz",
-].join("|") + ")\\b", "i");
+].join("|") + ")(?![a-z])", "i");
+
+// NOT: sag sinir \b DEGIL, (?![a-z]). Sebep olculdu (2026-08-31):
+// "MODEM_KULLANICI" icinde ALT CIZGI bir kelime karakteri oldugu icin
+// \bkullanici\b hic eslesmiyordu; problems.js'te uc bayat degisken adi
+// bekciden GECTI ve operatore hala "Set MODEM_KULLANICI / MODEM_SIFRE"
+// deniyordu — oysa o adlar v0.2.0'da degismisti.
 
 // --- ALLOWLIST: bilerek Turkce kalan, GEREKCELI uc bolge ------------------
 //

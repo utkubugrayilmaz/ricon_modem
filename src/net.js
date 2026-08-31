@@ -16,7 +16,7 @@
 // Neden fetch degil node:http: Windows'ta -SkipAsSource ile eklenen ikincil IP
 // varsayilan kaynak secilmez; istek yanlis arayuzden cikip modeme ulasamaz.
 // node:http request'e localAddress verebiliyoruz, fetch veremiyor. Kaynak IP
-// (MODEM_KAYNAK_IP) verilince oradan cikariz.
+// (MODEM_SOURCE_IP) verilince oradan cikariz.
 //
 // Guvenlik: salt-okunur modda (varsayilan) yalnizca GET'e izin verilir;
 // POST/PUT/DELETE reddedilir. Not: provizyon HTTP formu DEGIL telnet+nvram

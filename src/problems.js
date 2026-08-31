@@ -25,7 +25,7 @@ const CATALOG = {
       + " IS in and this persists, the address may genuinely not be configured"
       + " — add it (admin PowerShell): New-NetIPAddress -InterfaceAlias"
       + " Ethernet -IPAddress 192.168.1.50 -PrefixLength 24 ; then set"
-      + " MODEM_KAYNAK_IP to it.",
+      + " MODEM_SOURCE_IP to it.",
   }),
   DEVICE_UNREACHABLE: (host) => ({
     message: `No TCP port answered on ${host}; the modem looks unreachable.`,
@@ -68,20 +68,20 @@ const CATALOG = {
   CONSOLE_AUTH_REQUIRED: (host) => ({
     message: `No console credentials were supplied for ${host}, so the telnet`
       + " login could not even be attempted.",
-    check: "Set MODEM_KULLANICI / MODEM_SIFRE, or pass {user, password}"
+    check: "Set MODEM_USER / MODEM_PASSWORD, or pass {user, password}"
       + " (or {credentials:{...}}) to the console layer. Failing fast here is"
       + " deliberate: without credentials the login can only time out, and"
       + " retries would burn ~2 minutes to reach the same answer.",
   }),
   AUTH_REQUIRED: (path) => ({
     message: `${path} needs credentials (HTTP 401) but none were supplied.`,
-    check: "Set MODEM_KULLANICI and MODEM_SIFRE in .env. Unauthenticated"
+    check: "Set MODEM_USER and MODEM_PASSWORD in .env. Unauthenticated"
       + " access only returns system info; SIM, settings and the nvram backup"
       + " are behind Basic auth.",
   }),
   AUTH_REJECTED: (path) => ({
     message: `The credentials were rejected by ${path} (HTTP 401).`,
-    check: "Check MODEM_KULLANICI / MODEM_SIFRE. The default is on the label"
+    check: "Check MODEM_USER / MODEM_PASSWORD. The default is on the label"
       + " under the device. Avoid many rapid attempts — some builds lock out.",
   }),
   HTTP_ERROR: (path, code) => ({
