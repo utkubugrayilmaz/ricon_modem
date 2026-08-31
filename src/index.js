@@ -4,14 +4,21 @@
 //
 // KURAL (tum cekirdek icin): process.env OKUNMAZ, argv OKUNMAZ, stdout'a
 // YAZILMAZ. Girdi acikca `opts` ile gelir, cikti bir sonuc nesnesidir —
-// throw yok, problems[] var. Tuketiciler: ricon.js (CLI), src/server.js
-// (HTTP), ya da baska bir Node projesi (paket olarak import).
+// throw yok, problems[] var. Tuketiciler: ricon.js (CLI) ya da baska bir Node
+// projesi (paket olarak import).
 //
 // opts (ortak): { host, kaynakIp, kimlik:{kullanici,sifre}|null }
-// Ilerleme istersen opts.ilerle(mesaj) verilebilir (varsayilan: yok).
+// Ilerleme istersen iki opsiyonel kanal var:
+//   opts.ilerle(mesaj)  duz metin ilerleme
+//   opts.olay(nesne)    yapilandirilmis olay (adim/sure gorunumu icin)
+// Cekirdek ayrica GIRDI isteyebilir; nasil sorulacagi tuketicinin isi:
+//   opts.telefonSor(sira)      -> "05xxxxxxxxx" | null
+//   opts.pinSor(kilitBilgi)    -> "1234" | null
+// Hicbiri zorunlu degil; verilmezse cekirdek sormaz ve eksigi problems[] ile
+// bildirip duzgun basarisiz olur.
 
 
-// Provizyon (Faz 3) — çekirdek dışa aktarımı (paket/CLI/endpoint aynı API).
+// Provizyon — çekirdek dışa aktarımı (paket ve CLI aynı API).
 export {
   applyProvisioning, planProvisioning, groupPlan, applyPin,
 } from "./flow/provisioning.js";
@@ -27,7 +34,7 @@ export {
   readIdentity, simTakiliMi, waitForInternet, pcPreflight,
 } from "./device/cihaz.js";
 // Cihaz DEGERLENDIRME — "ne durumda, ne eksik, tekrar bakmali miyim?"
-// yenidenDenemeKarari PURE: tekrar politikasi cekirdekte, arayuzde degil.
+// yenidenDenemeKarari PURE: tekrar politikasi cekirdekte, tuketicide degil.
 export {
   assessDevice, provisionEksikleri, yenidenDenemeKarari, degerlendirmeyiIzle,
 } from "./flow/degerlendirme.js";
@@ -49,7 +56,7 @@ export {
 export {
   runConsole, consoleNvram, consoleRecon, konsolKimligi, parseNvramShow,
 } from "./transport/console.js";
-// Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
+// Gosterim sozlugu — rapor/terminal icin (motor kullanmaz).
 export { settingLabel } from "./report/report.js";
 // Sorun metinleri — kod -> operatore gosterilecek TURKCE. TEK sozluk.
 export { sorunTr, problemleriTurkcelestir, SORUN_TR } from "./domain/sorun-metni.js";

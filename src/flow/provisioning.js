@@ -18,7 +18,7 @@ const now = () => new Date().toISOString();
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
 
-// Yapilandirilmis olay bildirimi (UI canli guncellemesi icin). `ilerle` insana
+// Yapilandirilmis olay bildirimi (adim/sure gorunumu icin). `ilerle` insana
 // okunur METIN yollar; `olay` makineye NESNE yollar. Ikisi de OPSIYONEL ve
 // tuketicinin isi — cekirdek hicbir yere yazmaz, sadece haber verir. Tuketici
 // patlarsa provizyon akisi bozulmaz.
@@ -30,7 +30,7 @@ const olayla = (opts, olay) => {
 // PURE: mevcut nvram + profil -> plan. Cihaza gitmez, test edilebilir.
 // Doner: { degisecek:{k:{mevcut,hedef}}, ayni:[k], eksik:[k], onceki:{k:v}, hedef:{k:v} }
 // `onceki`/`hedef`: profildeki TUM anahtarlarin oncesi/hedefi — degismeyenler
-// dahil. Gosterim tarafi (UI'in "kurulum oncesi" paneli) tam liste ister;
+// dahil. Gosterim tarafi (oncesi->sonrasi karsilastirmasi) tam liste ister;
 // motorun kendisi yalnizca `degisecek`i kullanir.
 export function planProvisioning(mevcut, profil) {
   const degisecek = {};

@@ -6,7 +6,8 @@
 // MSISDN (telefon no) CIHAZDAN ALINAMAZ (arastirma 2026-08-26: nvram'da yok;
 // AT/USSD araci `at`/`at ctrl` interaktif+daemon-bagimli, telnet uzerinden
 // guvenli scriptlenemiyor + modulu koparma riski). Bu yuzden MSISDN operator/
-// UI tarafindan GIRDI olarak verilir (opts.telefon) — fallback tasarim.
+// tuketici tarafindan GIRDI olarak verilebilir (opts.telefon) — YEDEK yol;
+// birincil yol AT+CNUM ile SIM.den okumak (bkz. at.js readMsisdn).
 // Kesin numara icin: operatorden (Turkcell) ICCID->numara listesi.
 
 import { Client } from "../transport/client.js";
@@ -89,13 +90,13 @@ export async function readSim(opts) {
   rapor.sim1 = sim1;
   rapor.sim2 = sim2;
 
-  // MSISDN: cihazdan gelmez; operator/UI girdisi (opts.telefon).
+  // MSISDN: bu HTTP ucundan gelmez; cagirinin girdisi (opts.telefon).
   const norm = normalizePhone(telefon);
   if (telefon && !norm) rapor.problems.push(problem("MSISDN_INVALID", telefon));
   rapor.msisdn = norm;
   rapor.msisdn_kaynak = norm ? "operator_girisi" : null;
   if (!norm) {
-    rapor.msisdn_not = "Telefon no cihazdan alinamaz; operator/UI girisi gerekir "
+    rapor.msisdn_not = "Telefon no bu uctan alinamaz; --telefon ile ver ya da `numara` komutunu kullan "
       + "(--telefon 05xxxxxxxxx) ya da operatorden ICCID->numara listesi.";
   }
   rapor.ok = isOk(rapor.problems);

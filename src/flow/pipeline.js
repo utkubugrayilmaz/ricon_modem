@@ -24,7 +24,7 @@ const now = () => new Date().toISOString();
 const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
-// Yapilandirilmis olay (UI canli guncellemesi) — provisioning.js'teki ile ayni
+// Yapilandirilmis olay (adim/sure gorunumu) — provisioning.js.teki ile ayni
 // sozlesme: opsiyonel, tuketicinin isi, dinleyici hatasi akisi kesmez.
 const olayla = (opts, olay) => {
   if (typeof opts.olay !== "function") return;
@@ -269,7 +269,7 @@ export async function provisionModem(opts) {
     // Internet dogrulamasi ust siniri (sn). 0 = kapat. Varsayilan ACIK:
     // teknisyenin elle yaptigi kaliteyi kaybetmeyelim (PIN kilitli SIM yakalar).
     internetBekle = 150,
-    // Tuketici kimligi ZATEN okuduysa (or. UI sol paneli icin) tekrar okumayiz
+    // Tuketici kimligi ZATEN okuduysa tekrar okumayiz
     // — tek baglantili cihazda gereksiz ~4 sn demek.
     kimlikBilgi: hazirKimlikBilgi = null,
   } = opts;
@@ -463,8 +463,8 @@ export async function provisionModem(opts) {
     // gercek sorun "SIM yok"tur, "telefon yok" demek yanlis teshis olur
     // (projenin kurali: en temel eksik en basta soylenir).
     //
-    // Bu adim provisionModem'in ICINDE, arayuzde degil: CLI, HTTP ucu ve
-    // baska bir Node projesi de otomatik numara aliyor.
+    // Bu adim provisionModem.in ICINDE, tuketicide degil: CLI de, paket olarak
+    // import eden bir program da otomatik numara aliyor.
     if (konum && !telefonNorm && kimlikBilgiOnce?.sim?.hazir) {
       bildir(opts, "telefon numarasi SIM'den okunuyor (AT+CNUM)");
       const n = await readMsisdn({ ...konum, kimlik });
@@ -475,7 +475,7 @@ export async function provisionModem(opts) {
         rapor.problems.push(...n.problems);
       }
     }
-    // YEDEK: tuketiciye sor (CLI operatore sorar, arayuz alani acar).
+    // YEDEK: tuketiciye sor (CLI operatore terminalden sorar).
     // `deneme` gecilir ki dongude "3. modem" yazsin — sabit 1 yaziyordu.
     if (konum && !telefonNorm && typeof opts.telefonSor === "function") {
       const elle = normalizePhone(await opts.telefonSor(deneme));

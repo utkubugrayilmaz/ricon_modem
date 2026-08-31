@@ -5,9 +5,9 @@
 // 726 satirdi ve iki isi vardi.
 //
 // TEKRAR KARARI DA BURADA. Sebebi somut: numara okumasi gecici olarak
-// basarisiz oldugunda arac vazgeciyordu ve operator tarayiciyi yenilemek
+// basarisiz oldugunda arac vazgeciyordu ve operator isi bastan baslatmak
 // zorunda kaliyordu. "Tekrar bakalim mi, ne kadar sonra?" bir KARAR'dir —
-// arayuze gomulmez, cekirdekte durur ve CLI/endpoint/UI ayni cevaba bakar.
+// tuketiciye gomulmez, cekirdekte durur ve her tuketici ayni cevaba bakar.
 
 import { isReachable } from "../transport/scanner.js";
 import { readSim, normalizePhone, parseSimStatus } from "../device/sim.js";
@@ -21,9 +21,10 @@ const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
 const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// PURE: hazırlamaya başlamak için NE EKSİK? Tüketici (UI/endpoint/terminal)
-// buna bakıp hangi ekranı göstereceğine karar verir — karar mantığı burada,
-// arayüzde değil. Sıra ÖNEMLİ: en temel eksik başta.
+// PURE: hazırlamaya başlamak için NE EKSİK? Tüketici (terminal ya da paket
+// olarak import eden bir program) buna bakıp ne göstereceğine / operatörden
+// ne isteyeceğine karar verir — karar mantığı burada, tüketicide değil.
+// Sıra ÖNEMLİ: en temel eksik başta.
 //
 // Doner: ["modem"] | ["sim"] | ["telefon"] | ["pin"] | []  (boş = başlanabilir)
 export function provisionEksikleri({ modemVar, simTakili, simKilit, telefon, pin } = {}) {
@@ -43,7 +44,7 @@ export function provisionEksikleri({ modemVar, simTakili, simKilit, telefon, pin
 //
 // Neden ayrı fonksiyon: "modem bağlandı → numarayı çek → PIN gerekiyor mu bak
 // → gerekiyorsa iste, gerekmiyorsa başlat" kararı TÜKETİCİDE tekrarlanmasın.
-// UI, endpoint ve terminal aynı cevaba bakar.
+// Her tüketici aynı cevaba bakar.
 //
 // PAHALI: kimlik okuması (~4 sn) yapar. Sürekli yoklama için DEĞİL — modem
 // algılandığında BİR KEZ çağrılmalı (tek bağlantılı cihazı boğmayalım).

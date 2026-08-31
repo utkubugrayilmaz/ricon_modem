@@ -93,7 +93,7 @@ export const OPERATORS = Object.freeze({
 // docs/hazirlama-profili.md (default/duzeltilmis ekran kiyasiyla teyitli).
 //
 // Motor bunu KULLANMAZ — motor yalnizca anahtar/deger bilir. Bu tablo sadece
-// GOSTERIM icin (UI, rapor). Yeni ayar = yeni satir.
+// GOSTERIM icin (rapor, terminal ozeti). Yeni ayar = yeni satir.
 //   ad      : arayuzdeki alan adi
 //   sayfa   : arayuzde hangi sayfada
 //   degerler: ham deger -> okunabilir etiket (yoksa ham deger gosterilir)

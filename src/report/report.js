@@ -39,7 +39,7 @@ export function writeJson(nesne) {
 // Bilinmeyen deger 0 degil "—" gosterilir.
 const g = (v) => (v == null || v === "" ? "—" : v);
 
-// PURE: bir nvram anahtar/deger ciftini gosterime cevirir (UI + rapor ortak).
+// PURE: bir nvram anahtar/deger ciftini gosterime cevirir (rapor + terminal).
 // Sozlukte olmayan anahtar da calisir — adi anahtarin kendisi olur (gecirgen).
 // Doner: { anahtar, ad, sayfa, gosterim, ham }
 export function settingLabel(anahtar, deger) {
@@ -117,15 +117,6 @@ export function summaryText(rapor) {
   }
   if (rapor.nvram_anahtar_sayisi != null) {
     s.push(`\n  nvram: ${rapor.nvram_anahtar_sayisi} anahtar cekildi`);
-  }
-  if (rapor.komut === "fark") {
-    s.push(`\n  nvram farki: ${rapor.ozet?.degisen || 0} degisen, `
-      + `${rapor.ozet?.eklenen || 0} eklenen, ${rapor.ozet?.silinen || 0} silinen`);
-    for (const [k, v] of Object.entries(rapor.degisen || {})) {
-      s.push(`    ~ ${k}: ${g(v.eski)}  ->  ${g(v.yeni)}`);
-    }
-    for (const [k, v] of Object.entries(rapor.eklenen || {})) s.push(`    + ${k} = ${g(v)}`);
-    for (const [k, v] of Object.entries(rapor.silinen || {})) s.push(`    - ${k} (idi: ${g(v)})`);
   }
   if (rapor.komut === "sim") {
     const s1 = rapor.sim1 || {};
