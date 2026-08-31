@@ -42,6 +42,8 @@ const command = argv[0];
 // `bare`: bayrak olmayan konumsal sozcukler (`diff A.json B.json`).
 const { flags, positionals, bare } = parseArgv(argv.slice(1));
 const progress = (m) => process.stderr.write(`[${command}] ${m}\n`);
+// IP -> /24 oneki. Kaynak IP turetmek icin; iki komut da ayni seyi kullaniyor.
+const prefixOf = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
 
 // v0.2.0'da yeniden adlandirilan .env degiskenleri. Eski ad hala OKUNUR:
 // tezgahtaki ve teknisyenlerdeki .env dosyalari repo ile birlikte
@@ -437,12 +439,19 @@ async function runCommand() {
             message: `Unknown profile: ${profileName}`,
             check: `Valid: ${Object.keys(PROFILES).join(", ")}` }] };
       }
+      // --new-host verilip --new-source-ip verilmediyse kaynagi ONEKTEN TURET.
+      // Cekirdek bunu yapamaz (makineye bakmak CLI'in isi) ve turetilmezse
+      // dogrulama YANLIS ALT AGDAN cikar: `verifySource = newSourceIp
+      // || sourceIp` oldugu icin 5.5.5.100'den 192.168.1.1'e gitmeye
+      // calisirdi ve "cihaz geri gelmedi" derdi — oysa cihaz gelmisti.
+      const newSourceIp = flags.newSourceIp
+        || (flags.newHost ? findSourceIp(prefixOf(flags.newHost)) : undefined);
       return applyProvisioning({
         ...opts,
         apply: flags.apply === true,   // yoksa DRY-RUN (kuru)
         reboot: flags.noReboot !== true,
         newHost: flags.newHost,
-        newSourceIp: flags.newSourceIp,
+        newSourceIp,
         event: streamWatcher(),
       }, profile);
     }
@@ -525,10 +534,9 @@ async function runCommand() {
             message: `Unknown profile: ${profileName}`, check: `Valid: ${Object.keys(PROFILES).join(", ")}` }] };
       }
       const fieldHost = flags.fieldHost || profile.nvram.lan_ipaddr || "5.5.5.1";
-      const prefix = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
       // Fabrika oneki .env'deki MODEM_HOST'tan turer (varsayilan 192.168.1.1);
       // boylece host degistirilince on-kontrol de dogru alt agi arar.
-      const on = pcPreflight(prefix(opts.host), prefix(fieldHost));
+      const on = pcPreflight(prefixOf(opts.host), prefixOf(fieldHost));
       if (!on.ready) {
         return { timestamp: new Date().toISOString(), command: "provision", ok: false,
           status: "pc_not_ready", problems: on.problems };
