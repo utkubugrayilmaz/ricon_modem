@@ -4,9 +4,13 @@
 // icinde problems[] dizisi. Kismi okuma gercek bir sonuctur; exception gelen
 // yariyi tasiyamaz. Bilinmeyen bir kod istenirse patlamaz, kendini tarif eder.
 //
-// message/check runtime metni oldugu icin (log'a, gelistiriciye gider,
-// icinde Node/uretici Ingilizce hata metni gomulu olabilir) INGILIZCE yazilir;
-// cumle tek dilde kalsin. Turkce isteyen taraf sabit `code` uzerinden anahtarlar.
+// message/check INGILIZCE yazilir: icinde Node/uretici hata metni gomulu
+// olabiliyor ve cumlenin tek dilde kalmasi gerekiyor. Ekrana basilan metin
+// budur — ayri bir Turkce sozluk katmani YOK. (Vardi; tek tuketicisi tarayici
+// arayuzuydu ve ayni durumun metni iki yerde durunca biri eskiyordu.)
+//
+// Yeni kod eklerken: `kod` KISA ve SABIT kalsin (tuketiciler ona gore dallanir),
+// `message` NE oldugunu, `check` SIRADA NE YAPILACAGINI soylesin.
 
 const KATALOG = {
   // --- Ag / erisim ---

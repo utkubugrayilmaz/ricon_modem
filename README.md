@@ -177,8 +177,7 @@ telefon/ICCID/IMEI abonelik verisidir, commit edilmez.
 | **domain/** | *IO YOK — saf kural, sabit, karar* |
 | `src/domain/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
 | `src/domain/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
-| `src/domain/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
-| `src/domain/sorun-metni.js` | Sorun kodu → **operatöre gösterilecek Türkçe**. Tek sözlük; `message`/`check` geliştirici tarafı |
+| `src/domain/problems.js` | Sorun kataloğu `{kod, severity, message, check}` — ekrana basılan metin bu |
 | `src/domain/pin-karar.js` | ⭐ PIN denemesi kararları — **PURE, TEK YER**. Üç yol (nvram / AT / internet sonrası) da buraya sorar |
 | **transport/** | *cihazla ve agla konusan kanallar* |
 | `src/transport/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |

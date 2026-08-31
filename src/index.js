@@ -58,8 +58,7 @@ export {
 } from "./transport/console.js";
 // Gosterim sozlugu — rapor/terminal icin (motor kullanmaz).
 export { settingLabel } from "./report/report.js";
-// Sorun metinleri — kod -> operatore gosterilecek TURKCE. TEK sozluk.
-export { sorunTr, problemleriTurkcelestir, SORUN_TR } from "./domain/sorun-metni.js";
+// Sorun kodlarinin listesi. Metinler problems[] icinde (message/check) gelir.
 export { PROBLEM_CODES } from "./domain/problems.js";
 // Cihaz OKUMA islemleri (dogrula/oku/kesif/konsol) ve IZLEME. Govdeleri ayri
 // modullerde: bu dosya KAPI, uygulama degil.
