@@ -12,18 +12,23 @@ export const DEFAULT_HOST = "192.168.1.1";
 
 // Kesifte bakilan TCP kapilari. Hepsi salt-okunur yoklama (connect denemesi).
 // Endustriyel router'da RMS/DTU/VPN olabilir; liste Python'daki 6 kapidan genis.
+// `kesif` komutunun taradigi portlar. ARAC BU PORTLARI KULLANMAZ — yalnizca
+// "beklenen yuzey yerinde mi, fazladan bir sey acik mi" diye bakar.
+//
+// Liste 11'den 6'ya indirildi. Sebep: kesif BIR KEZ calisti ve cevap
+// docs/BULGULAR.md'de yazili — 502 (Modbus), 1723 (PPTP), 5000, 8080, 8443,
+// 9999 (DTU) KAPALI cikti. Her calistirmada onlari yeniden kanitlamak bosa
+// soket ve bosa saniye. Kalanlarin hepsinin bir sebebi var:
+//   80, 5123 : ARACIN KULLANDIGI iki kanal — kapaliysa hicbir sey calismaz
+//   22, 23, 443 : standart yonetim yuzeyleri; biri acilmissa BILMEK isteriz
+//   53 : acik cikti (dnsmasq) — kaybolursa DHCP/DNS tarafinda bir sey degismis
 export const TCP_PORTS = Object.freeze([
   { kapi: 22, ad: "SSH" },
   { kapi: 23, ad: "telnet" },
   { kapi: 53, ad: "DNS" },
   { kapi: 80, ad: "HTTP (web arayuzu)" },
   { kapi: 443, ad: "HTTPS" },
-  { kapi: 502, ad: "Modbus TCP" },
-  { kapi: 1723, ad: "PPTP VPN" },
-  { kapi: 5000, ad: "HTTP (alternatif)" },
-  { kapi: 8080, ad: "HTTP (alternatif)" },
-  { kapi: 8443, ad: "HTTPS (alternatif)" },
-  { kapi: 9999, ad: "DTU / ham TCP" },
+  { kapi: 5123, ad: "telnet konsolu (root shell)" },
 ]);
 
 // Not: UDP kapi listesi YOK — UDP'de "kapali" ile "cevapsiz" ayirt edilemez,

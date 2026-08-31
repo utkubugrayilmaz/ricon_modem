@@ -115,8 +115,24 @@ export const atTamam = (cevap) => /\bOK\b/.test(cevap || "") && !/\bERROR\b/i.te
 
 // Portu ACIK TUTAN kabuk komutunu uretir. Saf: test edilebilir.
 export function atKabukKomutu(port, komut, okumaSn = 3) {
+  // OK/ERROR GORUNCE DUR. `read -t` yalnizca UST SINIR; normal yolda cevabin
+  // sonlandiricisi dongudan cikarir.
+  //
+  // Eskiden dongu SADECE sessizlik zaman asimiyla cikiyordu, yani modul
+  // aninda cevap verse bile her komut okumaSn kadar oturuyordu. Olculdu
+  // (2026-08-28, canli, ayni uc komut):
+  //     sessizlik bekle : 9.34 sn
+  //     OK gorunce kes  : 0.12 sn
+  //
+  // AMA ASIL SEBEP HIZ DEGIL, DOGRULUK: modul kendiliginden mesaj yayinliyor
+  // (+QENG hucre durumu gibi). Bekleme penceresi bunlari komutun cevabi gibi
+  // okuyordu — ayni olcumde `AT+CPIN?` cevabi olarak `+QENG: "servingcell"...`
+  // geldi. Sonlandiricida durmak bu kaymayi kapatiyor.
+  //
+  // `case` BusyBox ash'de standart; cihazda dogrulandi.
   return `exec 3<>${port}; printf '${komut}\\r' >&3; `
-    + `while read -t ${okumaSn} l <&3; do echo "ATL:$l"; done; exec 3<&-`;
+    + `while read -t ${okumaSn} l <&3; do echo "ATL:$l"; `
+    + `case "$l" in *OK*|*ERROR*) break;; esac; done; exec 3<&-`;
 }
 
 // DENENDI VE VAZGECILDI — portu komuttan once bosaltmak (`read -t 1` dongusu).
@@ -255,6 +271,35 @@ async function atSorgu(atOpts, komut, secenek = {}) {
   const ilk = await atKomut(atOpts, komut, secenek);
   if (!atKarismisMi(ilk.cevap)) return ilk;
   return atKomut(atOpts, komut, secenek);
+}
+
+// Birden fazla SALT OKUNUR AT sorgusunu TEK telnet oturumunda calistirir.
+//
+// NEDEN: her atKomut kendi oturumunu aciyor (baglan + login + kapat). Ayni
+// bilgiyi iki komutla soruyorsak bunu iki kez odemek gereksiz — runConsole
+// zaten komut DIZISI aliyor. Cevaplar komut SIRASINDA doner.
+//
+// SINIR: yalniz OKUMA yollarinda kullanilir. PIN HARCAYAN komutlar (CPIN=,
+// CLCK=0/1) bilerek tek tek ve kendi oturumunda kalir — orada hiz degil
+// izlenebilirlik ve tek-deneme garantisi onemli.
+//
+// Karismis cevap gelen komut, kendi oturumunda BIR KEZ yeniden okunur.
+async function atSorgular(opts, komutlar, okumaSn = 3) {
+  const port = opts.atPort || AT_PORT;
+  const kabuklar = komutlar.map((k) => atKabukKomutu(port, k, okumaSn));
+  const r = await runConsole(
+    { ...opts, yazmaIzni: true, zamanAsimiMs: 15000 + komutlar.length * (okumaSn + 1) * 1000 },
+    ["stty -echo 2>/dev/null", ...kabuklar],
+  );
+  if (!r.ok) return komutlar.map(() => ({ ok: false, cevap: "", problems: r.problems }));
+  const cikti = [];
+  for (let i = 0; i < komutlar.length; i += 1) {
+    const cevap = atCevabiAyikla(r.ciktilar?.[kabuklar[i]]);
+    cikti.push(atKarismisMi(cevap)
+      ? await atKomut({ ...opts, atPort: port }, komutlar[i])
+      : { ok: true, cevap, problems: [] });
+  }
+  return cikti;
 }
 
 // Kilit sorgusu (AT+CLCK="SC",2). Parola istemez, hak HARCAMAZ.
@@ -423,26 +468,40 @@ export async function simPinKilitle(opts, pin, { elleOnay = false } = {}) {
 // SIM kilit durumunu MODULDEN okur (web sayfasindan degil): kalan PIN/PUK
 // hakkini da verir. Doner: { durum, hazir, pin_kalan, puk_kalan, problems }
 export async function readSimLock(opts) {
-  const { port, problems: portSorun } = opts.atPort
-    ? { port: opts.atPort, problems: [] } : await atPortBul(opts);
-  if (!port) return { durum: "UNKNOWN", hazir: false, pin_kalan: null, puk_kalan: null, problems: portSorun };
+  // Port YOKLANMIYOR. Eskiden once atPortBul ile AYRI bir telnet oturumu
+  // acilip sadece "AT" yaziliyordu; readMsisdn bunu bilerek yapmiyor
+  // (yorumu yukarida). Olculmus porta DOGRUDAN soruyoruz; cevap AT gibi
+  // degilse portu BIR KEZ dogrulayip net hata veriyoruz.
+  const port = opts.atPort || AT_PORT;
+  let atOpts = { ...opts, atPort: port };
+  const KOMUTLAR = ["AT+CPIN?", 'AT+QPINC="SC"'];
+  let [cpin, qpinc] = await atSorgular(atOpts, KOMUTLAR);
 
-  const atOpts = { ...opts, atPort: port };
-  // Kilit durumu ve kalan hak, PIN harcama kararinin GIRDISI — temiz portta
-  // okunur, karisan cevaptan karar cikarilmaz.
-  const durum = parseCpin((await atSorgu(atOpts, "AT+CPIN?")).cevap);
-  let sayac = null;
-  for (const komut of ['AT+QPINC="SC"', "AT+CPINC"]) {
-    sayac = parsePinCounter((await atSorgu(atOpts, komut)).cevap);
-    if (sayac) break;
+  if (!/\+CPIN|\bOK\b/.test(cpin.cevap)) {
+    const bulunan = await atPortBul(opts);
+    if (!bulunan.port) {
+      // Kilit durumu OKUNAMADI. Bu deger PIN kararinin girdisi; bilmiyorken
+      // "hazir" ya da "kilit yok" demek YANLIS yonde risk olur. UNKNOWN +
+      // hazir:false dondurup kararı reddettiriyoruz (bkz. simYoluAcik).
+      return { durum: "UNKNOWN", hazir: false, kilit: null,
+        pin_kalan: null, puk_kalan: null, at_port: null, problems: bulunan.problems };
+    }
+    atOpts = { ...opts, atPort: bulunan.port };
+    [cpin, qpinc] = await atSorgular(atOpts, KOMUTLAR);
   }
+
+  const durum = parseCpin(cpin.cevap);
+  // QPINC Quectel'e ozgu; bos gelirse standart CPINC'e dusuyoruz (nadir, o
+  // yuzden ayri bir tur olmasi sorun degil).
+  const sayac = parsePinCounter(qpinc.cevap)
+    ?? parsePinCounter((await atSorgu(atOpts, "AT+CPINC")).cevap);
   return {
     durum,
     hazir: durum === "READY",
     kilit: durum === "SIM PIN" ? "pin" : durum.includes("PUK") ? "puk" : null,
     pin_kalan: sayac?.pin ?? null,
     puk_kalan: sayac?.puk ?? null,
-    at_port: port,
+    at_port: atOpts.atPort,
     problems: [],
   };
 }

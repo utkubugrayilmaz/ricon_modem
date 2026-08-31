@@ -69,8 +69,15 @@ export async function assessDevice(opts) {
     return rapor;
   }
 
-  const fabrikaVar = await isReachable(fabrikaHost, on.fabrikaKaynak);
-  const sahaVar = fabrikaVar ? false : await isReachable(sahaHost, on.sahaKaynak);
+  // IKI ADRES AYNI ANDA yoklanir. Sirayla yoklamak, modem SAHA adresindeyken
+  // once fabrika zaman asimini odemek demekti (olculdu: assessDevice'in
+  // 3.4 sn'sinin 3 sn'si buydu). Farkli hostlar, cakisma yok.
+  // Oncelik korunuyor: ikisi de cevap verirse FABRIKA kazanir.
+  const [fabrikaVar, sahaCevap] = await Promise.all([
+    isReachable(fabrikaHost, on.fabrikaKaynak),
+    isReachable(sahaHost, on.sahaKaynak),
+  ]);
+  const sahaVar = fabrikaVar ? false : sahaCevap;
   const konum = fabrikaVar
     ? { host: fabrikaHost, kaynakIp: on.fabrikaKaynak, ad: "fabrika" }
     : sahaVar ? { host: sahaHost, kaynakIp: on.sahaKaynak, ad: "saha" } : null;

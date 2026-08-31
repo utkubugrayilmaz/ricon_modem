@@ -12,7 +12,12 @@ import { TCP_PORTS, TCP_PROBE_MS } from "./constants.js";
 
 // Tek portun acik olup olmadigina bakar; acilsa banner'i (ilk baytlar) alir.
 // Throw etmez. Doner: { kapi, acik, banner|null }
-export function probePort(host, kapi, kaynakIp, zamanAsimi = TCP_PROBE_MS) {
+// bannerSn: baglandiktan sonra banner icin beklenecek ms. 0 verilirse
+// baglanti kurulur kurulmaz "acik" denir ve soket kapanir — CANLILIK sorusu
+// icin dogrusu bu. Olculdu (canli): banner beklemesi her yoklamaya 600 ms
+// ekliyordu ve arayuz bunu 3 saniyede bir cagiriyor. Banner yalnizca `kesif`
+// icin degerli (hangi servis oturuyor), orada varsayilan korunuyor.
+export function probePort(host, kapi, kaynakIp, zamanAsimi = TCP_PROBE_MS, bannerMs = 600) {
   return new Promise((resolve) => {
     const soket = new net.Socket();
     let banner = "";
@@ -27,8 +32,9 @@ export function probePort(host, kapi, kaynakIp, zamanAsimi = TCP_PROBE_MS) {
     const baglantiSecenek = { host, port: kapi };
     if (kaynakIp) baglantiSecenek.localAddress = kaynakIp;
     soket.connect(baglantiSecenek, () => {
+      if (bannerMs <= 0) { kapat(true); return; }
       // Bazi servisler (SSH/telnet) baglaninca banner yollar; kisa bekle.
-      soket.setTimeout(600);
+      soket.setTimeout(bannerMs);
     });
     soket.on("data", (d) => {
       banner += d.toString("latin1").slice(0, 200);
@@ -64,8 +70,24 @@ export async function scanPorts(host, kaynakIp, kapilar = TCP_PORTS, esZaman = 6
 // Kaynak IP baglandiginda cekirdek yol dogru: rota yoksa connect timeout'a
 // dusuyor. Bu yuzden cagiranlar kaynagi pcPreflight'tan alir; alamiyorsa
 // yoklama YAPMAZ (bkz. provisionModem).
+// YALNIZCA KULLANDIGIMIZ IKI PORT yoklanir, SIRAYLA, ilki cevap verirse ikinci
+// hic denenmez:
+//   80   — modemin web arayuzu. Aracin ANA kanali (kimlik, SIM, ayar, nvram
+//          yedegi hepsi buradan): "cihaz ayakta mi" sorusunun en dogru olcusu.
+//   5123 — telnet konsolu. 80 bir an doymussa ikinci kanit.
+//
+// Eskiden [80, 443, 22, 8080, 23] yoklaniyordu. Kesif OLCTU (bkz.
+// docs/BULGULAR.md): 443/22/8080/23 KAPALI — yani `true` donmesinin sebebi
+// her zaman 80'di, digerleri her cagride bosa acilan soketti. Arayuz bunu
+// 3 saniyede bir cagiriyor.
+// PARALEL: iki port ayni anda yoklanir. Sirayla denemek CIHAZ YOKKEN maliyeti
+// IKIYE katliyor (iki zaman asimi ust uste) — olculdu: modem saha'dayken
+// assessDevice once fabrika'yi yokluyor ve bu 3 sn'ye cikiyordu. Paralelde
+// iskalama TEK zaman asimi kadar, cevap varsa aninda doner.
 export async function isReachable(host, kaynakIp) {
-  const oncelikli = [80, 443, 22, 8080, 23];
-  const r = await scanPorts(host, kaynakIp, oncelikli, 5);
-  return r.some((x) => x.acik);
+  // banner beklemesi YOK: soru "ayakta mi", "hangi servis" degil.
+  const sonuc = await Promise.all(
+    [80, 5123].map((kapi) => probePort(host, kapi, kaynakIp, TCP_PROBE_MS, 0)),
+  );
+  return sonuc.some((x) => x.acik);
 }

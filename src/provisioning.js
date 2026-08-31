@@ -12,6 +12,7 @@
 import { consoleNvram, consoleWrite, runConsole } from "./console.js";
 import { LAN_IP_KEYS, WRITE_GROUPS, SIM_PIN_KEY } from "./profile.js";
 import { problem, isOk } from "./problems.js";
+import { isReachable } from "./scanner.js";
 
 const now = () => new Date().toISOString();
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -172,6 +173,7 @@ export async function applyProvisioning(opts, profil) {
     bildir(opts, `dogrulama: ${dogrulamaHost} bekleniyor`);
     const dog = await dogrula(
       { host: dogrulamaHost, kaynakIp: dogrulamaKaynak, kimlik }, profil, opts,
+      rapor.reboot_gonderildi === true,
     );
     rapor.dogrulama = dog;
     rapor.durum = dog.tamam ? "basarili" : "dogrulama_bekliyor";
@@ -274,45 +276,82 @@ async function rebootFireForget(kOpts) {
 //                                 görülürse artık oturmuştur: gerçek uyuşmazlık)
 //   3) okunuyor, eksik yok     -> TAMAM
 // Doner: { tamam, kalan_degisecek, bekleme_sn, sebep }
-async function dogrula(opts, profil, anaOpts) {
+async function dogrula(opts, profil, anaOpts, rebootGonderildi = false) {
   const kOpts = { host: opts.host, kaynakIp: opts.kaynakIp,
     kullanici: opts.kimlik.kullanici, sifre: opts.kimlik.sifre };
-  const maxDeneme = 20;      // ~100 sn: reboot suresinden rahat uzun
-  const KARARLI_SINIR = 3;   // ayni eksik kac kez ust uste = oturmus
+  const UST_SINIR_MS = 100000;   // reboot suresinden rahat uzun
+  const ARALIK_MS = 1000;        // canlilik yoklamasi artik bedava (bkz. asagi)
+  const KARARLI_SINIR = 3;       // ayni eksik en az kac kez ust uste
+  const KARARLI_SURE_MS = 10000; // ...VE en az bu kadar surdu = artik oturmaz
+  const t0 = Date.now();
+  const gecenSn = () => Math.round((Date.now() - t0) / 1000);
   let oncekiImza = null;
   let ayniSayac = 0;
+  let imzaBaslangic = 0;
   let sonKalan = null;
+  let deneme = 0;
+  // Reboot gonderildiyse cihazi bir kez DUSMUS gormeden "dogrulandi" demeyiz:
+  // LAN IP degismeyen (idempotent) durumda cihaz reboot komutundan sonra bir
+  // sure daha ayakta kalir ve o oturumdan okunan nvram "yeni durum" sayilirdi.
+  // Eskiden bunu dongu basindaki kor 5 sn ortuyordu.
+  let dustuMu = !rebootGonderildi;
+  const DUSME_TOLERANS_MS = 12000;   // hic dusmezse (reboot yutulduysa) devam et
 
-  for (let i = 0; i < maxDeneme; i += 1) {
-    await bekle(5000);
-    bildir(anaOpts, `dogrulama denemesi ${i + 1}/${maxDeneme}`);
+  // ONCE UCUZ YOKLAMA, SONRA PAHALI OKUMA.
+  //
+  // Eskiden dongu her turda 5 sn KOR bekliyor, sonra cihaz gelmemis olsa bile
+  // tam nvram dokumu deniyordu; basarisiz telnet retry'leriyle her tur ~4 sn
+  // daha yiyordu. Olculen sonuc: 30 sn'de geri gelen cihaz icin 33.8 sn.
+  //
+  // Artik isReachable neredeyse bedava (2 port, paralel, banner beklemesi yok)
+  // — saniyede bir yoklayip cihaz TCP'ye cevap verdigi anda nvram'a gidiyoruz.
+  // Reboot suresi cihazin kendi isi; kazanc yoklama granulasyonundan geliyor.
+  while (Date.now() - t0 < UST_SINIR_MS) {
+    // Kaynak IP yoksa yoklama guvenilir degil (bkz. scanner.js uyarisi):
+    // o durumda gecidi atla, dogrudan konsola git — eski davranis.
+    const ayakta = opts.kaynakIp ? await isReachable(opts.host, opts.kaynakIp) : true;
+    if (!ayakta) {
+      dustuMu = true;
+      olayla(anaOpts, { tur: "dogrulama", deneme: deneme + 1, durum: "cihaz_bekleniyor" });
+      await bekle(ARALIK_MS);
+      continue;
+    }
+    if (!dustuMu && Date.now() - t0 < DUSME_TOLERANS_MS) {
+      olayla(anaOpts, { tur: "dogrulama", deneme: deneme + 1, durum: "reboot_bekleniyor" });
+      await bekle(ARALIK_MS);
+      continue;
+    }
+    deneme += 1;
+    bildir(anaOpts, `dogrulama denemesi ${deneme} (${gecenSn()} sn)`);
     const { degerler, sayi } = await consoleNvram(kOpts);
-    if (sayi === 0) {                                           // (1) gelmedi
-      olayla(anaOpts, { tur: "dogrulama", deneme: i + 1, durum: "cihaz_bekleniyor" });
+    if (sayi === 0) {                       // TCP acik ama konsol henuz hazir degil
+      olayla(anaOpts, { tur: "dogrulama", deneme, durum: "cihaz_bekleniyor" });
+      await bekle(ARALIK_MS);
       continue;
     }
 
     const kalan = Object.keys(planProvisioning(degerler, profil).degisecek);
     if (kalan.length === 0) {                                   // (3) TAMAM
-      olayla(anaOpts, { tur: "dogrulandi", bekleme_sn: (i + 1) * 5 });
-      return { tamam: true, kalan_degisecek: [], bekleme_sn: (i + 1) * 5 };
+      olayla(anaOpts, { tur: "dogrulandi", bekleme_sn: gecenSn() });
+      return { tamam: true, kalan_degisecek: [], bekleme_sn: gecenSn() };
     }
-    olayla(anaOpts, { tur: "dogrulama", deneme: i + 1, durum: "oturmadi", kalan });
+    olayla(anaOpts, { tur: "dogrulama", deneme, durum: "oturmadi", kalan });
 
     sonKalan = kalan;                                           // (2) oturmadi
     const imza = kalan.slice().sort().join(",");
-    ayniSayac = imza === oncekiImza ? ayniSayac + 1 : 0;
+    if (imza === oncekiImza) { ayniSayac += 1; } else { ayniSayac = 0; imzaBaslangic = Date.now(); }
     oncekiImza = imza;
     bildir(anaOpts, `dogrulama: ${kalan.length} anahtar henuz oturmadi (${kalan.join(", ")})`);
-    if (ayniSayac + 1 >= KARARLI_SINIR) {
-      return { tamam: false, kalan_degisecek: kalan, bekleme_sn: (i + 1) * 5,
+    if (ayniSayac + 1 >= KARARLI_SINIR && Date.now() - imzaBaslangic >= KARARLI_SURE_MS) {
+      return { tamam: false, kalan_degisecek: kalan, bekleme_sn: gecenSn(),
         sebep: `ayni eksik ${KARARLI_SINIR} kez ust uste: cihaz bu degeri kabul etmiyor` };
     }
+    await bekle(ARALIK_MS);   // deger boot sirasinda oturabilir; kisa nefes
   }
   return {
     tamam: false,
     kalan_degisecek: sonKalan ?? ["(cihaz reboot sonrasi gelmedi)"],
-    bekleme_sn: maxDeneme * 5,
+    bekleme_sn: gecenSn(),
     sebep: sonKalan ? "sure doldu, eksikler oturmadi" : "cihaz reboot sonrasi gelmedi",
   };
 }
