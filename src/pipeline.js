@@ -151,7 +151,7 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
   // yerine 0 sn. (2026-08-27 canlı: bu metin PIN kilitli SIM'de görüldü.)
   if (simState?.lock) {
     notify(opts, `SIM ${simState.lock.toUpperCase()} kilitli — internet beklenmiyor`);
-    emitEvent(opts, { kind: "sim_kilit", lock: simState.lock,
+    emitEvent(opts, { kind: "sim_lock", lock: simState.lock,
       pinRemaining: simState.pinRemaining, pukRemaining: simState.pukRemaining, raw: simState.raw });
     report.simLock = simState;
     const result = { up: false, durationSec: 0, wan_ip: null, simStatus: simState.raw };
@@ -177,11 +177,11 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
     // durumu ve doğru çözümü söylüyor. İkinci bir mesaj hem tekrar hem de ters
     // yönü ("PIN gir") öneriyor olurdu.
     if (pin) await tryPin({ location, credentials, pin, report, opts, simState });
-    else report.pinAttempt = { attempted: false, skipped: "pin_verilmedi",
+    else report.pinAttempt = { attempted: false, skipped: "no_pin_given",
       pinRemaining: simState.pinRemaining };
     if (report.pinAttempt?.attempted) {
       const next = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
-      report.pinAttempt.result = next.up ? "internet_geldi" : "internet_gelmedi";
+      report.pinAttempt.result = next.up ? "internet_up" : "internet_down";
       report.internet = next;
       if (!next.up) report.problems.push(problem("INTERNET_DOWN", internetWaitSec, next.simStatus));
       return next;
@@ -200,7 +200,7 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
     await tryPin({ location, credentials, pin, report, opts, simState });
     if (report.pinAttempt?.attempted) {
       result = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
-      report.pinAttempt.result = result.up ? "internet_geldi" : "internet_gelmedi";
+      report.pinAttempt.result = result.up ? "internet_up" : "internet_down";
     }
   }
 
@@ -223,7 +223,7 @@ async function finishRecord({ report, location, readyIdentity, credentials, phon
     } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
   }
   report.identity = identity;
-  if (location && credentials) emitEvent(opts, { kind: "kimlik", identity: identity });
+  if (location && credentials) emitEvent(opts, { kind: "identity", identity: identity });
   // Duvar saati: cagrinin basindan buraya. Tuketici bunu bir olcum satirina
   // cevirebilir (bkz. summarizeMetrics). Cekirdek dosyaya YAZMAZ, sadece
   // sureyi bildirir — "ne kadar surdu" sorusunun cevabi cihaz isine ait.
@@ -238,18 +238,18 @@ async function finishRecord({ report, location, readyIdentity, credentials, phon
   if (typeof opts.record === "function") {
     try { opts.record(report.record); } catch { /* kayit yazimi akisi bozmaz */ }
   }
-  emitEvent(opts, { kind: "sonuc", status: report.status, ok: report.ok,
+  emitEvent(opts, { kind: "result", status: report.status, ok: report.ok,
     attempt: report.attempt ?? null, record: report.record, problems: report.problems });
   return report;
 }
 
 // PURE: konum + dry-run durumuna göre sıradaki eylem. Test edilebilir.
-// Doner: "zaten_hazir" | "provizyon_fabrika" | "provizyon_saha" | "modem_yok"
+// Doner: "already_ready" | "provision_factory" | "provision_field" | "no_modem"
 export function nextAction(factoryUp, fieldUp, fieldDryRunStatus) {
-  if (fieldUp && fieldDryRunStatus === "zaten_istenen_durumda") return "zaten_hazir";
-  if (fieldUp) return "provizyon_saha";   // saha adresinde ama eksik provizyon
-  if (factoryUp) return "provizyon_fabrika";
-  return "modem_yok";
+  if (fieldUp && fieldDryRunStatus === "already_desired") return "already_ready";
+  if (fieldUp) return "provision_field";   // saha adresinde ama eksik provizyon
+  if (factoryUp) return "provision_factory";
+  return "no_modem";
 }
 
 // Bir modemi hazırlar (algıla → provizyon → doğrula → retry).
@@ -275,7 +275,7 @@ export async function provisionModem(opts) {
   // `let` cunku cozum algilamadan sonra olusuyor; finish()/buildActiveProfile()
   // cagri aninda gecerli degeri goruyor.
   let phoneNormalized = normalizePhone(phone);
-  let phoneSource = phoneNormalized ? "girdi" : null;
+  let phoneSource = phoneNormalized ? "input" : null;
 
   // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetAndPin,
   // finishRecord). Cagri yerleri degismedi.
@@ -293,7 +293,7 @@ export async function provisionModem(opts) {
 
   if (!credentials) {
     report.problems.push(problem("AUTH_REQUIRED", "modem"));
-    report.status = "kimlik_yok"; report.ok = false; return finish(null);
+    report.status = "no_identity"; report.ok = false; return finish(null);
   }
 
   // KAYNAK IP OLMADAN YOKLAMA YAPILMAZ. Sebebi olculdu: kaynak baglanmadan
@@ -310,7 +310,7 @@ export async function provisionModem(opts) {
     fieldSrc = fieldSrc || on.fieldSource;
     if (!factorySrc && !fieldSrc) {
       report.problems.push(...on.problems);
-      report.status = "pc_hazir_degil"; report.ok = false; return finish(null);
+      report.status = "pc_not_ready"; report.ok = false; return finish(null);
     }
   }
   // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi — kayitsiz modem sahaya
@@ -321,7 +321,7 @@ export async function provisionModem(opts) {
   // hatasi, cihaza gitmeye gerek yok.
   if (phone && !phoneNormalized) {
     report.problems.push(problem("MSISDN_INVALID", phone));
-    report.status = "telefon_yok"; report.ok = false; return finish(null);
+    report.status = "no_phone"; report.ok = false; return finish(null);
   }
 
   // ETKİN PROFİL = profil + ÇALIŞMA ANINA ÖZEL keys_. İkisi de profilde
@@ -360,7 +360,7 @@ export async function provisionModem(opts) {
   // (Ayni kontrol asagida, kimligi kendimiz okudugumuz yolda da var.)
   if (readyIdentityInfo && !isSimPresent(readyIdentityInfo)) {
     report.problems.push(problem("SIM_MISSING", readyIdentityInfo.simStatus));
-    report.status = "sim_yok"; report.ok = false;
+    report.status = "no_sim"; report.ok = false;
     return finish(null, readyIdentityInfo);
   }
 
@@ -373,7 +373,7 @@ export async function provisionModem(opts) {
       : fieldUp ? { host: fieldHost, sourceIp: fieldSrc } : null;
 
     // SIM KONTROLU — nvram'a bakmadan, HICBIR SEY yazmadan, EN BASTA.
-    // Sebep: SIM'siz modemde provizyon "basarili" gorunur ama cihaz sebekeye
+    // Sebep: SIM'siz modemde provizyon "success" gorunur ama cihaz sebekeye
     // kaydolamaz; defterde ICCID'siz satir kalir. 45 sn harcayip sonunda
     // anlamak yerine ilk saniyede soyluyoruz (2026-08-27 canli gozlem).
     if (location && !identityBefore) {
@@ -384,7 +384,7 @@ export async function provisionModem(opts) {
     }
     if (location && identityBefore && !isSimPresent(identityBefore)) {
       report.problems.push(problem("SIM_MISSING", identityBefore.simStatus));
-      report.status = "sim_yok"; report.attempt = attempt; report.ok = false;
+      report.status = "no_sim"; report.attempt = attempt; report.ok = false;
       return finish(location, identityBefore);
     }
 
@@ -405,7 +405,7 @@ export async function provisionModem(opts) {
         && typeof opts.askPin === "function") {
       const lock = identityBefore.sim;
       const gate = isSimLockEligible(lock, { manualConsent: true });
-      emitEvent(opts, { kind: "pin_kilidi", lock: lock.lock,
+      emitEvent(opts, { kind: "pin_lock", lock: lock.lock,
         pinRemaining: lock.pinRemaining, eligible: gate.eligible ?? true,
         reason: gate.reason ?? null });
       if (gate.eligible === false) {
@@ -423,7 +423,7 @@ export async function provisionModem(opts) {
             { ...location, credentials, progress: opts.progress, event: opts.event },
             pinEntry, { manualConsent: true },
           );
-          emitEvent(opts, { kind: "pin_kilidi_sonuc", ok: u.ok,
+          emitEvent(opts, { kind: "pin_lock_result", ok: u.ok,
             unlocked: u.unlocked, lockRemoved: u.lockRemoved,
             pinRemaining: u.pinRemaining });
           report.problems.push(...u.problems);
@@ -451,7 +451,7 @@ export async function provisionModem(opts) {
       const n = await readMsisdn({ ...location, credentials });
       if (n.phone) {
         phoneNormalized = n.phone;
-        phoneSource = "cihaz";
+        phoneSource = "device";
       } else {
         report.problems.push(...n.problems);
       }
@@ -473,7 +473,7 @@ export async function provisionModem(opts) {
         continue;
       }
       report.problems.push(problem("MSISDN_REQUIRED", "—"));
-      report.status = "telefon_yok"; report.ok = false;
+      report.status = "no_phone"; report.ok = false;
       return finish(location, identityBefore);
     }
 
@@ -497,26 +497,26 @@ export async function provisionModem(opts) {
 
     const action = nextAction(factoryUp, fieldUp, fieldDry);
     report.lastAction = action;
-    emitEvent(opts, { kind: "algilandi", action, attempt,
+    emitEvent(opts, { kind: "detected", action, attempt,
       location: factoryUp ? factoryHost : fieldUp ? fieldHost : null });
 
-    if (action === "zaten_hazir") {
+    if (action === "already_ready") {
       report.attempt = attempt; report.ok = true;
       const fieldPlace = { host: fieldHost, sourceIp: fieldSrc };
       const net = await verifyInternet(fieldPlace, simLockInfo, pinPlanned);
-      report.status = !net || net.up ? "zaten_hazir"
-        : (report.simLock?.lock ? "zaten_hazir_sim_kilitli" : "zaten_hazir_internet_yok");
+      report.status = !net || net.up ? "already_ready"
+        : (report.simLock?.lock ? "already_ready_sim_locked" : "already_ready_no_internet");
       return finish(fieldPlace, identityBefore, net);
     }
-    if (action === "modem_yok") {
+    if (action === "no_modem") {
       report.problems.push(problem("DEVICE_UNREACHABLE", `${factoryHost}/${fieldHost}`));
       if (attempt < attempts) { await wait(3000); continue; }
-      report.status = "modem_yok"; report.ok = false; return finish(null);
+      report.status = "no_modem"; report.ok = false; return finish(null);
     }
 
     // Provizyon: fabrikadaysa factoryHost'tan (LAN degisecek+reboot+yeni adres
     // dogrulama); sahadaysa fieldHost'tan (LAN degismez, eksikleri tamamla).
-    const atFactory = action === "provizyon_fabrika";
+    const atFactory = action === "provision_factory";
     const r = await applyProvisioning({
       host: atFactory ? factoryHost : fieldHost,
       sourceIp: atFactory ? factorySrc : fieldSrc,
@@ -535,22 +535,22 @@ export async function provisionModem(opts) {
       const writtenKeys = Object.values(r.written ?? {}).flat();
       const wasWritten = writtenKeys.includes(SIM_PIN_KEY);
       report.pinAttempt = { attempted: wasWritten, pinRemaining: simLockInfo?.pinRemaining ?? null,
-        skipped: wasWritten ? null : "ayni_pin_zaten_yazili" };
+        skipped: wasWritten ? null : "pin_already_set" };
       if (!wasWritten) report.problems.push(problem("PIN_STORED_WRONG"));
     }
-    if (r.ok && (r.status === "basarili" || r.status === "zaten_istenen_durumda")) {
+    if (r.ok && (r.status === "success" || r.status === "already_desired")) {
       report.ok = true;
       const fieldPlace = { host: fieldHost, sourceIp: fieldSrc };
       const net = await verifyInternet(fieldPlace, simLockInfo, pinPlanned);
-      report.status = !net || net.up ? "hazir"
-        : (report.simLock?.lock ? "hazir_sim_kilitli" : "hazir_internet_yok");
+      report.status = !net || net.up ? "ready"
+        : (report.simLock?.lock ? "ready_sim_locked" : "ready_no_internet");
       return finish(fieldPlace, identityBefore, net);
     }
     report.problems.push(...r.problems);
     notify(opts, `deneme ${attempt} basarisiz (${r.status}); tekrar denenecek`);
     if (attempt < attempts) await wait(5000);
   }
-  report.status = "basarisiz"; report.ok = false;
+  report.status = "failed"; report.ok = false;
   // Basarisiz kayit da KIMLIKLI olsun: cihaz hangi adreste cevap veriyorsa
   // oradan oku (LAN IP yazilmis ama dogrulama tamamlanmamis olabilir).
   const atField = await isReachable(fieldHost, fieldSrc);

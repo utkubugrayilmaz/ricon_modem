@@ -105,7 +105,7 @@ export async function waitForInternet({ host, sourceIp, credentials }, maxSec = 
       return { up: false, durationSec: elapsed(), wan_ip: null, simStatus: k?.simStatus ?? null };
     }
     notify(opts, `internet bekleniyor (${elapsed()} sn / ${maxSec} sn)`);
-    emitEvent(opts, { kind: "internet_bekleniyor", elapsedSec: elapsed(), maxSec: maxSec });
+    emitEvent(opts, { kind: "waiting_internet", elapsedSec: elapsed(), maxSec: maxSec });
     // Yoklama araligi. Olculdu (2026-08-31, enstrumanli reboot): tek readSim
     // 0.10-0.19 sn suruyor, yani yoklamanin MALIYETI yok — kayip tamamen
     // GRANULASYONDAN geliyordu. Ayni olcumde WAN IP, nvram okunabilir hale
@@ -164,7 +164,7 @@ export function parseSimStatus(raw) {
   return {
     raw: text || null,
     lock,
-    // "hazir": SIM kullanıma hazır. Kilit varsa ya da metin boş/OK değilse hayır.
+    // "ready": SIM kullanıma hazır. Kilit varsa ya da metin boş/OK değilse hayır.
     ready: lock === null && /^ok$/i.test(text),
     pinRemaining: pin.remaining, pinTotal: pin.total,
     pukRemaining: puk.remaining, pukTotal: puk.total,
@@ -212,7 +212,7 @@ export async function readSim(opts) {
   const normalized = normalizePhone(phone);
   if (phone && !normalized) report.problems.push(problem("MSISDN_INVALID", phone));
   report.msisdn = normalized;
-  report.msisdnSource = normalized ? "operator_girisi" : null;
+  report.msisdnSource = normalized ? "operator_input" : null;
   if (!normalized) {
     report.msisdnNote = "Telefon no cihazdan alinamaz; operator/UI girisi gerekir "
       + "(--telefon 05xxxxxxxxx) ya da operatorden ICCID->numara listesi.";

@@ -50,7 +50,7 @@ export function planProvisioning(current, profile) {
 }
 
 // PURE: planı YAZMA SIRASINA göre gruplar (Modem/WAN -> DHCP -> LAN).
-// Gruplanmamış anahtar "Diger" grubuna düşer ve LAN'dan ÖNCE yazılır — yönetim
+// Gruplanmamış anahtar "Other" grubuna düşer ve LAN'dan ÖNCE yazılır — yönetim
 // adresi her zaman en sonda kalsın. Neden sıra: profile.js WRITE_GROUPS notu.
 // Doner: [{ ad, ciftler:{k:{mevcut,hedef}} }]  (boş gruplar atlanır)
 export function groupPlan(changing) {
@@ -66,7 +66,7 @@ export function groupPlan(changing) {
   if (remaining.size) {
     const pairs = {};
     for (const k of remaining) pairs[k] = changing[k];
-    const group = { name: "Diger", pairs };
+    const group = { name: "Other", pairs };
     const lanOrder = groups.findIndex((g) => g.name === "LAN");
     if (lanOrder === -1) groups.push(group); else groups.splice(lanOrder, 0, group);
   }
@@ -121,14 +121,14 @@ export async function applyProvisioning(opts, profile) {
 
   // Değişecek bir şey yoksa: zaten istenen durumda (idempotent başarı).
   if (Object.keys(planObj.changing).length === 0) {
-    report.status = "zaten_istenen_durumda";
+    report.status = "already_desired";
     report.ok = isOk(report.problems);
     return report;
   }
 
   // 3) DRY-RUN ise burada dur.
   if (!apply) {
-    report.status = "kuru_calisma";
+    report.status = "dry_run";
     report.note = "Hicbir sey yazilmadi. Gercek uygulama icin uygula:true (CLI: --uygula).";
     report.ok = isOk(report.problems);
     return report;
@@ -139,7 +139,7 @@ export async function applyProvisioning(opts, profile) {
   for (const group of groups) {
     const keys = Object.keys(group.pairs);
     notify(opts, `${group.name}: ${keys.length} ayar yaziliyor`);
-    emitEvent(opts, { kind: "yaziliyor", group: group.name, keys });
+    emitEvent(opts, { kind: "writing", group: group.name, keys });
     const y = await consoleWrite(consoleOptions, match(group.pairs));
     report.problems.push(...y.problems);
     report.written[group.name] = y.written;
@@ -147,13 +147,13 @@ export async function applyProvisioning(opts, profile) {
       // Yönetim adresi grubunda kaldıysa cihaz HALA eski adreste — sıranın
       // sebebi tam bu (bkz. profile.js WRITE_GROUPS).
       report.status = changesManagementAddress(group.pairs)
-        ? "lan_yazma_hatasi" : "yazma_hatasi";
+        ? "lan_write_error" : "write_error";
       report.failedGroup = group.name;
       report.ok = false;
-      emitEvent(opts, { kind: "yazma_hatasi", group: group.name, keys });
+      emitEvent(opts, { kind: "write_error", group: group.name, keys });
       return report;
     }
-    emitEvent(opts, { kind: "yazildi", group: group.name, keys: y.written });
+    emitEvent(opts, { kind: "written", group: group.name, keys: y.written });
   }
 
   // 6) Reboot (config'i temiz uygula). Fire-and-forget: reboot bağlantıyı
@@ -176,12 +176,12 @@ export async function applyProvisioning(opts, profile) {
       report.rebootSent === true,
     );
     report.verification = verify;
-    report.status = verify.done ? "basarili" : "dogrulama_bekliyor";
+    report.status = verify.done ? "success" : "verify_pending";
     report.ok = verify.done && isOk(report.problems);
-    emitEvent(opts, { kind: "bitti", status: report.status, ok: report.ok, verification: verify });
+    emitEvent(opts, { kind: "done", status: report.status, ok: report.ok, verification: verify });
   } else {
     // LAN IP değişti ama yeni adres verilmedi -> PC'yi 5.5.5.x'e alıp doğrula.
-    report.status = "reboot_sonrasi_dogrulama_gerek";
+    report.status = "verify_after_reboot";
     report.note = `LAN IP ${profile.nvram.lan_ipaddr} yapildi + reboot edildi. `
       + `Dogrulama icin PC'ye 5.5.5.x ekleyip: uygula --yeni-host ${profile.nvram.lan_ipaddr} --kuru`;
     report.ok = isOk(report.problems);
@@ -217,13 +217,13 @@ export async function applyPin(opts, pin) {
   const report = { ok: false, attempted: false, skipped: null, problems: [] };
   if (!credentials) {
     report.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
-    report.skipped = "kimlik_yok";
+    report.skipped = "no_identity";
     return report;
   }
   // (2) Biçim
   if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
     report.problems.push(problem("PIN_INVALID"));
-    report.skipped = "gecersiz_bicim";
+    report.skipped = "invalid_format";
     return report;
   }
   const consoleOptions = { host, sourceIp, user: credentials.user, password: credentials.password };
@@ -233,21 +233,21 @@ export async function applyPin(opts, pin) {
   const { values, count } = await consoleNvram(consoleOptions);
   if (count === 0) {
     report.problems.push(problem("REQUEST_FAILED", "nvram", "PIN oncesi okuma basarisiz"));
-    report.skipped = "nvram_okunamadi";
+    report.skipped = "nvram_unreadable";
     return report;
   }
   if (values[SIM_PIN_KEY] === String(pin)) {
-    report.skipped = "ayni_pin_zaten_yazili";
+    report.skipped = "pin_already_set";
     report.ok = true;   // hata değil: yapılacak bir şey yok
     return report;
   }
 
   // (4) Tek deneme.
   notify(opts, "SIM PIN yaziliyor (TEK deneme)");
-  emitEvent(opts, { kind: "pin_deneniyor" });
+  emitEvent(opts, { kind: "pin_attempt" });
   const y = await consoleWrite(consoleOptions, { [SIM_PIN_KEY]: String(pin) });
   report.problems.push(...y.problems);
-  if (!y.ok) { report.skipped = "yazma_hatasi"; return report; }
+  if (!y.ok) { report.skipped = "write_error"; return report; }
   report.attempted = true;
 
   if (reboot) {
@@ -290,7 +290,7 @@ async function verifyPlanSettled(opts, profile, mainOptions, rebootWasSent = fal
   let signatureStart = 0;
   let lastRemaining = null;
   let attempt = 0;
-  // Reboot gonderildiyse cihazi bir kez DUSMUS gormeden "dogrulandi" demeyiz:
+  // Reboot gonderildiyse cihazi bir kez DUSMUS gormeden "verified" demeyiz:
   // LAN IP degismeyen (idempotent) durumda cihaz reboot komutundan sonra bir
   // sure daha ayakta kalir ve o oturumdan okunan nvram "yeni durum" sayilirdi.
   // Eskiden bunu dongu basindaki kor 5 sn ortuyordu.
@@ -312,12 +312,12 @@ async function verifyPlanSettled(opts, profile, mainOptions, rebootWasSent = fal
     const up = opts.sourceIp ? await isReachable(opts.host, opts.sourceIp) : true;
     if (!up) {
       wentDown = true;
-      emitEvent(mainOptions, { kind: "dogrulama", attempt: attempt + 1, status: "cihaz_bekleniyor" });
+      emitEvent(mainOptions, { kind: "verifying", attempt: attempt + 1, status: "waiting_device" });
       await wait(POLL_GAP_MS);
       continue;
     }
     if (!wentDown && Date.now() - t0 < DROP_TOLERANCE_MS) {
-      emitEvent(mainOptions, { kind: "dogrulama", attempt: attempt + 1, status: "reboot_bekleniyor" });
+      emitEvent(mainOptions, { kind: "verifying", attempt: attempt + 1, status: "waiting_reboot" });
       await wait(POLL_GAP_MS);
       continue;
     }
@@ -325,17 +325,17 @@ async function verifyPlanSettled(opts, profile, mainOptions, rebootWasSent = fal
     notify(mainOptions, `dogrulama denemesi ${attempt} (${elapsedSec()} sn)`);
     const { values, count } = await consoleNvram(consoleOptions);
     if (count === 0) {                       // TCP acik ama konsol henuz hazir degil
-      emitEvent(mainOptions, { kind: "dogrulama", attempt, status: "cihaz_bekleniyor" });
+      emitEvent(mainOptions, { kind: "verifying", attempt, status: "waiting_device" });
       await wait(POLL_GAP_MS);
       continue;
     }
 
     const remaining = Object.keys(planProvisioning(values, profile).changing);
     if (remaining.length === 0) {                                   // (3) TAMAM
-      emitEvent(mainOptions, { kind: "dogrulandi", waitedSec: elapsedSec() });
+      emitEvent(mainOptions, { kind: "verified", waitedSec: elapsedSec() });
       return { done: true, stillChanging: [], waitedSec: elapsedSec() };
     }
-    emitEvent(mainOptions, { kind: "dogrulama", attempt, status: "oturmadi", remaining });
+    emitEvent(mainOptions, { kind: "verifying", attempt, status: "not_settled", remaining });
 
     lastRemaining = remaining;                                           // (2) oturmadi
     const signature = remaining.slice().sort().join(",");

@@ -44,7 +44,7 @@ test("optsAlirMi: opts adi ve opts'a ozgu anahtarlar", () => {
 // siniflandirmasinin dogru oldugu GOZLE kontrol edilmeli, sayi guncellenmeli.
 test("cekirdegin tamami siniflandirilabiliyor ve dagilim beklendigi gibi", () => {
   const list = listSurface(core);
-  const functions = list.filter((x) => x.kind === "fonksiyon");
+  const functions = list.filter((x) => x.kind === "function");
   assert.ok(functions.length > 50, `beklenenden az export: ${functions.length}`);
   const opts = functions.filter((x) => x.takesOpts).map((x) => x.name);
   const pure = functions.filter((x) => !x.takesOpts).map((x) => x.name);
@@ -64,8 +64,8 @@ test("cekirdegin tamami siniflandirilabiliyor ve dagilim beklendigi gibi", () =>
 test("liste sabitleri fonksiyonlardan ayirir", () => {
   const list = listSurface(core);
   const sabit = list.find((x) => x.name === "SIM_PIN_KEY");
-  assert.equal(sabit.kind, "sabit");
-  assert.equal(list.find((x) => x.name === "checkDevice").kind, "fonksiyon");
+  assert.equal(sabit.kind, "constant");
+  assert.equal(list.find((x) => x.name === "checkDevice").kind, "function");
   const text = surfaceText(list);
   assert.match(text, /CIHAZA GIDEN/);
   assert.match(text, /SABITLER/);
@@ -149,7 +149,7 @@ test("cagir: fonksiyon PATLARSA stack degil sonuc nesnesi doner", async () => {
 
 test("cagir: sabit yazdirilir, cagrilmaz", async () => {
   const r = await callByName(core, "SIM_PIN_KEY");
-  assert.equal(r.kind, "sabit");
+  assert.equal(r.kind, "constant");
   assert.equal(r.value, "m1s1simpin");
   assert.equal(r.ok, true);
 });

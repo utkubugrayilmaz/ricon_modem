@@ -25,12 +25,12 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // buna bakıp hangi ekranı göstereceğine karar verir — karar mantığı burada,
 // arayüzde değil. Sıra ÖNEMLİ: en temel eksik başta.
 //
-// Doner: ["modem"] | ["sim"] | ["telefon"] | ["pin"] | []  (boş = başlanabilir)
+// Doner: ["modem"] | ["sim"] | ["phone"] | ["pin"] | []  (boş = başlanabilir)
 export function provisioningGaps({ modemUp, simPresent, simLockInfo, phone, pin } = {}) {
   const missing = [];
   if (!modemUp) missing.push("modem");
   else if (!simPresent) missing.push("sim");
-  if (!normalizePhone(phone)) missing.push("telefon");
+  if (!normalizePhone(phone)) missing.push("phone");
   // PIN yalnızca cihaz KİLİT BİLDİRDİYSE ve elimizde PIN yoksa eksiktir.
   // Kilit yoksa PIN sorulmaz — proje hedefi PIN'siz akış.
   if (simLockInfo?.lock === "pin" && !pin) missing.push("pin");
@@ -58,7 +58,7 @@ export async function assessDevice(opts) {
     pc: { ready: on.ready, problems: on.problems },
     modem: { location: null, host: null },
     identity: null, sim: null,
-    phone: { number: normalizePhone(phone), source: phone ? "girdi" : "yok" },
+    phone: { number: normalizePhone(phone), source: phone ? "input" : "none" },
     internet: null,
     problems: [...on.problems],
   };
@@ -140,7 +140,7 @@ export async function assessDevice(opts) {
         // olabilir. Sessizce birini secmek yerine ikisini de bildiriyoruz.
         report.problems.push(problem("MSISDN_MISMATCH", manual, n.phone));
       }
-      report.phone = { number: n.phone, source: "cihaz" };
+      report.phone = { number: n.phone, source: "device" };
     } else {
       report.problems.push(...n.problems);
     }
@@ -180,33 +180,33 @@ export function retryDecision(report = {}) {
   const yes = (afterSec, reason) => ({ retry: true, afterSec, reason });
 
   // Is bitti: operator baslatacak.
-  if (report.canStart) return no("baslatilabilir");
+  if (report.canStart) return no("can_start");
 
   // PC agi yok -> kablo/modem bekleniyor. Ucuz kontrol, sik bak.
-  if (report.pc && report.pc.ready === false) return yes(3, "pc_hazir_degil");
+  if (report.pc && report.pc.ready === false) return yes(3, "pc_not_ready");
 
   // Modem yok -> takilmasi bekleniyor. Sik bak, ucuz (TCP yoklama).
-  if (!report.modem?.host) return yes(3, "modem_yok");
+  if (!report.modem?.host) return yes(3, "no_modem");
 
   // Insan mudahalesi bekleniyor: tekrar bakmak ayni cevabi verir.
-  if (codes.has("SIM_PUK_LOCKED")) return no("puk_insan_bekliyor");
-  if (report.sim?.lock === "pin") return no("pin_bekleniyor");
-  if (codes.has("MSISDN_NOT_ON_SIM")) return no("numara_simde_yok");
-  if (codes.has("MSISDN_MISMATCH")) return no("operator_karari");
+  if (codes.has("SIM_PUK_LOCKED")) return no("puk_needs_human");
+  if (report.sim?.lock === "pin") return no("pin_pending");
+  if (codes.has("MSISDN_NOT_ON_SIM")) return no("msisdn_not_on_sim");
+  if (codes.has("MSISDN_MISMATCH")) return no("operator_decision");
 
   // SIM takili degil -> FIZIKSEL is: modem kapatilip SIM takilacak. Bakmaya
   // devam ama seyrek; operator bu arada modemi kapatacak.
-  if (report.sim && report.sim.present === false) return yes(10, "sim_bekleniyor");
+  if (report.sim && report.sim.present === false) return yes(10, "waiting_sim");
 
   // GECICI aksilik: telnet dustu / AT portu cevap vermedi / istek yarida
   // kaldi. Tam olarak tarayici yenileyince duzelen durum bu.
   for (const k of ["REQUEST_FAILED", "AT_PORT_NOT_FOUND", "DEVICE_BUSY", "EMPTY_BODY"]) {
-    if (codes.has(k)) return yes(5, "gecici_hata");
+    if (codes.has(k)) return yes(5, "temporary_error");
   }
 
   // Eksik var ama sebebini tanimadik: seyrek tekrar, sessiz kalmaktan iyi.
-  if ((report.missing || []).length) return yes(10, "eksik_var");
-  return no("tekrar_gerekmiyor");
+  if ((report.missing || []).length) return yes(10, "gaps_remain");
+  return no("no_retry_needed");
 }
 
 // Degerlendirmeyi TEKRARLAYARAK izler. Karar yukaridaki saf fonksiyondan

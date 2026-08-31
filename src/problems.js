@@ -245,7 +245,7 @@ const WARNING_CODES = new Set(["EMPTY_BODY", "AUTH_REQUIRED",
   "INTERNET_DOWN", "SIM_PIN_LOCKED", "SIM_PUK_LOCKED", "PIN_LAST_ATTEMPT",
   // PIN_REQUIRED de UYARI: ayarlar dogru yazilmis, provizyon basarili. PIN'in
   // bilinmemesi bizim hatamiz degil ve tekrar denemek cozmez. Error yapmak
-  // durum ("hazir") ile problems'i celiskiye dusuruyordu.
+  // durum ("ready") ile problems'i celiskiye dusuruyordu.
   "PIN_REQUIRED", "PIN_STORED_WRONG", "PIN_STALE_CLEARED", "PIN_ATTEMPT_BURNED",
   // Numara SIM'de yazili degilse bu bir ARIZA degil: operator elle girer.
   "MSISDN_NOT_ON_SIM", "PIN_LOCK_NOT_DISABLED", "MSISDN_MISMATCH"]);

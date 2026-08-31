@@ -131,12 +131,12 @@ test("summarizeMetrics: gercek OLCUM satirlari beyan diye etiketlenmez", () => {
 // gorunuyordu. Asagidaki iki satir dosyadan ALINMIS gercek bicimlerdir.
 
 const ESKI_SATIR = {
-  zaman: "2026-08-27T10:17:32.748Z", tur: "kurulum", durum: "hazir", ok: true,
+  zaman: "2026-08-27T10:17:32.748Z", tur: "kurulum", durum: "ready", ok: true,
   deneme: 1, toplam_sn: 41.3, giris_sn: 9.8, lan_mac: "00:0C:43:43:5F:4E",
   adimlar: [{ ad: "modem algılandı", sure_sn: 3.3 }],
 };
 const YENI_SATIR = {
-  timestamp: "2026-08-28T13:13:34.279Z", kind: "run", status: "hazir", ok: true,
+  timestamp: "2026-08-28T13:13:34.279Z", kind: "run", status: "ready", ok: true,
   attempt: 1, totalSec: 50.0, entrySec: 8.0, lan_mac: "00:0C:43:43:5F:5A",
   steps: [{ name: "modem algılandı", durationSec: 4.1 }],
 };
@@ -177,7 +177,7 @@ test("adim kovasi AYAR SAYISINA gore BOLUNMEZ (olculmus kusur)", () => {
 });
 
 test("yazma BASLADI ve BITTI ayri kalir (birlestirmek medyani seyreltir)", () => {
-  // "basladi" suresi hep ~0; "bitti" gercek yazma suresini tasir. Ikisini
+  // "basladi" suresi hep ~0; "done" gercek yazma suresini tasir. Ikisini
   // ayni kovaya atmak medyani sifirlarla asagi ceker — yanlis duzeltme.
   const r = summarizeMetrics([{
     kind: "run", ok: true, totalSec: 10,

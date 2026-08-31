@@ -17,7 +17,7 @@ const temel = { pc: { ready: true }, modem: { host: "192.168.1.1" },
 test("baslatilabilir -> tekrar YOK (is bitti, operator baslatacak)", () => {
   const k = retryDecision({ ...temel, canStart: true });
   assert.equal(k.retry, false);
-  assert.equal(k.reason, "baslatilabilir");
+  assert.equal(k.reason, "can_start");
 });
 
 test("modem yok -> SIK tekrar (kablo takilinca hemen gorulsun)", () => {
@@ -35,10 +35,10 @@ test("PC agi yok -> SIK tekrar (kablo takilacak)", () => {
 // GECICI: tarayici yenileyince duzelen durum tam olarak bu.
 test("gecici hata (telnet dustu / AT portu) -> tekrar, 5 sn", () => {
   for (const code of ["REQUEST_FAILED", "AT_PORT_NOT_FOUND", "DEVICE_BUSY", "EMPTY_BODY"]) {
-    const k = retryDecision({ ...temel, missing: ["telefon"], problems: p(code) });
+    const k = retryDecision({ ...temel, missing: ["phone"], problems: p(code) });
     assert.equal(k.retry, true, code);
     assert.equal(k.afterSec, 5, code);
-    assert.equal(k.reason, "gecici_hata", code);
+    assert.equal(k.reason, "temporary_error", code);
   }
 });
 
@@ -47,20 +47,20 @@ test("PIN kilitli -> tekrar YOK (operator PIN girecek)", () => {
   const k = retryDecision({ ...temel, sim: { present: true, lock: "pin" },
     missing: ["pin"], problems: p("SIM_PIN_LOCKED") });
   assert.equal(k.retry, false);
-  assert.equal(k.reason, "pin_bekleniyor");
+  assert.equal(k.reason, "pin_pending");
 });
 
 test("PUK kilitli -> tekrar YOK (insan mudahalesi)", () => {
   const k = retryDecision({ ...temel, problems: p("SIM_PUK_LOCKED") });
   assert.equal(k.retry, false);
-  assert.equal(k.reason, "puk_insan_bekliyor");
+  assert.equal(k.reason, "puk_needs_human");
 });
 
 test("numara SIM'de yazili degil -> tekrar YOK (tekrar okumak ayni sonuc)", () => {
-  const k = retryDecision({ ...temel, missing: ["telefon"],
+  const k = retryDecision({ ...temel, missing: ["phone"],
     problems: p("MSISDN_NOT_ON_SIM") });
   assert.equal(k.retry, false);
-  assert.equal(k.reason, "numara_simde_yok");
+  assert.equal(k.reason, "msisdn_not_on_sim");
 });
 
 test("numara uyusmazligi -> tekrar YOK (operator karar verecek)", () => {
@@ -74,14 +74,14 @@ test("SIM takili degil -> SEYREK tekrar (10 sn)", () => {
     missing: ["sim"], problems: p("SIM_MISSING") });
   assert.equal(k.retry, true);
   assert.equal(k.afterSec, 10);
-  assert.equal(k.reason, "sim_bekleniyor");
+  assert.equal(k.reason, "waiting_sim");
 });
 
 test("sebebi tanimadigimiz eksik -> seyrek tekrar (sessiz kalmaktan iyi)", () => {
-  const k = retryDecision({ ...temel, missing: ["telefon"] });
+  const k = retryDecision({ ...temel, missing: ["phone"] });
   assert.equal(k.retry, true);
   assert.equal(k.afterSec, 10);
-  assert.equal(k.reason, "eksik_var");
+  assert.equal(k.reason, "gaps_remain");
 });
 
 test("bos/eksiksiz rapor patlamaz", () => {

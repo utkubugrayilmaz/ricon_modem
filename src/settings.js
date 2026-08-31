@@ -10,15 +10,15 @@
 // Modemin fabrika IP'si.
 export const DEFAULT_HOST = "192.168.1.1";
 
-// HTTP uclari. tur: "sistem" = kimliksiz erisilebilir (2026-08-26 dogrulandi),
-// "kimlik" = HTTP Basic gerekli, "config" = tam yapilandirma yedegi.
+// HTTP uclari. tur: "system" = kimliksiz erisilebilir (2026-08-26 dogrulandi),
+// "identity" = HTTP Basic gerekli, "config" = tam yapilandirma yedegi.
 // Not: bu firmware'de canli veri .live.htm (sistem) ve .live.asp (kimlikli).
 export const ENDPOINTS = Object.freeze([
-  { name: "info", path: "/asp/status/Info.htm", kind: "sistem", format: "html" },
-  { name: "info_live", path: "/asp/status/Info.live.htm", kind: "sistem", format: "ddwrt" },
-  { name: "internet_live", path: "/asp/status/Status_Internet.live.asp", kind: "kimlik", format: "ddwrt" },
-  { name: "wireless_live", path: "/asp/status/Status_Wireless.live.asp", kind: "kimlik", format: "ddwrt" },
-  { name: "setup_index", path: "/asp/setup/index.asp", kind: "kimlik", format: "html" },
+  { name: "info", path: "/asp/status/Info.htm", kind: "system", format: "html" },
+  { name: "info_live", path: "/asp/status/Info.live.htm", kind: "system", format: "ddwrt" },
+  { name: "internet_live", path: "/asp/status/Status_Internet.live.asp", kind: "identity", format: "ddwrt" },
+  { name: "wireless_live", path: "/asp/status/Status_Wireless.live.asp", kind: "identity", format: "ddwrt" },
+  { name: "setup_index", path: "/asp/setup/index.asp", kind: "identity", format: "html" },
   { name: "nvram_yedek", path: "/nvrambak.bin", kind: "config", format: "nvram" },
 ]);
 
@@ -76,7 +76,7 @@ export const OPERATORS = Object.freeze({
 //   gizli   : degeri ekranda maskele (parola alani)
 export const SETTING_LABELS = Object.freeze({
   // Cihaz adi = SIM'in telefon numarasi (arayuzde Device Name).
-  router_name: { name: "Device Name (telefon no)", page: "Cihaz" },
+  router_name: { name: "Device Name (telefon no)", page: "Device" },
   // SIM PIN — degeri EKRANDA MASKELENIR, log/deftere hic yazilmaz.
   m1s1simpin: { name: "SIM1 PIN", page: "Modem/WAN → Main Link", secret: true },
 
@@ -183,12 +183,12 @@ const DEVICE_NAME_DEFAULT = "Industrial Cellular Router";
 //   1) Yazma yarida kalirsa (baglanti dustu, konsol koptu) yonetim adresi EN
 //      SON degistigi icin cihaz hala eski adreste bulunabilir — kurtarilabilir.
 //   2) Plan/ilerleme ekrani teknisyenin kafasindaki sirayla akar.
-// Listede olmayan anahtar "Diger" grubuna duser ve LAN'dan ONCE yazilir.
+// Listede olmayan anahtar "Other" grubuna duser ve LAN'dan ONCE yazilir.
 export const WRITE_GROUPS = [
   {
     // Cihaz adı = telefon numarası. En başta: en zararsız yazma, sorun çıkarsa
     // gerisi hiç denenmemiş olur.
-    name: "Cihaz",
+    name: "Device",
     keys: ["router_name"],
   },
   {

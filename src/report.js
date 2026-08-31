@@ -562,20 +562,20 @@ export function parseArgv(argv = []) {
   return { flags, positionals };
 }
 
-// Cagrilabilir yuzeyin tamami. tur: "fonksiyon" | "sabit".
+// Cagrilabilir yuzeyin tamami. tur: "function" | "constant".
 export function listSurface(mode) {
   return Object.entries(mode)
     .map(([name, value]) => (typeof value === "function"
-      ? { name, kind: "fonksiyon", takesOpts: takesOptions(value), signature: firstParameter(value) }
-      : { name, kind: "sabit", takesOpts: false, signature: null }))
+      ? { name, kind: "function", takesOpts: takesOptions(value), signature: firstParameter(value) }
+      : { name, kind: "constant", takesOpts: false, signature: null }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Listeyi insan-okunur metne cevirir (stderr'a basilacak).
 export function surfaceText(list) {
   const s = [];
-  const functions = list.filter((x) => x.kind === "fonksiyon");
-  const constants = list.filter((x) => x.kind === "sabit");
+  const functions = list.filter((x) => x.kind === "function");
+  const constants = list.filter((x) => x.kind === "constant");
   s.push(`  CIHAZA GIDEN (${functions.filter((x) => x.takesOpts).length})`
     + "  — ortam/bayraklar opts olarak gecer");
   for (const f of functions.filter((x) => x.takesOpts)) s.push(`    ${f.name}`);
@@ -628,7 +628,7 @@ export async function callByName(mode, name, { opts = {}, flags = {},
 
   const value = mode[name];
   if (typeof value !== "function") {
-    return { timestamp, command: "calistir", fn: name, kind: "sabit", ok: true,
+    return { timestamp, command: "calistir", fn: name, kind: "constant", ok: true,
       value, problems: [] };
   }
 

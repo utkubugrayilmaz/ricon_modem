@@ -266,7 +266,7 @@ function isPortOpen(host, port, sourceIp, timeout = TCP_PROBE_MS) {
 // Cihaz ayakta mi? Kullandigimiz iki kapiya TCP connect (ICMP yerine).
 //
 // ⚠ KAYNAK IP VERMEK SART. Olculdu (2026-08-28, kurumsal ag): kaynak IP
-// BAGLANMADAN yapilan connect bu makinede HER adrese aninda "basarili"
+// BAGLANMADAN yapilan connect bu makinede HER adrese aninda "success"
 // donuyor (guvenlik ajani/proxy yerelde kabul ediyor) — TEST-NET dahil.
 // Yani kaynaksiz cagri "her cihaz ayakta" der ve teshis coker.
 //   isReachable("192.0.2.1")                 -> true   (YANLIS)

@@ -23,7 +23,7 @@ test("SIM yok -> sim eksik", () => {
 
 test("telefon yok / gecersiz -> telefon eksik", () => {
   for (const t of [null, "", "1234", "0535064185"]) {
-    assert.ok(provisioningGaps({ ...full, phone: t }).includes("telefon"),
+    assert.ok(provisioningGaps({ ...full, phone: t }).includes("phone"),
       `"${t}" gecersiz sayilmali`);
   }
 });
@@ -51,5 +51,5 @@ test("PUK kilidi 'eksik girdi' DEGIL — insan mudahalesi, problems ile bildiril
 test("cok eksik varsa hepsi listelenir, sira en temelden", () => {
   const e = provisioningGaps({ modemUp: true, simPresent: true,
     simLockInfo: { lock: "pin" }, phone: null, pin: null });
-  assert.deepEqual(e, ["telefon", "pin"]);
+  assert.deepEqual(e, ["phone", "pin"]);
 });

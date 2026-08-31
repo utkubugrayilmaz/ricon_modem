@@ -19,7 +19,7 @@
 // KAPSAM KARARI — USSD (*101#) yolu BILEREK YOK. Kardes calismada var ama
 // GSM7 paketleme + UCS2 cozme ~150 satir ve bizim SIM'lerde CNUM zaten
 // doluyor. Kanitlanmamis bir yedek icin o hacmi tasimiyoruz; CNUM bos gelirse
-// `yontem: "yok"` dondurup ICCID bildiriyoruz (operator elle girer — bugun
+// `yontem: "none"` dondurup ICCID bildiriyoruz (operator elle girer — bugun
 // zaten oyle yapiyor). Ihtiyac cikarsa kardes calismadan alinir.
 
 import { runConsole } from "./console.js";
@@ -195,7 +195,7 @@ export async function findAtPort(opts) {
 
 // SIM'in TELEFON NUMARASINI okur. Bugune kadar operator elle giriyordu;
 // numara SIM'de yaziliysa (EF_MSISDN) buradan okunabiliyor.
-// Doner: { telefon, yontem: "cnum"|"yok", iccid, atPort, problems }
+// Doner: { telefon, yontem: "cnum"|"none", iccid, atPort, problems }
 export async function readMsisdn(opts) {
   let port = opts.atPort ?? null;
   let cnum = null;
@@ -208,7 +208,7 @@ export async function readMsisdn(opts) {
     if (!isAtOk(cnum.answer) && !/\+CNUM/.test(cnum.answer)) {
       const found = await findAtPort(opts);
       if (!found.port) {
-        return { phone: null, method: "yok", iccid: null, atPort: null,
+        return { phone: null, method: "none", iccid: null, atPort: null,
           problems: found.problems };
       }
       port = found.port;
@@ -224,7 +224,7 @@ export async function readMsisdn(opts) {
   // CNUM bos: numara SIM'e yazilmamis. ICCID'yi bildirip operatore birakiyoruz.
   const ccid = await atCommand(atOptions, "AT+CCID");
   return {
-    phone: null, method: "yok", iccid: parseCcid(ccid.answer), atPort: port,
+    phone: null, method: "none", iccid: parseCcid(ccid.answer), atPort: port,
     problems: [problem("MSISDN_NOT_ON_SIM")],
   };
 }
@@ -479,7 +479,7 @@ export async function readSimLock(opts) {
     const found = await findAtPort(opts);
     if (!found.port) {
       // Kilit durumu OKUNAMADI. Bu deger PIN kararinin girdisi; bilmiyorken
-      // "hazir" ya da "kilit yok" demek YANLIS yonde risk olur. UNKNOWN +
+      // "ready" ya da "kilit yok" demek YANLIS yonde risk olur. UNKNOWN +
       // hazir:false dondurup kararı reddettiriyoruz (bkz. isSimPathOpen).
       return { status: "UNKNOWN", ready: false, lock: null,
         pinRemaining: null, pukRemaining: null, atPort: null, problems: found.problems };

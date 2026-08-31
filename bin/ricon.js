@@ -213,12 +213,12 @@ function streamWatcher() {
     switch (o.kind) {
       // Yeni cihaz/deneme basladi: onceki kirilimi at, sifirdan olc. Dongude
       // her modem KENDI adim surelerini alsin diye gerekli.
-      case "algilandi":
+      case "detected":
         steps.length = 0;
         last = { step: STEP.detected };
         lastAt = Date.now();
         break;
-      case "kimlik": stamp({ step: STEP.identity }); break;
+      case "identity": stamp({ step: STEP.identity }); break;
       case "plan":
         stamp({ step: STEP.plan });
         // Arayuzdeki iki panelin (once/sonra) terminal karsiligi: ham nvram
@@ -226,13 +226,13 @@ function streamWatcher() {
         process.stderr.write("\n  PLAN — once -> sonra (* = degisecek)\n"
           + planText(planRows(o.planObj)) + "\n\n");
         break;
-      case "yaziliyor": stamp({ step: "write_start", count: o.keys?.length ?? 0 }); break;
-      case "yazildi": stamp({ step: "write_done", count: o.keys?.length ?? 0 }); break;
+      case "writing": stamp({ step: "write_start", count: o.keys?.length ?? 0 }); break;
+      case "written": stamp({ step: "write_done", count: o.keys?.length ?? 0 }); break;
       case "reboot": stamp({ step: STEP.reboot }); break;
-      case "dogrulandi": stamp({ step: STEP.verified }); break;
+      case "verified": stamp({ step: STEP.verified }); break;
       case "internet": stamp(o.up ? { step: STEP.internet } : null); break;
-      case "bitti":
-      case "sonuc": stamp(null); break;
+      case "done":
+      case "result": stamp(null); break;
       default: break;
     }
   };
@@ -428,7 +428,7 @@ async function runCommand() {
       const line = {
         timestamp: new Date().toISOString(),
         kind: "manual",   // eski satirlarda tur:"elle" — okuma ikisini de kabul eder
-        status: "elle_kurulum",
+        status: "manual_run",
         ok: true,
         totalSec: totalSeconds,
         who: flag("--kim") || null,
@@ -497,7 +497,7 @@ async function runCommand() {
       const on = pcPreflight(prefix(opts.host), prefix(fieldHost));
       if (!on.ready) {
         return { timestamp: new Date().toISOString(), command: "hazirla", ok: false,
-          status: "pc_hazir_degil", problems: on.problems };
+          status: "pc_not_ready", problems: on.problems };
       }
       const provisionOptions = {
         factoryHost: opts.host, factorySource: on.factorySource,

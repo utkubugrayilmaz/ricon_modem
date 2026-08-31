@@ -50,7 +50,7 @@ test("groupPlan: bilinmeyen anahtar Diger grubuna duser ve LANdan ONCE yazilir",
     lan_ipaddr: { current: "a", target: "b" },
     bilinmeyen_ayar: { current: "1", target: "2" },
   });
-  assert.deepEqual(groups.map((g) => g.name), ["Diger", "LAN"]);
+  assert.deepEqual(groups.map((g) => g.name), ["Other", "LAN"]);
 });
 
 test("groupPlan: bos plan -> bos grup listesi", () => {
