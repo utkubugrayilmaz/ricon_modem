@@ -213,6 +213,12 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
 
 // Her çıkışta çalışır: kimliği tamamla, kalıcı kayıt satırını üret, dışarıya
 // bildir. Çekirdek DOSYAYA YAZMAZ — nereye yazılacağı tüketicinin kararı.
+// Hucresel modul SIM'i ayaga kaldirana kadar beklenen sure. Olculdu: modem
+// aciliste ~yarim dakika "Invalid" diyor, sonra ICCID geliyor. 3 deneme x 15 sn
+// = ~30 sn pencere. Bos yuvali modem bu sureyi bosa harcar ve sonra dogru
+// teshisi alir — yanlis "SIM yok" demekten cok daha ucuz.
+const SIM_SETTLE_MS = 15000;
+
 async function finishRecord({ report, location, readyIdentity, credentials, phone,
   profile, internet, opts }) {
   let identity = readyIdentity || {};
@@ -411,7 +417,30 @@ export async function provisionModem(opts) {
       report.status = "no_identity"; report.attempt = attempt; report.ok = false;
       return finish(location, identityBefore);
     }
+    // "SIM YOK" HEMEN SOYLENMEZ — ONCE HUCRESEL MODULUN ACILMASI BEKLENIR.
+    //
+    // Olculdu (2026-08-31, canli): AYNI modem (MAC 00:0C:43:43:5F:4E) saat
+    // 11:14'te `ready` oldu ve ICCID okundu; 83 saniye sonra, fabrikaya
+    // donup yeniden acildiktan hemen sonra ayni SIM icin
+    // `simStatus: "Invalid", iccid: null` dondu. Okuma BASARILIYDI (IMEI ve
+    // lan_mac geldi) — cihaz "SIM gecersiz" diyordu, cunku modul SIM'i henuz
+    // ayaga kaldirmamisti. `detected` adimi 12.4 sn surmustu: cihaz o an
+    // aciliyordu.
+    //
+    // BOS YUVA DA "Invalid" DER. Fark zamanda: bos yuva HEP oyle der,
+    // acilmakta olan modem ~yarim dakika icinde ICCID'i bildirir. Tek bir
+    // okumayla ikisini ayirmak MUMKUN DEGIL — ayiran sey tekrar denemektir.
+    //
+    // `attempts` tam bunun icin vardi ama SIM kontrolu onu HIC KULLANMIYOR,
+    // ilk turda pes ediyordu. Numara okuma yolu zaten dogru davraniyordu;
+    // asimetri buradaydi.
     if (location && identityBefore && !isSimPresent(identityBefore)) {
+      if (attempt < attempts) {
+        notify(opts, `SIM not up yet (${identityBefore.simStatus ?? "?"}); waiting for the module`);
+        identityBefore = null;    // SART: yoksa sonraki tur bayat sonucu kullanir
+        await wait(SIM_SETTLE_MS);
+        continue;
+      }
       report.problems.push(problem("SIM_MISSING", identityBefore.simStatus));
       report.status = "no_sim"; report.attempt = attempt; report.ok = false;
       return finish(location, identityBefore);
