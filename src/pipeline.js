@@ -17,7 +17,7 @@ import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./settings.js";
 import { normalizePhone } from "./device.js";
 import { readIdentity, isSimPresent, waitForInternet, pcPreflight } from "./device.js";
 import { problem } from "./problems.js";
-import { readMsisdn, disableSimPin, isSimLockEligible } from "./at.js";
+import { readMsisdn, disableSimPin, isSimLockEligible, readSimLock } from "./at.js";
 import { canSpendPinAttempt, isAttemptBurned } from "./at.js";
 
 const now = () => new Date().toISOString();
@@ -512,11 +512,22 @@ export async function provisionModem(opts) {
             pinRemaining: u.pinRemaining });
           report.problems.push(...u.problems);
           if (!u.unlocked) {
-            // KABUL EDILMEDI. Kalan hakki TAZE oku (u.pinRemaining cihazdan
-            // geliyor) ve dongunun basina don: kapi yeniden sorulur, son hak
-            // kalmissa orada durur ve karar insana kalir.
-            notify(opts, `PIN rejected — ${u.pinRemaining ?? "?"} attempts left`);
-            lock = { ...lock, pinRemaining: u.pinRemaining ?? lock.pinRemaining };
+            // KABUL EDILMEDI. Kalan hakki CIHAZDAN TAZE OKU.
+            //
+            // `u.pinRemaining` denemeden ONCEKI sayidir (problem metni de
+            // "attempts left before this try" diyor). Onu kullanmak sayiyi
+            // 3/3'te dondurur — ve bu KOZMETIK DEGIL: kapi (PIN_ATTEMPT_BURNED)
+            // "kalan < toplam" kuralina bakiyor, sayi donarsa koruma HIC
+            // devreye girmez ve operator uc hakki da yakabilir.
+            // (2026-08-31 canli: yanlis PIN sonrasi ekranda yine 3/3 yazdi.)
+            let fresh = null;
+            try { fresh = await readSimLock({ ...location, credentials }); } catch { /* okunamadi */ }
+            const remaining = fresh?.pinRemaining
+              // Okunamazsa TEMKINLI DAVRAN: bir eksilt. Fazla saymak
+              // korumayi gecirtir, eksik saymak yalnizca erken durdurur.
+              ?? (lock.pinRemaining != null ? lock.pinRemaining - 1 : null);
+            notify(opts, `PIN rejected — ${remaining ?? "?"} attempts left`);
+            lock = { ...lock, pinRemaining: remaining };
             continue;
           }
           if (u.unlocked) {
