@@ -269,6 +269,10 @@ export async function provisionModem(opts) {
   // cagri aninda gecerli degeri goruyor.
   let telefonNorm = normalizePhone(telefon);
   let telefonKaynak = telefonNorm ? "girdi" : null;
+  // `telefon` olayi BIR KEZ yollanir. Retry dongusu icinde oldugu icin bayrak
+  // sart: ikinci denemede ayni numara tekrar bildirilirse ekranda iki kez
+  // gorunur ve "numara degisti mi?" izlenimi verir.
+  let telefonBildirildi = false;
 
   // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
   // kaydiTamamla). Cagri yerleri degismedi.
@@ -415,6 +419,15 @@ export async function provisionModem(opts) {
       const elle = normalizePhone(await opts.telefonSor(deneme));
       if (elle) { telefonNorm = elle; telefonKaynak = "operator"; }
     }
+    // NUMARA BULUNDU — hemen bildir. Operator hangi hattin kaydedilecegini
+    // kurulumun BITISINI beklemeden gormeli: yanlis SIM takilmissa 90 saniye
+    // once anlar. Numaranin nereden geldigi de tasiniyor, cunku SIM'den
+    // okunan numara elle yazilandan daha guvenilir.
+    if (telefonNorm && !telefonBildirildi) {
+      telefonBildirildi = true;
+      olayla(opts, { tur: "telefon", numara: telefonNorm, kaynak: telefonKaynak });
+    }
+
     // Numara YOK. Son denemede vazgec; oncesinde DEVAM ET — okuma gecici
     // olarak da basarisiz olabiliyor (telnet dusmesi olculdu) ve
     // `denemeler` tam bunun icin var. Ilk turda return etmek retry'i

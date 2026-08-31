@@ -35,6 +35,7 @@ import {
   readMsisdn, readSimLock, simPinKaldir, atKomut, parseClck,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report/report.js";
+import { ilerlemeIzleyici } from "./src/report/ilerleme.js";
 import { isOk } from "./src/domain/problems.js";
 
 const argv = process.argv.slice(2);
@@ -44,6 +45,60 @@ const bayrak = (ad) => {
   return i === -1 ? undefined : argv[i + 1];
 };
 const ilerle = (m) => process.stderr.write(`[${komut}] ${m}\n`);
+
+// --- Terminal ilerleme yazici ---
+//
+// Izleyici (src/report/ilerleme.js) satirlari URETIR, burasi YAZAR. Iki tur
+// satir var: duz string akisa eklenir, { yenile:true } AYNI satiri gunceller.
+//
+// `yenile` neden TTY'ye bagli: gerceklesen kurulumda dogrulama saniyede bir,
+// internet beklemesi iki saniyede bir olay uretiyor — hepsini yeni satir
+// olarak basmak 60 satirlik gurultu demek. Terminalde \r ile ayni satir
+// guncellenir; cikti bir dosyaya ya da boruya gidiyorsa \r ise yaramaz, o
+// yuzden orada DURUM satirlari hic basilmaz (akis zaten JSON'da tam).
+function ilerlemeYazici() {
+  const tty = process.stderr.isTTY === true;
+  let acikDurumSatiri = false;
+  const yaz = (metin) => process.stderr.write(metin);
+  // Acik bir durum satiri varsa temizle — yoksa yeni satir onun uzerine biner.
+  const durumuKapat = () => {
+    if (!acikDurumSatiri) return;
+    yaz(`\r${" ".repeat(78)}\r`);
+    acikDurumSatiri = false;
+  };
+  return {
+    bas(satirlar) {
+      for (const s of satirlar || []) {
+        if (typeof s === "string") {
+          durumuKapat();
+          yaz(`${s}\n`);
+          continue;
+        }
+        if (!s?.yenile || !tty) continue;      // TTY yoksa durum satiri basilmaz
+        yaz(`\r${s.metin.slice(0, 78).padEnd(78)}`);
+        acikDurumSatiri = true;
+      }
+    },
+    kapat: durumuKapat,
+  };
+}
+
+// Cekirdegi ilerleme gorunumune bagli olarak calistirir.
+//
+// Cekirdek iki kanal sunuyor: `olay` (yapilandirilmis nesne) ve `ilerle`
+// (duz metin). Ikisi de OPSIYONEL ve tuketicinin isi — bu fonksiyon o iki
+// kanali terminale baglayan tek yer. Cekirdege hicbir sey EKLEMEZ.
+async function ilerlemeliCalistir(calistir) {
+  const izleyici = ilerlemeIzleyici();
+  const yazici = ilerlemeYazici();
+  const rapor = await calistir({
+    olay: (o) => yazici.bas(izleyici.olay(o)),
+    ilerle: (m) => yazici.bas(izleyici.ilerleme(m)),
+  });
+  yazici.kapat();
+  yazici.bas(izleyici.ozet());
+  return rapor;
+}
 
 // .env -> opts. Cekirdek (src/) process.env OKUMAZ; okuma burada.
 function ortamOpts() {
@@ -189,13 +244,13 @@ async function komutuCalistir() {
             message: `Bilinmeyen profil: ${profilAd}`,
             check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
       }
-      return applyProvisioning({
-        ...opts,
+      return ilerlemeliCalistir((kanal) => applyProvisioning({
+        ...opts, ...kanal,
         uygula: argv.includes("--uygula"),   // yoksa DRY-RUN (kuru)
         reboot: !argv.includes("--reboot-yok"),
         yeniHost: bayrak("--yeni-host"),
         yeniKaynakIp: bayrak("--yeni-kaynak"),
-      }, profil);
+      }, profil));
     }
     case "hazirla": {
       const profilAd = bayrak("--profil") || "saha";
@@ -224,19 +279,25 @@ async function komutuCalistir() {
           ? Number(bayrak("--internet-bekle")) : 150,
         kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
         telefonSor,          // dongu: her modem icin sorar
-        ilerle,
       };
       const dongu = argv.includes("--dongu");
       if (dongu) {
         // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli);
         // numara her modemde o modemin SIM'inden okunuyor.
-        return provisionLoop({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity });
+        //
+        // Dongude ilerleme gorunumu YOK: adim sureleri BIR calistirmaya ait,
+        // dongu N calistirma demek ve hepsi tek kronometreye yazilirsa sayilar
+        // anlamsizlasir. Dongu kendi ozetini `hazirlanan` listesiyle veriyor.
+        return provisionLoop({ ...hOpts, ilerle,
+          maxModem: Number(bayrak("--max")) || Infinity });
       }
       // Tek modem: --telefon VERMEK ARTIK ZORUNLU DEGIL. Cekirdek numarayi
       // SIM'den okuyor (AT+CNUM); okuyamazsa telefonSor ile burayi cagirip
       // operatore soruyor. Verilirse operator bilerek eziyor; gecersizse
       // cekirdek MSISDN_INVALID der (sessizce yeniden sormaz).
-      return provisionModem({ ...hOpts, telefon: bayrak("--telefon") });
+      return ilerlemeliCalistir((kanal) => provisionModem({
+        ...hOpts, ...kanal, telefon: bayrak("--telefon"),
+      }));
     }
     default: return null;
   }
