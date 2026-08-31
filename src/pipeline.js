@@ -218,9 +218,18 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
 // = ~30 sn pencere. Bos yuvali modem bu sureyi bosa harcar ve sonra dogru
 // teshisi alir — yanlis "SIM yok" demekten cok daha ucuz.
 const SIM_SETTLE_MS = 15000;
-// Kilit kalktiktan sonra kimligi kac kez okumayi deneriz. 3 x 15 sn = 30 sn
-// pencere; olculen ayaga kalkma suresi bunun altinda.
-const SIM_UNLOCK_READS = 3;
+// Kilit kalktiktan sonra SIM'in ayaga kalkmasini bekleme.
+//
+// SIK YOKLA, ERKEN CIK: 8 x 3 sn = 24 sn ust sinir, ama sim.ready gorunur
+// gorunmez kirilir. Ilk surumde 3 x 15 sn vardi ve SIM ikinci turda hazir
+// olsa bile ARADAKI 15 SANIYE tam olarak bekleniyordu — olculdu (canli):
+// kilitli SIM kosusu 64.3 sn, kilitsiz medyan 47 sn. Fark neredeyse tamamen
+// bu sabit beklemeydi.
+//
+// Okuma zaten ~2-3 sn suruyor, yani gercek aralik ~5-6 sn: bir tur kaybetsek
+// bile ceza kucuk. Sabit uzun bekleme ise HER SEFERINDE odeniyordu.
+const SIM_UNLOCK_READS = 8;
+const SIM_UNLOCK_GAP_MS = 3000;
 
 async function finishRecord({ report, location, readyIdentity, credentials, phone,
   profile, internet, opts }) {
@@ -509,7 +518,7 @@ export async function provisionModem(opts) {
                 identityBefore = await readIdentity({ ...location, credentials });
               } catch { /* kismi sonuc gecerli */ }
               if (identityBefore?.sim?.ready) break;
-              if (round < SIM_UNLOCK_READS) await wait(SIM_SETTLE_MS);
+              if (round < SIM_UNLOCK_READS) await wait(SIM_UNLOCK_GAP_MS);
             }
           }
         }
