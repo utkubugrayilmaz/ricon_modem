@@ -473,21 +473,35 @@ export async function provisionModem(opts) {
     // hicbir yere (kayit, olay, defter) yazilmiyor.
     if (location && !phoneNormalized && identityBefore?.sim?.lock === "pin"
         && typeof opts.askPin === "function") {
-      const lock = identityBefore.sim;
-      const gate = isSimLockEligible(lock, { manualConsent: true });
-      emitEvent(opts, { kind: "pin_lock", lock: lock.lock,
-        pinRemaining: lock.pinRemaining, eligible: gate.eligible ?? true,
-        reason: gate.reason ?? null });
-      if (gate.eligible === false) {
-        // Uygun degilse SORMA: operatore yanlislikla basilacak bir kapi
-        // birakmiyoruz (arayuzde de dugme hic gorunmuyordu).
-        report.problems.push(...(gate.problems ?? []));
-      } else {
+      // YANLIS PIN GIRILDIYSE TEKRAR SOR — numaraya GECME.
+      //
+      // Olculdu (2026-08-31, canli): operator PIN'i bir hane yanlis girdi
+      // (7215 / 7216). Bir hak yandi ve akis DOGRUDAN "telefon numarasi?"
+      // sorusuna gecti. Operator ne oldugunu goremedi, kalan hakkini
+      // ogrenemedi ve duzeltme sansi bulamadi — oysa 2 hakki daha vardi.
+      //
+      // Tekrar sormak KURALI ESNETMEZ: her turda kapi (isSimLockEligible)
+      // TAZE kalan hakla yeniden sorulur ve SON HAK asla harcanmaz. "Bir hak
+      // yakildiysa arac kendi kendine tekrar denemez" kurali otomatige
+      // karsiydi; burada her denemeyi INSAN tetikliyor.
+      let lock = identityBefore.sim;
+      for (;;) {
+        const gate = isSimLockEligible(lock, { manualConsent: true });
+        emitEvent(opts, { kind: "pin_lock", lock: lock.lock,
+          pinRemaining: lock.pinRemaining, eligible: gate.eligible ?? true,
+          reason: gate.reason ?? null });
+        if (gate.eligible === false) {
+          // Uygun degilse SORMA: operatore yanlislikla basilacak bir kapi
+          // birakmiyoruz (arayuzde de dugme hic gorunmuyordu).
+          report.problems.push(...(gate.problems ?? []));
+          break;
+        }
         notify(opts, `SIM is PIN locked — ${lock.pinRemaining ?? "?"} attempts left`);
         const pinEntry = await opts.askPin({
           attempt, pinRemaining: lock.pinRemaining, pinTotal: lock.pinTotal,
         });
-        if (pinEntry) {
+        if (!pinEntry) break;               // bos birakti: vazgecti
+        {
           notify(opts, "removing the PIN lock (SINGLE attempt)");
           const u = await disableSimPin(
             { ...location, credentials, progress: opts.progress, event: opts.event },
@@ -497,6 +511,14 @@ export async function provisionModem(opts) {
             unlocked: u.unlocked, lockRemoved: u.lockRemoved,
             pinRemaining: u.pinRemaining });
           report.problems.push(...u.problems);
+          if (!u.unlocked) {
+            // KABUL EDILMEDI. Kalan hakki TAZE oku (u.pinRemaining cihazdan
+            // geliyor) ve dongunun basina don: kapi yeniden sorulur, son hak
+            // kalmissa orada durur ve karar insana kalir.
+            notify(opts, `PIN rejected — ${u.pinRemaining ?? "?"} attempts left`);
+            lock = { ...lock, pinRemaining: u.pinRemaining ?? lock.pinRemaining };
+            continue;
+          }
           if (u.unlocked) {
             // Kilit kalkti: kimligi YENIDEN oku. Eski `identityBefore` hala
             // "kilitli" diyor; onunla devam etmek numarayi bir daha
@@ -521,6 +543,7 @@ export async function provisionModem(opts) {
               if (round < SIM_UNLOCK_READS) await wait(SIM_UNLOCK_GAP_MS);
             }
           }
+          break;                            // kilit kalkti: dongu bitti
         }
       }
     }
