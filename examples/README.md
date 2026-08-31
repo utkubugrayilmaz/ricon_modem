@@ -1,44 +1,42 @@
-# examples/ — ÖRNEKLER (ürün değil)
+# examples/ — ÖRNEK (ürün değil)
 
-Buradaki hiçbir şey ürün değil. **Ürün `src/` altındaki çekirdek** ve onun
-HTTP API'si. Bu klasör, çekirdeğin nasıl tüketileceğini gösteren örnekler ve
-bizim kendi testimiz için yazdığımız arayüzden oluşur.
+Ürün `src/` altındaki çekirdek. Buradaki dosya, çekirdeğin **npm paketi gibi**
+nasıl tüketileceğini gösteriyor.
 
-Çekirdeğin üç tüketim biçimi var; hepsi **aynı** fonksiyonları çağırır:
+```bash
+node examples/paket-kullanimi.js                      # cihazsız da çalışır
+node examples/paket-kullanimi.js 5.5.5.1 5.5.5.100 riconadmin PAROLA
+```
 
-| Biçim | Nasıl | Örnek |
-|---|---|---|
-| **Terminal** | `node ricon.js hazirla --telefon 05...` | `../ricon.js` (ince CLI) |
-| **npm paketi** | `import { provisionModem } from "ricon-modem"` | `paket-kullanimi.js` |
-| **HTTP endpoint** | `POST/GET /api/*` | `endpoint-kullanimi.md` |
+Cihaz yoksa erişilemez sonuç döner, **throw etmez** — çekirdek sözleşmesi bu.
+
+## Çekirdeğin tüketim biçimleri
+
+| Biçim | Nasıl |
+|---|---|
+| **Terminal** | `node bin/ricon.js hazirla --telefon 05...` |
+| **npm paketi** | `import { provisionModem } from "ricon-modem"` |
+| **Herhangi bir fonksiyon** | `node bin/ricon.js calistir readSimLock` |
+
+Üçü de **aynı** fonksiyonları çağırır.
 
 ## Neden bu ayrım önemli
 
-Çekirdek kuralı: `src/` içindeki fonksiyonlar **`opts` alır**,
-`process.env`/`argv` **okumaz**, stdout'a **yazmaz**, **throw etmez**
-(sonuç + `problems[]`). Bu yüzden aynı kod hem terminalden hem bir HTTP
-isteğinden hem başka bir Node projesinden çağrılabiliyor.
-
-İş kuralları da çekirdekte durur, tüketicide değil:
-
-- telefon numarası zorunluluğu
-- SIM yoksa reddetme, PIN/PUK kilidi teşhisi, son PIN hakkını koruma
-- idempotency, LAN IP'nin en sona yazılması, yazma sırası
-- defter kaydının **üretilmesi** (nereye yazılacağı tüketicinin kararı)
+Çekirdek kuralı: `src/` içindeki fonksiyonlar `opts` alır, `process.env`/`argv`
+okumaz, stdout'a yazmaz, throw etmez (sonuç + `problems[]`). İş kuralları da
+çekirdekte durur, tüketicide değil — telefon zorunluluğu, SIM yoksa reddetme,
+PIN/PUK teşhisi ve son hakkı koruma, idempotency, LAN IP'nin en sona yazılması,
+defter satırının üretilmesi.
 
 Yani yeni bir arayüz yazan kişi bu kuralları yeniden yazmak zorunda değil;
 yanlışlıkla atlaması da mümkün değil.
 
-## test-ui/
+## HTTP endpoint isteyen
 
-Bizim kendi testimiz için yazılmış tarayıcı arayüzü. Düz HTML/CSS/JS, build
-yok, sıfır bağımlılık. Sahaya çıkacak ürün bu değil — çekirdeği çalıştırıp
-gözle doğrulamak, süreleri ölçmek ve akışı denemek için var.
+`ui` dalında çalışan bir örnek var: `src/server.js` (7 uç + SSE) ve onu
+tüketen tarayıcı arayüzü.
 
 ```bash
-node --env-file=.env ricon.js sunucu              # arayüzle (varsayılan)
-node --env-file=.env ricon.js sunucu --arayuz yok # SALT API, arayüz yok
-node --env-file=.env ricon.js sunucu --arayuz /baska/dizin
+git show ui:src/server.js
+git switch ui && node bin/ricon.js sunucu
 ```
-
-Sunucu `staticDir` verilmezse **salt API**'dir: arayüz gömülü değil.

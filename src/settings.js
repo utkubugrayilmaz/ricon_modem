@@ -325,4 +325,10 @@ export const FACTORY_PROFILE = {
 };
 
 // Ad -> profil. CLI `--profil <ad>` ile secilir.
-export const PROFILES = { field: FIELD_PROFILE, factory: FACTORY_PROFILE };
+// DIKKAT: anahtarlar TIRNAKLI ve TURKCE. Bunlar CLI SOZLESMESI
+// (`--profil saha`) ve defterdeki gecmis satirlarda da "saha" yaziyor.
+// Ciplak birakildiginda bir yeniden adlandirma turunda koda benzeyip
+// `field`/`factory` oldular; PROFILES["saha"] undefined donunce `hazirla`
+// "Bilinmeyen profil: saha" deyip hic calismadi. Ayni kusur 2026-08-28'de de
+// yasanmisti (bkz. af9ccf8) — o zaman sunucuyu tamamen olduruyordu.
+export const PROFILES = { "saha": FIELD_PROFILE, "fabrika": FACTORY_PROFILE };

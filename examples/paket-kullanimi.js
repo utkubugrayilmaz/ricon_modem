@@ -1,7 +1,7 @@
 // ÖRNEK: çekirdeği npm paketi gibi import edip kullanmak.
 //
 // Gösterdiği şey: hiçbir CLI, hiçbir HTTP, hiçbir .env yok. Çekirdek
-// functions `opts` alır ve sonuç nesnesi döner. Kendi projenize
+// fonksiyonlar `opts` alır ve sonuç nesnesi döner. Kendi projenize
 // gömerken tam olarak böyle çağırırsınız.
 //
 // Çalıştırmak için (cihaz gerekir):
