@@ -7,7 +7,7 @@
 //
 // Izin verilen yon:  flow → device → transport/parse → domain
 // domain hicbir seye bagli degildir. transport cihaza gider ama KARAR VERMEZ.
-// Giris noktalari (index.js, server.js) her katmani cagirabilir — isleri bu.
+// Giris noktasi (index.js) her katmani cagirabilir — isi bu.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -67,5 +67,7 @@ test("katman klasorleri bos degil ve src kokunde yalnizca giris dosyalari var", 
     .map((e) => e.name)
     .sort();
   // Kokte uygulama kodu BIRIKMESIN: yeni dosya bir katmana ait olmali.
-  assert.deepEqual(kokte, ["index.js", "server.js"]);
+  // TEK giris dosyasi: index.js (public API). server.js kaldirildi — HTTP/SSE
+  // katmani tarayici arayuzunu besliyordu, ikisi birlikte gitti.
+  assert.deepEqual(kokte, ["index.js"]);
 });

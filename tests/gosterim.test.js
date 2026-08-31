@@ -1,5 +1,10 @@
-// Gosterim katmani testleri — ayar sozlugu + UI satirlari.
-// Cihaz GEREKTIRMEZ, sunucu DINLEMEZ (createServer cagrilmiyor).
+// Gosterim katmani testleri — ayar sozlugu + plan gorunumu.
+// Cihaz GEREKTIRMEZ.
+//
+// Sozluk (settingLabel) neden hala urunun parcasi: terminal ozeti ham nvram
+// anahtari basmaz, "Connection Type: M1-PPP" basar ve parola alanlarini
+// maskeler. Eskiden tuketicisi tarayici arayuzuydu; arayuz kalkti, tuketici
+// report.js'in kendi ozeti oldu.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -7,7 +12,6 @@ import { settingLabel } from "../src/report/report.js";
 import { SETTING_LABELS } from "../src/domain/constants.js";
 import { FIELD_PROFILE, FACTORY_PROFILE } from "../src/domain/profile.js";
 import { planProvisioning } from "../src/flow/provisioning.js";
-import { planRows } from "../src/server.js";
 
 test("settingLabel: ham deger okunabilir etikete cevrilir", () => {
   const r = settingLabel("w1_wan_proto", "m13g");
@@ -59,27 +63,14 @@ test("planProvisioning: onceki/hedef DEGISMEYENLERI de tasir (sol panel tam list
   assert.deepEqual(Object.keys(plan.degisecek), ["b", "yok"]);
 });
 
-test("planRows: satirlar ARAYUZ sirasinda gelir (profil sirasi degil)", () => {
-  // Profil sirasi WLAN'i basa koyar; ekran arayuz sirasini ister.
-  const plan = planProvisioning({}, FIELD_PROFILE);
-  const satirlar = planRows(plan);
-  const sayfalar = [...new Set(satirlar.map((s) => s.sayfa))];
-  // Teknisyenin arayuzde izledigi sira: Modem/WAN -> DHCP -> LAN.
-  assert.deepEqual(sayfalar, [
-    "Modem/WAN → Main Link", "Modem/WAN → Others",
-    "Modem/WAN → Backup Link", "Wireless", "DHCP Server", "LAN",
-  ]);
-});
-
-test("planRows: her satir ekrana hazir (ad + once + sonra + degisecek)", () => {
-  const profil = { ad: "t", nvram: { w1_kponm: "1" } };
-  const [satir] = planRows(planProvisioning({ w1_kponm: "7" }, profil));
-  assert.deepEqual(satir, {
-    anahtar: "w1_kponm",
-    ad: "Keep Alive",
-    sayfa: "Modem/WAN → Others",
-    once: "ICMP+",
-    sonra: "None",
-    degisecek: true,
-  });
+test("settingLabel: profildeki her anahtar cihazin ARAYUZ sayfasini soyler", () => {
+  // Teknisyen ayari modemin web arayuzunde hangi sayfada gorurse, sozluk de
+  // onu yazar. Bu bilgi terminal ozetinde "hangi ekrandaki ayar degisti"
+  // sorusunu cevapliyor.
+  const sayfalar = [...new Set(
+    Object.keys(FIELD_PROFILE.nvram).map((k) => settingLabel(k, null).sayfa),
+  )];
+  for (const s of sayfalar) assert.ok(s, "profil anahtarinin sayfasi bos olamaz");
+  assert.ok(sayfalar.includes("Modem/WAN → Main Link"));
+  assert.ok(sayfalar.includes("LAN"));
 });

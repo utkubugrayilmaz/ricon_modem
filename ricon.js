@@ -13,7 +13,6 @@
 //   node ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
 //                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
 //                                --reboot-yok
-//   node ricon.js sunucu         Tarayici arayuzu (UI) — http://127.0.0.1:8080
 //   node ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
 //                                Numara SIM'den okunur; --telefon 05xx EZER
 //                                --dongu (cok modem: tak -> hazir -> cikar)
@@ -298,8 +297,7 @@ async function komutuCalistir() {
         return { zaman: new Date().toISOString(), komut: "olcum", ok: false,
           problems: [{ kod: "OLCUM_DOSYA_YOK", severity: "error",
             message: `Metric file not found or unreadable: ${dosya}`,
-            check: "Run the UI flow (node ricon.js sunucu) a few times first;"
-              + " each finished run appends one line." }] };
+            check: "Record a manual duration first: ricon.js olcum-elle --dk 15" }] };
       }
       const elleDk = Number(bayrak("--elle-dk"));
       return summarizeMetrics(satirlar, {
@@ -308,46 +306,6 @@ async function komutuCalistir() {
         elleN: Number(bayrak("--elle-n")) || undefined,
         modemSayisi: Number(bayrak("--modem-sayisi")) || undefined,
       });
-    }
-    case "sunucu": {
-      // UI/HTTP katmani: cekirdegi TUKETIR. Kural eklemez — telefon
-      // zorunlulugu ve defter kaydi zaten cekirdekte.
-      const profilAd = bayrak("--profil") || "saha";
-      const profil = PROFILES[profilAd];
-      if (!profil) {
-        return { zaman: new Date().toISOString(), komut: "sunucu", ok: false,
-          problems: [{ kod: "ARGS", severity: "error",
-            message: `Bilinmeyen profil: ${profilAd}`,
-            check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
-      }
-      const { createServer } = await import("./src/server.js");
-      const port = Number(bayrak("--port")) || 8080;
-      // Varsayilan YALNIZCA 127.0.0.1: bu servis cihaza YAZAR, agda
-      // yayinlanmasi acik bir karar olmali.
-      const adres = bayrak("--dinle") || "127.0.0.1";
-      const sunucu = createServer({
-        fabrikaHost: opts.host,
-        sahaHost: bayrak("--saha-host") || profil.nvram.lan_ipaddr || "5.5.5.1",
-        kimlik: opts.kimlik,
-        profil,
-        // Arayuzdeki "Fabrikaya dondur" dugmesi bu profili uygular. DIKKAT:
-        // gercek factory reset DEGIL — yalniz bizim dokundugumuz anahtarlari
-        // default'a alir (bkz. profile.js).
-        sifirlamaProfil: PROFILES.fabrika,
-        // Test arayuzu bir ORNEK: urun cekirdek + API. Bu yol verilmezse
-        // sunucu salt API olarak calisir.
-        staticDir: bayrak("--arayuz") === "yok" ? null
-          : (bayrak("--arayuz") || new URL("./examples/test-ui/", import.meta.url).pathname
-            .replace(/^\/([A-Za-z]:)/, "$1")),
-        kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
-        olcumKayit: kayitYazici(bayrak("--olcum") || OLCUM_DOSYA, "olcum"),
-        ilerle,
-      });
-      await new Promise((c) => sunucu.listen(port, adres, c));
-      process.stderr.write(`\nModem kurulum arayuzu: http://${adres}:${port}\n`
-        + `  profil: ${profil.ad} · fabrika: ${opts.host}\n`
-        + "  Ctrl+C ile kapat.\n\n");
-      return null;   // sunucu calisir; JSON ciktisi/cikis yok
     }
     case "hazirla": {
       const profilAd = bayrak("--profil") || "saha";
@@ -396,7 +354,7 @@ async function komutuCalistir() {
 
 const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
   "degerlendir", "numara", "sim-kilit", "sim-pin-kaldir", "sim-pin-kilitle",
-  "fark", "uygula", "hazirla", "sunucu", "olcum", "olcum-elle"]);
+  "fark", "uygula", "hazirla", "olcum", "olcum-elle"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {
@@ -426,8 +384,6 @@ async function main() {
       + "         [--dongu]             cok modem: tak -> hazir -> cikar -> sonraki\n"
       + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
       + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
-      + "  sunucu                       tarayici arayuzu (UI) — cekirdegi tuketir\n"
-      + "         [--port 8080] [--dinle 127.0.0.1] [--profil ad] [--kayit <dosya>]\n"
       + "  olcum-elle --dk 15.5         ELLE surecin kronometresini kaydet\n"
       + "         [--kim \"teknisyen A\"] [--not \"...\"]\n"
       + "  olcum                        kaydedilmis surelerden metrik ozeti (cihazsiz)\n"
@@ -442,10 +398,6 @@ async function main() {
     const yardimIstendi = !komut || komut === "-h" || komut === "--help";
     return yardimIstendi ? 0 : 1;
   }
-
-  // sunucu: surekli calisir — JSON basmaz, cikmaz. Dinleyen sunucu olay
-  // dongusunu acik tutar; asagidaki process.exit'e DUSMEMESI gerekir.
-  if (komut === "sunucu") { await komutuCalistir(); return null; }
 
   const kaynak = bayrak("--kaynak");
   const rapor = kaynak
