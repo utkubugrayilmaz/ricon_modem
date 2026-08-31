@@ -5,7 +5,7 @@
 // gömerken tam olarak böyle çağırırsınız.
 //
 // Çalıştırmak için (cihaz gerekir):
-//   node examples/paket-kullanimi.js 5.5.5.1 5.5.5.100 riconadmin PAROLA
+//   node examples/package-usage.js 5.5.5.1 5.5.5.100 riconadmin PAROLA
 //
 // Cihaz olmadan da çalışır: erişilemez sonuç döner, throw ETMEZ.
 
@@ -20,10 +20,10 @@ const credentials = user ? { user, password } : null;
 const opts = { host, sourceIp, credentials };
 
 // 1) Erişim teşhisi. Throw etmez; sorun varsa problems[] içinde çözümüyle gelir.
-const teshis = await checkDevice(opts);
-console.log("erisilebilir :", teshis.reachable);
-for (const p of teshis.problems) console.log(`  [${p.code}] ${p.message}`);
-if (!teshis.reachable || !credentials) {
+const diagnosis = await checkDevice(opts);
+console.log("reachable     :", diagnosis.reachable);
+for (const p of diagnosis.problems) console.log(`  [${p.code}] ${p.message}`);
+if (!diagnosis.reachable || !credentials) {
   console.log("\n(cihaz/kimlik yok — kalan adimlar atlandi)");
   process.exit(0);
 }
@@ -66,9 +66,9 @@ console.log("kilit durumu :", lock.status, `· kalan PIN hakki: ${lock.pinRemain
 
 // 5c) "Cihaz kurulmaya hazır mı, değilse NE eksik?" Tek çağrı, tek cevap.
 //     UI ve HTTP endpoint de tam olarak bunu çağırıyor — üçü aynı karara bakar.
-const durumRaporu = await assessDevice({ ...opts, factoryHost: host });
-console.log("eksik        :", durumRaporu.missing.length ? durumRaporu.missing.join(", ") : "yok");
-console.log("baslatilabilir:", durumRaporu.canStart);
+const stateReport = await assessDevice({ ...opts, factoryHost: host });
+console.log("eksik        :", stateReport.missing.length ? stateReport.missing.join(", ") : "yok");
+console.log("can start     :", stateReport.canStart);
 
 // 5d) provisioningGaps TAMAMEN SAF: cihaz olmadan da karar verir.
 console.log("saf karar    :", provisioningGaps({
@@ -78,7 +78,7 @@ console.log("saf karar    :", provisioningGaps({
 // 5e) "Kendi komutumu çalıştırmak istiyorum." Konsol katmanı da dışa açık;
 //     yazan komutlar writeAllowed olmadan reddedilir (salt-okunur varsayılan).
 const shell = await runConsole(opts, ["uname -a"]);
-console.log("uname        :", (shell.outs?.["uname -a"] ?? "").trim() || "okunamadi");
+console.log("uname        :", (shell.outs?.["uname -a"] ?? "").trim() || "unreadable");
 
 // GERÇEK yazma için: applyProvisioning({ ...opts, apply: true, ... })
 // SIM PIN kilidini KALICI kaldırmak için: disableSimPin(opts, "1234")

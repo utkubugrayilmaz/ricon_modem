@@ -1,11 +1,11 @@
 # Arayüz → nvram Haritası (Faz 2)
 
 Her satır **web arayüzünde ayar değiştir → nvram öncesi/sonrası diff** ile
-**kanıtlandı**. Yöntem: nvram kararlı (hiç değişmeden iki görüntü = 0 fark),
-o yüzden bir ayar değişince çıkan fark %100 o ayarın karşılığı.
+**kanıtlandı**. Yöntem: nvram kararlı (hiç değişmeden iki görüntü = 0 diff),
+o yüzden bir ayar değişince çıkan diff %100 o ayarın karşılığı.
 
-Kaynak araç: `node ricon.js konsol --nvram --json ...` (önce/sonra) +
-`node ricon.js fark once.json sonra.json`.
+Kaynak araç: `node ricon.js console --nvram --json ...` (önce/sonra) +
+`node ricon.js diff once.json sonra.json`.
 
 Durum işareti: 🟢 diff ile doğrulandı · ⏳ henüz haritalanmadı.
 

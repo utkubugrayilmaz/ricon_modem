@@ -63,7 +63,7 @@ uygular (zaten kapalıysa dokunmaz). Anahtar: `wl0_net_mode`+`wl_net_mode`
 | LAN class | `lan_cclass` = `5.5.5.` | 🟢 ÇÖZÜLDÜ — **cihaz kendi türetiyor**, profile konmadı |
 
 Tüm bu eşlemeler `src/settings.js` içindeki `FIELD_PROFILE`'a işlendi ve motor
-(`node ricon.js uygula`) bunları uyguluyor. `lan_cclass` bilerek DIŞARIDA:
+(`node ricon.js apply`) bunları uyguluyor. `lan_cclass` bilerek DIŞARIDA:
 LAN IP değişince cihaz onu reboot'ta kendisi güncelliyor (aşağıdaki uçtan uca
 testte gözlemle kesinleşti) — yazmak gereksiz risk.
 
@@ -73,7 +73,7 @@ Sıfır (fabrikaya döndürülmüş) cihazda tek komutla tam provizyon **başar�
 çalıştı ve doğrulandı**:
 
 ```
-node ricon.js uygula --profil saha --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.5.5.100
+node ricon.js apply --profile field --apply --new-host 5.5.5.1 --new-source-ip 5.5.5.100
 ```
 
 - Motor 12 anahtarı yazdı → reboot → cihaz **5.5.5.1**'de geldi → geri-oku
@@ -83,7 +83,7 @@ node ricon.js uygula --profil saha --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.
   (biz yazmadık). Başka hiçbir şeye dokunulmadı — **yan etki yok**.
 - **`lan_cclass` bulgusu:** LAN IP değişince cihaz `lan_cclass`'ı reboot'ta
   otomatik günceller. Profile EKLENMESİNE GEREK YOK (gözlemle kesinleşti).
-- **Idempotency:** 5.5.5.1'de tekrar `uygula` → "zaten istenen durumda",
+- **Idempotency:** 5.5.5.1'de tekrar `apply` → "zaten istenen durumda",
   0 değişiklik.
 - **Erişim/kimlik:** provizyon + reboot sonrası 5.5.5.1'de erişim ve
   `riconadmin` / `<parola .env>` çalışmaya devam ediyor.
@@ -98,46 +98,46 @@ Cihaz araçla fabrikaya döndürüldü (5.5.5.1→192.168.1.1, doğrulama TAMAM)
 **tek komut** ile sıfırdan tam otomatik provizyon:
 
 ```
-node ricon.js hazirla
+node ricon.js provision
 ```
 
 - Algıla (192.168.1.1) → 11 ayar + LAN IP yaz → reboot → 5.5.5.1'de doğrula →
   **durum: hazir (deneme 1)**. Elle müdahale yok.
-- Tekrar `hazirla` → **zaten_hazir** (idempotent).
+- Tekrar `provision` → **zaten_hazir** (idempotent).
 - Motor iki yönde de çalışıyor (saha ↔ fabrika), LAN IP + reboot + yeni-adres
   doğrulama dahil.
 
 Çoklu modem: aynı ağda **tek modem** olmalı (hepsi 192.168.1.1'de gelir →
-çakışma). `hazirla --dongu` sıralı akış için: tak → otomatik → çıkar → sıradaki.
+çakışma). `provision --loop` sıralı akış için: tak → otomatik → çıkar → sıradaki.
 
 ## İki yönlü tam test — 2026-08-27
 
 Aynı ünitede, tek oturumda, **iki yönde** uçtan uca çalıştırıldı:
 
-1. **Saha → fabrika** (`uygula --host 5.5.5.1 --profil fabrika --uygula
-   --yeni-host 192.168.1.1 --yeni-kaynak 192.168.1.50`)
+1. **Saha → fabrika** (`apply --host 5.5.5.1 --profile factory --apply
+   --new-host 192.168.1.1 --new-source-ip 192.168.1.50`)
    12 anahtar default'a alındı → reboot → `192.168.1.1`'de doğrulama
    **TAMAM (15 sn)**. Kullanıcı arayüzden default hali **gözle teyit etti**.
-2. **Fabrika → saha** (`hazirla --telefon 5350641858`)
+2. **Fabrika → saha** (`provision --phone 5350641858`)
    11 ayar + LAN IP → reboot → `5.5.5.1`'de doğrulama **TAMAM**, durum
    **hazir (deneme 1)**, elle müdahale yok.
 3. **Idempotency:** aynı komut tekrar → `zaten_hazir`, cihaza yazma yok.
 
 ### Bu testte ilk kez doğrulanan yenilikler
-- **Hazırlama defteri:** her çalıştırma `data/hazirlanan.jsonl`'e bir satır
+- **Hazırlama defteri:** her çalıştırma `data/provisioned.jsonl`'e bir satır
   yazdı; kimlik alanları cihazdan **canlı** geldi:
   `ICCID 8990011626160064930 · IMEI 867191084820421 ·
   MAC 00:0C:43:43:5F:4E · IMSI 286016661026495 · Turkcell`.
-- **Telefon zorunluluğu:** `hazirla` numarasız başlamıyor (çekirdek kuralı);
-  numara deftere işlendi.
-- **`dogrula()` üç durum ayrımı:** 1. ve 2. denemede nvram okunamadı (cihaz
+- **Telefon zorunluluğu:** `provision` numarasız başlamıyor (çekirdek kuralı);
+  msisdn deftere işlendi.
+- **`verify()` üç durum ayrımı:** 1. ve 2. denemede nvram okunamadı (cihaz
   boot ediyor → "gelmedi, bekle"), 3. denemede eksik sıfır → TAMAM. Eskiden
   ilk okunabilen nvram'da karar veriliyordu.
-- **`--host` / `--kaynak-ip`:** iki yönlü test `.env` dosyasına dokunmadan
+- **`--host` / `--source-ip`:** iki yönlü test `.env` dosyasına dokunmadan
   yapıldı.
 
 ### Hâlâ kanıtlanmayan tek şey
-Seri (tak → çıkar → sıradaki) akış: `hazirla --dongu` tek modemde çalışıyor,
+Seri (tak → çıkar → sıradaki) akış: `provision --loop` tek modemde çalışıyor,
 **birkaç modemin ard arda** hazırlanması sahada denenmedi. İzlenecekler:
 ARP önbelleği tazeliği, kablo çıkınca PC'deki ikincil IP'lerin geri gelmesi,
 "çıkarıldı" tespitinin gecikmesi.

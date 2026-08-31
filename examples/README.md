@@ -4,8 +4,8 @@
 nasıl tüketileceğini gösteriyor.
 
 ```bash
-node examples/paket-kullanimi.js                      # cihazsız da çalışır
-node examples/paket-kullanimi.js 5.5.5.1 5.5.5.100 riconadmin PAROLA
+node examples/package-usage.js                      # cihazsız da çalışır
+node examples/package-usage.js 5.5.5.1 5.5.5.100 riconadmin PAROLA
 ```
 
 Cihaz yoksa erişilemez sonuç döner, **throw etmez** — çekirdek sözleşmesi bu.
@@ -14,9 +14,9 @@ Cihaz yoksa erişilemez sonuç döner, **throw etmez** — çekirdek sözleşmes
 
 | Biçim | Nasıl |
 |---|---|
-| **Terminal** | `node bin/ricon.js hazirla --telefon 05...` |
+| **Terminal** | `node bin/ricon.js provision --phone 05...` |
 | **npm paketi** | `import { provisionModem } from "ricon-modem"` |
-| **Herhangi bir fonksiyon** | `node bin/ricon.js calistir readSimLock` |
+| **Herhangi bir fonksiyon** | `node bin/ricon.js call readSimLock` |
 
 Üçü de **aynı** fonksiyonları çağırır.
 
@@ -38,5 +38,5 @@ tüketen tarayıcı arayüzü.
 
 ```bash
 git show ui:src/server.js
-git switch ui && node bin/ricon.js sunucu
+git switch ui && node bin/ricon.js sunucu   # ui dali v0.2.0 oncesi TURKCE yuzeyi kullanir
 ```

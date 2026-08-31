@@ -28,7 +28,7 @@ Bu belgedeki her satır **canlı cihazda ölçüldü** (varsayım değil).
 **Sonuç:** veri çekme **HTTP:80** üzerinden; ama ayar/otomasyon için asıl
 güçlü kanal **telnet konsolu (5123)** — root shell, `nvram get/set/commit`.
 Alttaki OS OpenWrt/Linux (`Release: 21.05.4-ricon`, kernel 2.6.36 mips).
-Standart telnet 23 ve SSH kapalı; konsol 5123'te. Otomasyon (Faz 2/3) bu
+Standart telnet 23 ve SSH kapalı; console 5123'te. Otomasyon (Faz 2/3) bu
 telnet+nvram kanalı üzerine kurulacak (bkz. YETENEKLER.md).
 
 ## Web sunucu parmak izi
@@ -79,4 +79,4 @@ değişmiş — bu yüzden uç listesi sabit değil, gerekirse sayfa JS'inden
 
 Cihazda **yayınlanmıyor** (Python çalışmasında 38 alan + ayar + SMS + nvram
 tarandı, yok). Numara operatörün HLR'ında ICCID'ye bağlı. Gerekirse
-Turkcell'den ICCID→numara eşlemesi istenir.
+Turkcell'den ICCID→msisdn eşlemesi istenir.
