@@ -3,17 +3,17 @@
 // bu dosya sadece: argv ayristir + .env oku + index'i cagir + yazdir.
 // Ayni cekirdek HTTP endpoint / npm paketi olarak da tuketilebilir.
 //
-//   node ricon.js dogrula        Ortam teshisi
-//   node ricon.js oku            HER SEYI cek (sistem + SIM + ayar + nvram)
-//   node ricon.js konsol         Telnet root shell kesfi (--nvram = tam nvram)
-//   node ricon.js sim            SIM/hucresel ozet (--telefon 05xx = MSISDN girisi)
-//   node ricon.js fark A.json B.json   Iki nvram anlik goruntusunu karsilastir
-//   node ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
+//   node bin/ricon.js dogrula        Ortam teshisi
+//   node bin/ricon.js oku            HER SEYI cek (sistem + SIM + ayar + nvram)
+//   node bin/ricon.js konsol         Telnet root shell kesfi (--nvram = tam nvram)
+//   node bin/ricon.js sim            SIM/hucresel ozet (--telefon 05xx = MSISDN girisi)
+//   node bin/ricon.js fark A.json B.json   Iki nvram anlik goruntusunu karsilastir
+//   node bin/ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
 //                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
 //                                --reboot-yok
-//   node ricon.js calistir <fn>  Cekirdegin HERHANGI bir fonksiyonunu cagir
+//   node bin/ricon.js calistir <fn>  Cekirdegin HERHANGI bir fonksiyonunu cagir
 //                                adsiz cagrilirsa tum yuzeyi listeler
-//   node ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
+//   node bin/ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
 //                                Numara SIM'den okunur; --telefon 05xx EZER
 //                                --dongu (cok modem: tak -> hazir -> cikar)
 //                                --profil · --saha-host · --deneme N · --max N
@@ -496,7 +496,7 @@ const COMMANDS = new Set(["dogrula", "oku", "konsol", "sim",
 async function main() {
   if (!command || command === "-h" || command === "--help" || !COMMANDS.has(command)) {
     process.stderr.write(
-      "Kullanim: node --env-file=.env ricon.js <komut> [bayraklar]\n\n"
+      "Kullanim: node --env-file=.env bin/ricon.js <komut>   (ya da: npm start / npm run <komut>) [bayraklar]\n\n"
       + "  dogrula                      ortam/erisim teshisi\n"
       + "  oku                          HER SEYI cek (sistem+SIM+ayar+nvram)\n"
       + "  konsol [--nvram]             telnet root shell / tam nvram\n"
