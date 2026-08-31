@@ -5,21 +5,7 @@
   "type": "module",
   "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./okuma": "./src/okuma.js",
-    "./izleme": "./src/izleme.js",
-    "./degerlendirme": "./src/degerlendirme.js",
-    "./provizyon": "./src/provisioning.js",
-    "./at": "./src/at.js",
-    "./konsol": "./src/console.js",
-    "./sim": "./src/sim.js",
-    "./nvram": "./src/nvram.js",
-    "./pin-karar": "./src/pin-karar.js",
-    "./sorunlar": "./src/problems.js",
-    "./sorun-metni": "./src/sorun-metni.js",
-    "./profil": "./src/profile.js",
-    "./olcum": "./src/metrics.js",
-    "./cihaz": "./src/cihaz.js"
+    ".": "./src/index.js"
   },
   "bin": {
     "ricon": "./ricon.js"
