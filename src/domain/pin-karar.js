@@ -3,7 +3,7 @@
 // NEDEN AYRI MODUL: bir PIN denemesi harcamak geri alinamaz. Uc yol da ayni
 // riski tasiyor:
 //   1) nvram'a PIN yazma        (provisioning: simPinHedefi)
-//   2) AT ile kilit kaldirma/acma (at.js: simPinKaldir / simPinKilitle)
+//   2) AT ile kilit kaldirma (at.js: simPinKaldir)
 //   3) internet gelmeyince deneme (pipeline: pinDene)
 // Kural her birinde ayri yazildiginda birbirinden ayrildi: 2026-08-28'de
 // pinDene'de "hak yanmissa bir daha denemez" korumasi YOKTU, digerlerinde

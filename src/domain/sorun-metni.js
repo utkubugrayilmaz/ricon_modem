@@ -59,7 +59,6 @@ const SORUN_TR = {
   PIN_STORED_WRONG: { baslik: "Saklı PIN bu SIM'e uymuyor",
     neYap: "Saklı PIN temizlendi. Doğru PIN'i gir." },
   PIN_STALE_CLEARED: { baslik: "Eski PIN silindi", neYap: "Bilgi amaçlı." },
-  PIN_LOCK_NOT_ENABLED: { baslik: "PIN kilidi açılamadı", neYap: "Tekrar dene ya da telefondan aç." },
   PIN_LOCK_NOT_DISABLED: { baslik: "Kilit kalıcı kaldırılamadı",
     neYap: "SIM açık, kurulum devam edebilir." },
 };

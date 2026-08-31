@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 // Ricon S9922M44 — INCE CLI sarmalayici. Cekirdek is src/index.js'te;
 // bu dosya sadece: argv ayristir + .env oku + index'i cagir + yazdir.
-// Ayni cekirdek HTTP endpoint / npm paketi olarak da tuketilebilir.
+// Ayni cekirdek npm paketi olarak da tuketilebilir.
 //
 //   node ricon.js dogrula        Ortam teshisi
 //   node ricon.js kesif          Salt-okunur kesif (port + parmak izi + SNMP)
 //   node ricon.js oku            HER SEYI cek (sistem + SIM + ayar + nvram)
-//   node ricon.js izle           Fark tabanli ornekleme (--sure sn)
 //   node ricon.js konsol         Telnet root shell kesfi (--nvram = tam nvram)
 //   node ricon.js sim            SIM/hucresel ozet (--telefon 05xx = MSISDN girisi)
-//   node ricon.js fark A.json B.json   Iki nvram anlik goruntusunu karsilastir
 //   node ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
 //                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
 //                                --reboot-yok
@@ -31,11 +29,10 @@ import { createInterface } from "node:readline";
 import { DEFAULT_HOST } from "./src/domain/constants.js";
 import { findSourceIp } from "./src/transport/network.js";
 import {
-  checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
+  checkDevice, discoverDevice, readDevice, readConsole,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
-  normalizePhone, summarizeMetrics, assessDevice, degerlendirmeyiIzle,
-  readMsisdn, readSimLock, simPinKaldir,
-  simPinKilitle, atKomut, parseClck,
+  normalizePhone, assessDevice, degerlendirmeyiIzle,
+  readMsisdn, readSimLock, simPinKaldir, atKomut, parseClck,
 } from "./src/index.js";
 import { writeJson, summaryText } from "./src/report/report.js";
 import { isOk } from "./src/domain/problems.js";
@@ -71,10 +68,6 @@ function ortamOpts() {
 // dosyaya yazmaz; yazma karari burada. Dosya `data/` altinda ve .gitignore'da
 // — icinde telefon/ICCID/IMEI (kisisel/abonelik verisi) var, commit EDILMEZ.
 const KAYIT_DOSYA = "data/hazirlanan.jsonl";
-// Sure olcumleri ayri dosyada: defter "hangi modem sahaya cikti" sorusunun
-// kaydi, olcum dosyasi "surec ne kadar suruyor" sorusunun kaydi. Karistirmak
-// ikisini de bulaniklastirir.
-const OLCUM_DOSYA = "data/olcumler.jsonl";
 
 function kayitYazici(dosya, etiket = "kayit") {
   return (satir) => {
@@ -124,27 +117,16 @@ async function sonucOk(vaat) {
   return { ...r, ok: r.ok ?? isOk(r.problems ?? []) };
 }
 
-// nvram JSON dosyasindan nvram nesnesini alir ({nvram:{...}} ya da ham {...}).
-function farkNvramAl(dosya) {
-  const j = JSON.parse(readFileSync(dosya, "utf8"));
-  return j.nvram || j;
-}
-
 async function komutuCalistir() {
   const opts = ortamOpts();
   switch (komut) {
     case "dogrula": return checkDevice(opts);
     case "kesif": return discoverDevice(opts);
     case "oku": return readDevice(opts);
-    case "izle": return watchDevice({
-      ...opts,
-      sureSn: Number(bayrak("--sure")) || 60,
-      aralikSn: Number(bayrak("--aralik")) || 5,
-    });
     case "konsol": return readConsole({ ...opts, nvram: argv.includes("--nvram") });
     case "sim": return readSim({ ...opts, telefon: bayrak("--telefon") });
-    // Cihazin O ANKI durumu + ne eksik. Sunucudaki /api/degerlendir ile AYNI
-    // cekirdek cagrisi — endpoint bir tuketici, burasi digeri.
+    // Cihazin O ANKI durumu + ne eksik. Karar cekirdekte (assessDevice);
+    // burasi yalnizca cagirip basiyor.
     case "degerlendir": {
       const dOpts = {
         ...opts,
@@ -155,7 +137,6 @@ async function komutuCalistir() {
       };
       // --izle: cekirdek KENDI KENDINE tekrar bakar. Ne zaman tekrar
       // bakilacagina yenidenDenemeKarari karar veriyor — burada politika YOK.
-      // Ayni yetenegi arayuz de kullaniyor; kural: her yetenek her tuketiciden.
       if (!argv.includes("--izle")) return assessDevice(dOpts);
       return degerlendirmeyiIzle({
         ...dOpts,
@@ -199,43 +180,6 @@ async function komutuCalistir() {
         kuru: false, modem_ip: opts.host,
         ...(await simPinKaldir(opts, pin, { elleOnay: argv.includes("--zorla") })) };
     }
-    // SADECE TEST ICIN: PIN kilidini ACAR. Uretim akisinda yeri yok — kilit
-    // KALDIRMA yolunu gercek bir kilitli SIM'de sinamak icin var. Ayni
-    // sozlesme: bayraksiz KURU, gercek deneme --uygula ister.
-    case "sim-pin-kilitle": {
-      const pin = bayrak("--pin");
-      if (!argv.includes("--uygula")) {
-        const k = await sonucOk(readSimLock(opts));
-        // Kilit ZATEN acik mi? Sorgu (AT+CLCK="SC",2) hak HARCAMAZ. Bunu
-        // sormadan "ACILACAK" demek yaniltiyordu: kilit acikken de ayni
-        // cumle yaziliyordu (2026-08-28 canli goruldu).
-        const acikMi = k.at_port
-          ? parseClck((await atKomut({ ...opts, atPort: k.at_port }, 'AT+CLCK="SC",2')).cevap)
-          : null;
-        return { zaman: new Date().toISOString(), komut: "sim-pin-kilitle",
-          kuru: true, modem_ip: opts.host, ...k, kilit_acik: acikMi,
-          yapilacak: k.kilit === "pin"
-            ? "SIM zaten kilitli — yapilacak is yok"
-            : acikMi === true
-              ? "PIN kilidi ZATEN ACIK — yapilacak is yok (etkisi sonraki acilista)"
-              : k.hazir ? "PIN kilidi ACILACAK (TEK deneme). Etkisi SONRAKI ACILISTA:"
-                + " modemi kapat-ac, SIM PIN soracak. Onaylamak icin --uygula ekle"
-                : `kilit durumu: ${k.durum} — mudahale edilmez`,
-        };
-      }
-      return { zaman: new Date().toISOString(), komut: "sim-pin-kilitle",
-        kuru: false, modem_ip: opts.host,
-        ...(await simPinKilitle(opts, pin, { elleOnay: argv.includes("--zorla") })) };
-    }
-    case "fark": {
-      const [, once, sonra] = argv;
-      if (!once || !sonra) {
-        return { zaman: new Date().toISOString(), komut: "fark", ok: false,
-          problems: [{ kod: "ARGS", severity: "error",
-            message: "fark <once.json> <sonra.json> gerekli", check: "Iki nvram JSON dosyasi ver." }] };
-      }
-      return computeNvramDiff(farkNvramAl(once), farkNvramAl(sonra));
-    }
     case "uygula": {
       const profilAd = bayrak("--profil") || "saha";
       const profil = PROFILES[profilAd];
@@ -252,60 +196,6 @@ async function komutuCalistir() {
         yeniHost: bayrak("--yeni-host"),
         yeniKaynakIp: bayrak("--yeni-kaynak"),
       }, profil);
-    }
-    case "olcum-elle": {
-      // ELLE surecin kronometre sonucunu kaydeder — otomatik olcumlerle AYNI
-      // dosyaya, tur:"elle" ile. Karsilastirma tabani boylece kayitli bir
-      // olcum olur; komut satirinda tasinan bir sayi degil.
-      const dk = Number(bayrak("--dk"));
-      const snBayrak = Number(bayrak("--sn"));
-      const toplamSn = Number.isFinite(snBayrak) && snBayrak > 0
-        ? snBayrak
-        : (Number.isFinite(dk) && dk > 0 ? Math.round(dk * 60) : null);
-      if (!toplamSn) {
-        return { zaman: new Date().toISOString(), komut: "olcum-elle", ok: false,
-          problems: [{ kod: "ARGS", severity: "error",
-            message: "Manual duration is required.",
-            check: "Give it as --dk 15.5 (minutes) or --sn 930 (seconds)." }] };
-      }
-      const satir = {
-        zaman: new Date().toISOString(),
-        tur: "elle",
-        durum: "elle_kurulum",
-        ok: true,
-        toplam_sn: toplamSn,
-        kim: bayrak("--kim") || null,
-        not: bayrak("--not") || null,
-        // --beyan: bu sayi OLCULMEDI, soylendi. Rapor bunu BEYAN diye
-        // etiketler; olculmus bir medyan gibi sunulmaz.
-        beyan: argv.includes("--beyan"),
-      };
-      kayitYazici(bayrak("--kayit") || OLCUM_DOSYA, "olcum-elle")(satir);
-      return { ...satir, komut: "olcum-elle", problems: [] };
-    }
-    case "olcum": {
-      // Kaydedilmis calistirmalardan savunulabilir sayi uretir. Cihaza GITMEZ.
-      // --elle-dk: elle surecin suresi (KARSILASTIRMA TABANI). Bu bir olcum ya
-      // da beyandir; hangisi oldugunu --elle-kaynak ile ACIKCA soyle.
-      const dosya = bayrak("--kayit") || OLCUM_DOSYA;
-      let satirlar = [];
-      try {
-        satirlar = readFileSync(dosya, "utf8").split("\n")
-          .filter((s) => s.trim())
-          .map((s) => JSON.parse(s));
-      } catch {
-        return { zaman: new Date().toISOString(), komut: "olcum", ok: false,
-          problems: [{ kod: "OLCUM_DOSYA_YOK", severity: "error",
-            message: `Metric file not found or unreadable: ${dosya}`,
-            check: "Record a manual duration first: ricon.js olcum-elle --dk 15" }] };
-      }
-      const elleDk = Number(bayrak("--elle-dk"));
-      return summarizeMetrics(satirlar, {
-        elleSn: Number.isFinite(elleDk) && elleDk > 0 ? elleDk * 60 : undefined,
-        elleKaynak: bayrak("--elle-kaynak"),
-        elleN: Number(bayrak("--elle-n")) || undefined,
-        modemSayisi: Number(bayrak("--modem-sayisi")) || undefined,
-      });
     }
     case "hazirla": {
       const profilAd = bayrak("--profil") || "saha";
@@ -352,9 +242,9 @@ async function komutuCalistir() {
   }
 }
 
-const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
-  "degerlendir", "numara", "sim-kilit", "sim-pin-kaldir", "sim-pin-kilitle",
-  "fark", "uygula", "hazirla", "olcum", "olcum-elle"]);
+const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "konsol", "sim",
+  "degerlendir", "numara", "sim-kilit", "sim-pin-kaldir",
+  "uygula", "hazirla"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {
@@ -363,7 +253,6 @@ async function main() {
       + "  dogrula                      ortam/erisim teshisi\n"
       + "  kesif                        port + parmak izi + SNMP (salt okunur)\n"
       + "  oku                          HER SEYI cek (sistem+SIM+ayar+nvram)\n"
-      + "  izle --sure <sn>             fark tabanli canli alan tespiti\n"
       + "  konsol [--nvram]             telnet root shell / tam nvram\n"
       + "  sim [--telefon 05xxxxxxxxx]  SIM/hucresel ozet (+MSISDN girisi)\n"
       + "  degerlendir                  cihaz durumu + NE EKSIK (numara dahil, ~5 sn)\n"
@@ -373,9 +262,6 @@ async function main() {
       + "  sim-pin-kaldir --pin 1234    SIM PIN kilidini KALICI kaldir\n"
       + "         [--uygula]            bayraksiz KURU: yalniz durumu bildirir\n"
       + "         [--zorla]             hak yanmis SIM'de yine dene (PIN'den eminsen)\n"
-      + "  sim-pin-kilitle --pin 1234   SADECE TEST: PIN kilidini AC (kilitli SIM uret)\n"
-      + "         [--uygula]            bayraksiz KURU; etkisi sonraki acilista\n"
-      + "  fark <A.json> <B.json>       iki nvram anlik goruntusu diff\n"
       + "  uygula [--uygula]            provizyon (bayraksiz KURU/dry-run)\n"
       + "         [--profil saha|fabrika] [--yeni-host ip] [--yeni-kaynak ip]\n"
       + "         [--reboot-yok]\n"
@@ -383,12 +269,7 @@ async function main() {
       + "         [--telefon 05xx]      numara SIM'den okunur; bu bayrak EZER\n"
       + "         [--dongu]             cok modem: tak -> hazir -> cikar -> sonraki\n"
       + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
-      + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
-      + "  olcum-elle --dk 15.5         ELLE surecin kronometresini kaydet\n"
-      + "         [--kim \"teknisyen A\"] [--not \"...\"]\n"
-      + "  olcum                        kaydedilmis surelerden metrik ozeti (cihazsiz)\n"
-      + "         [--modem-sayisi 400] [--kayit data/olcumler.jsonl]\n"
-      + "         [--elle-dk 15] sadece kayitli elle olcum YOKSA (beyan tabani)\n\n"
+      + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n\n"
       + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n"
       + "       --host <ip> · --kaynak-ip <ip>  (.env'i ezer; modem o an neredeyse)\n",
     );

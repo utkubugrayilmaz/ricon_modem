@@ -58,13 +58,6 @@ const KATALOG = {
       + " not block every SIM. But be sure of the PIN: an unknown counter"
       + " could already be at 2.",
   }),
-  PIN_LOCK_NOT_ENABLED: () => ({
-    message: "The module accepted the PIN but the SC lock still reads as"
-      + " disabled, so the PIN prompt was not switched on.",
-    check: "This path exists only to build a locked SIM for testing. Re-run"
-      + " the command; if it keeps reading disabled, enable the PIN from a"
-      + " phone instead.",
-  }),
   CONSOLE_KIMLIK_YOK: (host) => ({
     message: `No console credentials were supplied for ${host}, so the telnet`
       + " login could not even be attempted.",

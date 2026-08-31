@@ -39,7 +39,7 @@ export {
 } from "./domain/pin-karar.js";
 // AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
 export {
-  readMsisdn, readSimLock, simPinKaldir, simPinKilitle,
+  readMsisdn, readSimLock, simPinKaldir,
   simKilitKaldirmaKarari, simKilidiUygunMu,
   atPortBul, atKomut, atYazanMi, AT_PORT,
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
@@ -59,9 +59,6 @@ export { PROBLEM_CODES } from "./domain/problems.js";
 export {
   checkDevice, readDevice, systemView, discoverDevice, readConsole,
 } from "./device/okuma.js";
-export { watchDevice, kesintileriBul } from "./flow/izleme.js";
 // nvram: ikili tam yedek cozumleyici + saf diff.
 export { parseNvram, diffNvram, computeNvramDiff } from "./parse/nvram.js";
-// Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.
-export { summarizeMetrics, dagilim } from "./report/metrics.js";
 export { SETTING_LABELS } from "./domain/constants.js";
