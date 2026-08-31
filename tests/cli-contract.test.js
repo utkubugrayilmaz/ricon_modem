@@ -45,7 +45,7 @@ test("CLI'in varsayilan profili PROFILES'ta GERCEKTEN var", () => {
 const COMMANDS = [
   "verify", "read", "console", "sim", "assess", "msisdn", "sim-lock",
   "sim-pin-disable", "sim-pin-enable", "diff", "apply", "provision",
-  "call", "metrics", "metrics-manual",
+  "call", "metrics", "metrics-manual", "sim-puk",
 ];
 
 test("komut adlari tam liste", () => {

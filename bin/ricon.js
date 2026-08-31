@@ -18,7 +18,7 @@ import {
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
   normalizePhone, summarizeMetrics, assessDevice, watchAssessment,
   readMsisdn, readSimLock, disableSimPin,
-  enableSimPin, atCommand, parseClck,
+  enableSimPin, unblockSimPuk, atCommand, parseClck,
 } from "../src/index.js";
 import * as core from "../src/index.js";
 // Cikti/cagirma tesisati: bunlar TUKETICI API'si degil, CLI'in kendi araclari
@@ -192,11 +192,11 @@ function askPhone(index) {
 // hem daha guvenli hem de `npm run` ile tek kelimelik komut yazmayi mumkun
 // kiliyor — bayrak tasimaya gerek kalmiyor.
 // PIN hicbir yere yazilmaz; yalnizca cekirdege gecer.
-function promptPin() {
+function promptPin(label = "  SIM PIN: ") {
   if (!process.stdin.isTTY) return Promise.resolve(undefined);
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   return new Promise((done) => {
-    rl.question("  SIM PIN: ", (raw) => { rl.close(); done(raw.trim() || undefined); });
+    rl.question(label, (raw) => { rl.close(); done(raw.trim() || undefined); });
   });
 }
 
@@ -446,6 +446,23 @@ async function runCommand() {
     // SADECE TEST ICIN: PIN kilidini ACAR. Uretim akisinda yeri yok — kilit
     // KALDIRMA yolunu gercek bir kilitli SIM'de sinamak icin var. Ayni
     // sozlesme: bayraksiz KURU, gercek deneme --uygula ister.
+    // PUK ile SIM'i ac + YENI PIN belirle. Uc yanlis PIN'den sonra tek cikis.
+    // Ayni sozlesme: bayraksiz KURU, gercek deneme --apply ister.
+    case "sim-puk": {
+      const puk = flags.puk ?? await promptPin("  SIM PUK (8 digits): ");
+      const newPin = flags.newPin ?? await promptPin("  NEW SIM PIN: ");
+      if (flags.apply !== true) {
+        const k = await withDerivedOk(readSimLock(opts));
+        return { timestamp: new Date().toISOString(), command: "sim-puk",
+          dryRun: true, modemIp: opts.host, ...k,
+          todo: k.lock === "puk"
+            ? "the SIM is PUK locked; --apply will send the PUK and set the new PIN"
+            : `the SIM is not PUK locked (${k.status}) — a PUK would be wasted` };
+      }
+      return { timestamp: new Date().toISOString(), command: "sim-puk",
+        dryRun: false, modemIp: opts.host,
+        ...(await unblockSimPuk(opts, puk, newPin, { manualConsent: flags.manualConsent === true })) };
+    }
     case "sim-pin-enable": {
       const pin = flags.pin ?? await promptPin();
       if (flags.apply !== true) {
@@ -629,7 +646,8 @@ async function runCommand() {
 
 const COMMANDS = new Set(["verify", "read", "console", "sim",
   "assess", "msisdn", "sim-lock", "sim-pin-disable", "sim-pin-enable",
-  "diff", "apply", "provision", "call", "metrics", "metrics-manual"]);
+  "diff", "apply", "provision", "call", "metrics", "metrics-manual",
+  "sim-puk"]);
 
 // v0.2.0'da yeniden adlandirilan komutlar. Takma ad DEGIL: eski adi yazana
 // dogrusunu soyleyip 1 ile cikiyoruz. Sessizce calistirmak, tezgahtaki
@@ -656,6 +674,8 @@ const HELP = "Usage: node --env-file=.env bin/ricon.js <command>   (or: npm star
   + "         [--force]             try even on a SIM with a burnt attempt (if sure)\n"
   + "  sim-pin-enable --pin 1234    TEST ONLY: turn the PIN lock ON (make a locked SIM)\n"
   + "         [--apply]             without it DRY; takes effect on next power-up\n"
+  + "  sim-puk [--apply]            unblock a PUK-locked SIM and set a NEW PIN\n"
+  + "         (asks for PUK and the new PIN; without --apply it is DRY)\n"
   + "  diff <A.json> <B.json>       diff two nvram snapshots\n"
   + "  apply [--apply]              provisioning (DRY/dry-run without the flag)\n"
   + "         [--profile field|factory] [--new-host ip] [--new-source-ip ip]\n"

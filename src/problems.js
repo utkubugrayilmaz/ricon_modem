@@ -228,6 +228,28 @@ const CATALOG = {
   }),
 
   // --- Yazma (Faz 3) ---
+  PUK_INVALID: () => ({
+    message: "The supplied PUK is not 8 digits, or the new PIN is not 4-8 digits,"
+      + " so nothing was sent to the device.",
+    check: "A malformed PUK would waste one of the SIM's ten PUK attempts."
+      + " Ten wrong attempts destroy the SIM permanently. Re-enter both values.",
+  }),
+  PUK_NOT_REQUIRED: (status) => ({
+    message: `The SIM is not PUK locked (status: ${status}), so the PUK was not sent.`,
+    check: "A PUK is only accepted while the SIM reports PUK lock. If you meant to"
+      + " reset the PIN attempt counter, verify the correct PIN once instead.",
+  }),
+  PUK_REJECTED: (remaining) => ({
+    message: `The SIM rejected the PUK (attempts left before this try: ${remaining}).`
+      + " It was NOT retried.",
+    check: "One PUK attempt is now spent. Read the PUK from the carrier paperwork"
+      + " or the SIM holder. Ten wrong attempts destroy the SIM permanently.",
+  }),
+  PUK_LAST_ATTEMPT: (remaining) => ({
+    message: `Only ${remaining} PUK attempt(s) remain, so no automatic attempt was made.`,
+    check: "A wrong PUK here would destroy the SIM permanently. This is left to a"
+      + " human on purpose: verify the PUK against the carrier record first.",
+  }),
   WRITE_BLOCKED_READONLY: (path) => ({
     message: `A write to ${path} was blocked: this command is read-only.`,
     check: "Writing is only allowed in the 'apply' command with --apply."
@@ -302,6 +324,12 @@ const OPERATOR_TEXT = {
     whatToDo: "No PIN was sent. Retry; if it persists, power cycle the modem." },
   PROFILE_MISSING: { title: "Profile is not defined", whatToDo: "Tell IT." },
   NVRAM_BAD_HEADER: { title: "Backup file not recognised", whatToDo: "Tell IT." },
+  PUK_INVALID: { title: "PUK format is wrong", whatToDo: "PUK is 8 digits, new PIN 4-8 digits." },
+  PUK_NOT_REQUIRED: { title: "SIM is not PUK locked", whatToDo: "No PUK needed; nothing was sent." },
+  PUK_REJECTED: { title: "PUK was rejected",
+    whatToDo: "One attempt is gone. Verify the PUK from the carrier record." },
+  PUK_LAST_ATTEMPT: { title: "Last PUK attempt — not tried",
+    whatToDo: "A wrong PUK destroys the SIM. Verify it against the carrier record." },
   WRITE_BLOCKED_READONLY: { title: "No write permission", whatToDo: "Nothing changed on the modem." },
   // --- SIM ---
   SIM_MISSING: { title: "No SIM inserted", whatToDo: "Power off the modem, insert the SIM, power on." },

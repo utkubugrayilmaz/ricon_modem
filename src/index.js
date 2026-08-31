@@ -39,7 +39,7 @@ export {
 } from "./at.js";
 // AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
 export {
-  readMsisdn, readSimLock, disableSimPin, enableSimPin,
+  readMsisdn, readSimLock, disableSimPin, enableSimPin, unblockSimPuk,
   simUnlockDecision, isSimLockEligible,
   findAtPort, atCommand, isAtWrite, AT_PORT,
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,

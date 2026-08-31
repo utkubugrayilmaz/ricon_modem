@@ -559,3 +559,65 @@ export function canSpendPinAttempt(lock = {}, pin, { manualConsent = false } = {
   if (!/^\d{4,8}$/.test(String(pin))) return refuse("PIN_INVALID");
   return attemptState(lock, { manualConsent });
 }
+
+// PUK ile SIM'i ac ve YENI PIN belirle. AT+CPIN="PUK","YENIPIN".
+//
+// NEDEN VAR: uc yanlis PIN'den sonra SIM PUK kilitlenir ve tek cikis yol PUK.
+// Bunu telefona takarak yapmak, aracin varlik sebebine aykiri — teknisyen
+// tezgahta kalsin diye yazildi.
+//
+// PUK MANTIGI PIN'DEN FARKLI: PIN 3 hak, PUK 10 hak — ama PUK'un sonu SIM'in
+// KALICI OLARAK OLMESI. O yuzden kurallar daha da siki:
+//   1) bicim: PUK 8 hane, yeni PIN 4-8 hane. Bozuksa cihaza HIC gitmez.
+//   2) SIM gercekten PUK kilitli mi? Degilse gonderme — PUK yalnizca o
+//      durumda kabul edilir, baska her durumda bosa harcanmis bir denemedir.
+//   3) SON HAK ASLA otomatik harcanmaz (PIN'deki kuralin aynisi). Orada
+//      yanlis PUK SIM'i geri donusu olmadan yok eder; karar insanindir.
+//      manualConsent bu kurali da GECEMEZ.
+// PUK ve yeni PIN hicbir yere (kayit, olay, defter, log) yazilmaz.
+export async function unblockSimPuk(opts, puk, newPin, { manualConsent = false } = {}) {
+  const report = { ok: false, unblocked: false, status: null,
+    pukRemaining: null, pinRemaining: null, problems: [] };
+  if (!/^\d{8}$/.test(String(puk ?? "")) || !/^\d{4,8}$/.test(String(newPin ?? ""))) {
+    report.problems.push(problem("PUK_INVALID"));
+    return report;
+  }
+  const lock = await readSimLock(opts);
+  report.status = lock.status;
+  report.pukRemaining = lock.pukRemaining;
+  report.pinRemaining = lock.pinRemaining;
+
+  if (lock.lock !== "puk") {
+    report.problems.push(problem("PUK_NOT_REQUIRED", lock.status ?? "unknown"));
+    return report;
+  }
+  // SON HAK: manualConsent DAHIL hicbir sey gecemez.
+  if (lock.pukRemaining != null && lock.pukRemaining <= 1) {
+    report.problems.push(problem("PUK_LAST_ATTEMPT", lock.pukRemaining));
+    return report;
+  }
+  if (lock.pukRemaining == null && !manualConsent) {
+    // Kalan hak okunamadi: bilmeden PUK harcamayiz.
+    report.problems.push(problem("PIN_REMAINING_UNKNOWN"));
+    return report;
+  }
+
+  const atOptions = { ...opts, atPort: lock.atPort };
+  const sent = await atCommand(atOptions, `AT+CPIN="${puk}","${newPin}"`,
+    { writeAllowed: true, readSec: 8 });
+  if (!isAtOk(sent.answer)) {
+    report.problems.push(problem("PUK_REJECTED", lock.pukRemaining ?? "?"));
+    const after = await readSimLock(opts);
+    report.pukRemaining = after.pukRemaining;
+    report.pinRemaining = after.pinRemaining;
+    report.status = after.status;
+    return report;
+  }
+  const after = await readSimLock(opts);
+  report.status = after.status;
+  report.pukRemaining = after.pukRemaining;
+  report.pinRemaining = after.pinRemaining;
+  report.unblocked = after.lock !== "puk";
+  report.ok = report.unblocked;
+  return report;
+}
