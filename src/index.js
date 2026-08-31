@@ -54,12 +54,11 @@ export { settingLabel } from "./report/report.js";
 // Sorun metinleri — kod -> operatore gosterilecek TURKCE. TEK sozluk.
 export { sorunTr, problemleriTurkcelestir, SORUN_TR } from "./domain/sorun-metni.js";
 export { PROBLEM_CODES } from "./domain/problems.js";
-// Cihaz OKUMA islemleri (dogrula/oku/kesif/konsol) ve IZLEME. Govdeleri ayri
-// modullerde: bu dosya KAPI, uygulama degil.
+// Cihaz OKUMA islemleri (dogrula/oku/konsol). Govdeleri ayri modullerde:
+// bu dosya KAPI, uygulama degil.
 export {
-  checkDevice, readDevice, systemView, discoverDevice, readConsole,
+  checkDevice, readDevice, systemView, readConsole,
 } from "./device/okuma.js";
-export { watchDevice, kesintileriBul } from "./flow/izleme.js";
 // nvram: ikili tam yedek cozumleyici + saf diff.
 export { parseNvram, diffNvram, computeNvramDiff } from "./parse/nvram.js";
 // Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.

@@ -1,4 +1,4 @@
-// Cihaz OKUMA islemleri — dogrula / oku / kesif / konsol.
+// Cihaz OKUMA islemleri — dogrula / oku / konsol.
 //
 // Neden index.js'ten ayrildi: index.js hem PUBLIC API KAPISI hem bu
 // islemlerin govdesiydi (316 satirin 250'si govde). API'yi ogrenmek icin
@@ -7,13 +7,12 @@
 // KURAL (index.js ile ayni): process.env OKUMAZ, argv OKUMAZ, stdout'a
 // YAZMAZ. Girdi `opts`, cikti sonuc nesnesi (throw yok, problems[]).
 
-import { ENDPOINTS, TCP_PORTS } from "../domain/constants.js";
+import { ENDPOINTS } from "../domain/constants.js";
 import { Client, isHostBusy, lockHost, unlockHost } from "../transport/client.js";
 import { parsePairs, simView } from "../parse/ddwrt.js";
 import { parseNvram } from "../parse/nvram.js";
-import { localInterfaces, arpTable, ipv6Neighbors, guessVendor } from "../transport/network.js";
-import { scanPorts, isReachable } from "../transport/scanner.js";
-import { snmpIdentity } from "../transport/snmp.js";
+import { localInterfaces, guessVendor } from "../transport/network.js";
+import { isReachable } from "../transport/scanner.js";
 import { consoleRecon, consoleNvram } from "../transport/console.js";
 import { problem, isOk } from "../domain/problems.js";
 
@@ -101,38 +100,6 @@ export function systemView(ham) {
     bellek: al("mem_info"),
     lan_proto: al("lan_proto"),
   };
-}
-
-// --- kesif: salt-okunur port/parmak-izi/SNMP ---
-export async function discoverDevice(opts) {
-  const { host, kaynakIp, community = "public" } = opts;
-  const rapor = { zaman: now(), komut: "kesif", modem_ip: host, problems: [] };
-  bildir(opts, "port taramasi");
-  rapor.kapilar = (await scanPorts(host, kaynakIp, TCP_PORTS)).map((p) => {
-    const tanim = TCP_PORTS.find((k) => k.kapi === p.kapi);
-    return { ...p, ad: tanim?.ad };
-  });
-  rapor.arp = await arpTable(onekAl(host));
-  rapor.mac = rapor.arp[host] || null;
-  rapor.mac_uretici = guessVendor(rapor.mac);
-  // IPv6 komsu tablosu: cihazin IPv4'u bilinmiyorsa (yanlis alt ag) OUI'den
-  // yine de "orada bir Ricon var" denebilir — yanlis-IP teshisini kolaylastirir.
-  rapor.ipv6_komsular = (await ipv6Neighbors())
-    .map((k) => ({ ...k, uretici: guessVendor(k.mac) }))
-    .filter((k) => k.uretici);
-
-  const c = new Client({ host, kaynakIp, kimlik: null });
-  bildir(opts, "HTTP parmak izi");
-  const kok = await c.get("/");
-  rapor.http = {
-    kod: kok.kod,
-    baslik: (kok.govde.match(/<title[^>]*>(.*?)<\/title>/i)?.[1] || "").trim() || null,
-    ddwrt_izi: /prototype\.js|WEB-ROUTER|Industrial Cellular Router/i.test(kok.govde),
-  };
-  bildir(opts, "SNMP");
-  rapor.snmp = await snmpIdentity(host, community);
-  rapor.ok = isOk(rapor.problems);
-  return rapor;
 }
 
 // --- konsol: telnet root shell (salt okunur) ---

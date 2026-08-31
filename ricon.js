@@ -4,9 +4,7 @@
 // Ayni cekirdek HTTP endpoint / npm paketi olarak da tuketilebilir.
 //
 //   node ricon.js dogrula        Ortam teshisi
-//   node ricon.js kesif          Salt-okunur kesif (port + parmak izi + SNMP)
 //   node ricon.js oku            HER SEYI cek (sistem + SIM + ayar + nvram)
-//   node ricon.js izle           Fark tabanli ornekleme (--sure sn)
 //   node ricon.js konsol         Telnet root shell kesfi (--nvram = tam nvram)
 //   node ricon.js sim            SIM/hucresel ozet (--telefon 05xx = MSISDN girisi)
 //   node ricon.js fark A.json B.json   Iki nvram anlik goruntusunu karsilastir
@@ -22,8 +20,7 @@
 //                                --kayit <dosya> (varsayilan data/hazirlanan.jsonl)
 //
 // Ortak: --json <dosya> (ciktiyi yaz) · --kaynak <dosya> (kayittan goster)
-// Ortam: MODEM_HOST, MODEM_KULLANICI, MODEM_SIFRE, MODEM_KAYNAK_IP,
-//        MODEM_SNMP_COMMUNITY  (node --env-file=.env ricon.js ...)
+// Ortam: MODEM_HOST, MODEM_KULLANICI, MODEM_SIFRE, MODEM_KAYNAK_IP
 //
 // Sozlesme: stdout HER ZAMAN saf JSON; ilerleme/ozet stderr'a; cikis kodu ok'tan.
 
@@ -33,7 +30,7 @@ import { createInterface } from "node:readline";
 import { DEFAULT_HOST } from "./src/domain/constants.js";
 import { findSourceIp } from "./src/transport/network.js";
 import {
-  checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
+  checkDevice, readDevice, readConsole, computeNvramDiff,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
   normalizePhone, summarizeMetrics, assessDevice, degerlendirmeyiIzle,
   readMsisdn, readSimLock, simPinKaldir,
@@ -66,8 +63,7 @@ function ortamOpts() {
   const kullanici = (process.env.MODEM_KULLANICI || "").trim();
   const sifre = process.env.MODEM_SIFRE || "";
   const kimlik = kullanici ? { kullanici, sifre } : null;
-  const community = (process.env.MODEM_SNMP_COMMUNITY || "public").trim();
-  return { host, kaynakIp, kimlik, community, ilerle };
+  return { host, kaynakIp, kimlik, ilerle };
 }
 
 // --- Hazirlama kaydi (JSONL) ---
@@ -233,13 +229,7 @@ async function komutuCalistir() {
   const opts = ortamOpts();
   switch (komut) {
     case "dogrula": return checkDevice(opts);
-    case "kesif": return discoverDevice(opts);
     case "oku": return readDevice(opts);
-    case "izle": return watchDevice({
-      ...opts,
-      sureSn: Number(bayrak("--sure")) || 60,
-      aralikSn: Number(bayrak("--aralik")) || 5,
-    });
     case "konsol": return readConsole({ ...opts, nvram: argv.includes("--nvram") });
     case "sim": return readSim({ ...opts, telefon: bayrak("--telefon") });
     // Cihazin O ANKI durumu + ne eksik. Sunucudaki /api/degerlendir ile AYNI
@@ -419,7 +409,7 @@ async function komutuCalistir() {
       const { saf, json, kaynak, ...fonksiyonBayraklari } = bayraklar;
       return cagir(cekirdek, ad, {
         opts: { host: opts.host, kaynakIp: opts.kaynakIp, kimlik: opts.kimlik,
-          community: opts.community, ilerle },
+          ilerle },
         bayraklar: fonksiyonBayraklari,
         konumsallar,
         saf: saf === true,
@@ -476,7 +466,7 @@ async function komutuCalistir() {
   }
 }
 
-const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
+const KOMUTLAR = new Set(["dogrula", "oku", "konsol", "sim",
   "degerlendir", "numara", "sim-kilit", "sim-pin-kaldir", "sim-pin-kilitle",
   "fark", "uygula", "hazirla", "calistir", "olcum", "olcum-elle"]);
 
@@ -485,9 +475,7 @@ async function main() {
     process.stderr.write(
       "Kullanim: node --env-file=.env ricon.js <komut> [bayraklar]\n\n"
       + "  dogrula                      ortam/erisim teshisi\n"
-      + "  kesif                        port + parmak izi + SNMP (salt okunur)\n"
       + "  oku                          HER SEYI cek (sistem+SIM+ayar+nvram)\n"
-      + "  izle --sure <sn>             fark tabanli canli alan tespiti\n"
       + "  konsol [--nvram]             telnet root shell / tam nvram\n"
       + "  sim [--telefon 05xxxxxxxxx]  SIM/hucresel ozet (+MSISDN girisi)\n"
       + "  degerlendir                  cihaz durumu + NE EKSIK (numara dahil, ~5 sn)\n"

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { Client } from "../src/transport/client.js";
-import { parseArp, parseIpv6Neighbors, guessVendor } from "../src/transport/network.js";
+import { guessVendor } from "../src/transport/network.js";
 import { problem, isOk, PROBLEM_CODES } from "../src/domain/problems.js";
 import { stripSecrets } from "../src/report/report.js";
 
@@ -85,20 +85,6 @@ test("istemci: bos govde EMPTY_BODY uyarisi (error degil)", async () => {
   } finally {
     m.kapat();
   }
-});
-
-test("ag: arp ciktisi ayristirilir", () => {
-  const metin = `Interface: 192.168.1.50 --- 0x2
-  Internet Address      Physical Address      Type
-  192.168.1.1           00-0c-43-43-5f-4e     dynamic`;
-  const t = parseArp(metin, "192.168.1.");
-  assert.equal(t["192.168.1.1"], "00:0c:43:43:5f:4e");
-});
-
-test("ag: ipv6 komsu ciktisi ayristirilir", () => {
-  const metin = "fe80::4e51:a5a0:8b4a:776  00-0c-43-43-5f-4e   Reachable";
-  const k = parseIpv6Neighbors(metin);
-  assert.equal(k[0].mac, "00:0c:43:43:5f:4e");
 });
 
 test("ag: OUI'den uretici tahmini", () => {

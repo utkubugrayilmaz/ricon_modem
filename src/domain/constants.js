@@ -10,31 +10,6 @@
 // Modemin fabrika IP'si.
 export const DEFAULT_HOST = "192.168.1.1";
 
-// Kesifte bakilan TCP kapilari. Hepsi salt-okunur yoklama (connect denemesi).
-// Endustriyel router'da RMS/DTU/VPN olabilir; liste Python'daki 6 kapidan genis.
-// `kesif` komutunun taradigi portlar. ARAC BU PORTLARI KULLANMAZ — yalnizca
-// "beklenen yuzey yerinde mi, fazladan bir sey acik mi" diye bakar.
-//
-// Liste 11'den 6'ya indirildi. Sebep: kesif BIR KEZ calisti ve cevap
-// docs/BULGULAR.md'de yazili — 502 (Modbus), 1723 (PPTP), 5000, 8080, 8443,
-// 9999 (DTU) KAPALI cikti. Her calistirmada onlari yeniden kanitlamak bosa
-// soket ve bosa saniye. Kalanlarin hepsinin bir sebebi var:
-//   80, 5123 : ARACIN KULLANDIGI iki kanal — kapaliysa hicbir sey calismaz
-//   22, 23, 443 : standart yonetim yuzeyleri; biri acilmissa BILMEK isteriz
-//   53 : acik cikti (dnsmasq) — kaybolursa DHCP/DNS tarafinda bir sey degismis
-export const TCP_PORTS = Object.freeze([
-  { kapi: 22, ad: "SSH" },
-  { kapi: 23, ad: "telnet" },
-  { kapi: 53, ad: "DNS" },
-  { kapi: 80, ad: "HTTP (web arayuzu)" },
-  { kapi: 443, ad: "HTTPS" },
-  { kapi: 5123, ad: "telnet konsolu (root shell)" },
-]);
-
-// Not: UDP kapi listesi YOK — UDP'de "kapali" ile "cevapsiz" ayirt edilemez,
-// tarama yanlis guven verir. Tek gereken UDP servisi SNMP; o snmp.js'te
-// dogrudan gercek bir GET ile yoklanir (kesin cevap).
-
 // HTTP uclari. tur: "sistem" = kimliksiz erisilebilir (2026-08-26 dogrulandi),
 // "kimlik" = HTTP Basic gerekli, "config" = tam yapilandirma yedegi.
 // Not: bu firmware'de canli veri .live.htm (sistem) ve .live.asp (kimlikli).
