@@ -158,9 +158,18 @@ function _trySession(opts, komutlar) {
     let asama = 0; // 0=login bekle 1=parola bekle 2=prompt bekle 3=komut gonderildi 4=bitti
     let cozuldu = false;
 
+    // TEK CIKIS NOKTASI. Zaman asimi sayacini BURADA temizliyoruz: temizlik
+    // eskiden yalnizca iki yolda (basarili bitis ve `error`) yapiliyordu,
+    // `close` ve `timeout` yollarinda 20 saniyelik timer ASILI KALIYORDU.
+    // Sonuc: basarisiz bir konsol cagrisindan sonra Node olay dongusu ~20 sn
+    // daha acik kaliyor ve surec kapanmiyordu. CLI'da fark edilmiyordu cunku
+    // ricon.js process.exit() ile zorla cikiyor; kutuphane olarak kullanan bir
+    // program ise asiliyordu (olculdu: alti basarisiz deneme -> 22 sn).
+    let zaman = null;
     const bitir = (sonuc) => {
       if (cozuldu) return;
       cozuldu = true;
+      clearTimeout(zaman);
       try { s.destroy(); } catch { /* zaten kapali */ }
       resolve(sonuc);
     };
@@ -171,7 +180,7 @@ function _trySession(opts, komutlar) {
       .join("; ") + "\r\n";
     const beklenenBit = komutlar.length;
 
-    const zaman = setTimeout(() => bitir({
+    zaman = setTimeout(() => bitir({
       ok: false, ciktilar: {},
       problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `login/komut zaman asimi (asama ${asama})`)],
     }), ust);
@@ -200,14 +209,14 @@ function _trySession(opts, komutlar) {
         // satir-ortasindadir, ^BIT$ ile eslesmez. Hepsi gelince biter.
         const t = tumu.join("").replace(/\r/g, "");
         const tamam = (t.match(new RegExp(`^${BIT}\\s*$`, "mg")) || []).length;
-        if (tamam >= beklenenBit) { asama = 4; clearTimeout(zaman); s.write("exit\r\n"); bitir(sonucCoz()); }
+        if (tamam >= beklenenBit) { asama = 4; s.write("exit\r\n"); bitir(sonucCoz()); }
       }
     });
     s.on("timeout", () => bitir({
       ok: false, ciktilar: {},
       problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, "soket zaman asimi")],
     }));
-    s.on("error", (e) => { clearTimeout(zaman); bitir({
+    s.on("error", (e) => { bitir({
       ok: false, ciktilar: {},
       problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `${e.code || e.name}: ${e.message}`)],
     }); });

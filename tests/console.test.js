@@ -4,6 +4,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import net from "node:net";
 import {
   iacReply, extractOutput, parseNvramShow, runConsole, konsolKimligi,
 } from "../src/transport/console.js";
@@ -147,4 +148,39 @@ test("runConsole: kimlik yoksa AGA HIC CIKMAZ, hemen net hata verir", async () =
   assert.equal(r.ok, false);
   assert.equal(r.problems[0].kod, "CONSOLE_KIMLIK_YOK");
   assert.ok(Date.now() - t < 500, "kimliksiz cagri aga cikmadan donmeli");
+});
+
+// BASARISIZ OTURUM KAYNAK SIZDIRMAMALI.
+//
+// NEDEN VAR — olculmus gercek kusur: `bitir()` soketi kapatiyor ama zaman
+// asimi sayacini temizlemiyordu. Temizlik yalnizca iki yolda (basarili bitis
+// ve `error`) vardi; `close` ve `timeout` yollarinda 20 saniyelik timer ASILI
+// KALIYORDU. Sonuc: basarisiz bir konsol cagrisindan sonra Node olay dongusu
+// ~20 sn daha acik kaliyor, surec kapanmiyordu. Olculdu: alti basarisiz
+// deneme -> 22 sn. CLI'da gorunmuyordu cunku ricon.js process.exit() ile
+// zorla cikiyor; kutuphane olarak kullanan bir program asiliyordu.
+//
+// Test, oturum bittikten sonra ASILI TIMER kalmadigini dogruluyor.
+test("runConsole: basarisiz oturumdan sonra ASILI TIMER kalmaz", async () => {
+  // Baglantiyi kabul edip ANINDA kapatan sunucu: `close` yolu tetiklenir —
+  // eskiden timer'i temizlemeyen yol tam buydu.
+  const sunucu = net.createServer((s) => s.destroy());
+  await new Promise((c) => sunucu.listen(0, "127.0.0.1", c));
+  const { port } = sunucu.address();
+
+  const oncekiTimer = process.getActiveResourcesInfo()
+    .filter((x) => x === "Timeout").length;
+
+  const r = await runConsole({
+    host: "127.0.0.1", port, kullanici: "u", sifre: "p",
+    denemeler: 1,          // retry beklemesi testi yavaslatmasin
+  }, ["uname -a"]);
+
+  assert.equal(r.ok, false, "baglanti kapandi, oturum basarisiz");
+  const sonrakiTimer = process.getActiveResourcesInfo()
+    .filter((x) => x === "Timeout").length;
+  assert.equal(sonrakiTimer, oncekiTimer,
+    "oturum bitti ama zaman asimi sayaci hala acik — surec kapanmayi bekler");
+
+  await new Promise((c) => sunucu.close(c));
 });
