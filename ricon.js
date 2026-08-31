@@ -162,6 +162,53 @@ function telefonSor(sira) {
   })();
 }
 
+// SIM PIN'i sorar. Cekirdek YALNIZCA cihaz PIN kilidi bildirdiginde cagirir
+// (bkz. provisionModem: pinSor). Doner: "1234" | null
+//
+// ⚠ BU GIRDI BIR HAK YAKAR. Uc yanlis deneme SIM'i PUK'a kilitler ve PUK
+// olmadan geri donusu YOKTUR. O yuzden burada iki sey yapiliyor:
+//   1) KALAN HAK yazilir — operator neyi riske attigini denemeden gorur
+//   2) bicim YEREL suzuluyor: 4-8 rakam olmayan girdi cihaza HIC gitmez
+//      (cekirdek de ayrica reddediyor; buradaki suzgec bir tur bile
+//      harcamamak icin)
+// TEK SORU: yanlis PIN'de tekrar sorulmaz. "Bir hak yandiysa bir daha deneme"
+// karari cekirdekte; operator komutu bilerek yeniden calistirir.
+function pinSor(kilit) {
+  // Etkilesimli degilsek SORMA. Kapanmis stdin'de beklemek kilitlenmedir;
+  // cekirdek SIM_PIN_LOCKED der ve is duzgun basarisiz olur.
+  if (!process.stdin.isTTY) {
+    process.stderr.write("[hazirla] etkilesimli terminal yok: SIM PIN kilitli,"
+      + " kilidi 'ricon.js sim-pin-kaldir --pin XXXX --uygula' ile kaldir\n");
+    return Promise.resolve(null);
+  }
+  const kalan = kilit?.pin_kalan;
+  // SON HAK: cekirdek zaten reddeder (PIN_LAST_ATTEMPT). Sormak, girilen
+  // PIN'in hicbir yere gitmeyecegini bilerek operatoru yazdirmak olurdu.
+  if (kalan != null && kalan <= 1) {
+    process.stderr.write(`\n  ✗ SON HAK (kalan ${kalan}) — arac PIN DENEMEZ.`
+      + " Yanlis PIN SIM'i PUK'a kilitler.\n"
+      + "    SIM'i telefona tak, PIN'i orada kapat, sonra geri tak.\n");
+    return Promise.resolve(null);
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const sor = (soru) => new Promise((c) => rl.question(soru, c));
+  return (async () => {
+    const ham = (await sor(`\n  SIM PIN (4-8 hane, kalan hak ${kalan ?? "?"}): `)).trim();
+    rl.close();
+    if (!ham) {
+      process.stderr.write("  PIN girilmedi — kilit kaldirilmayacak.\n");
+      return null;
+    }
+    if (!/^\d{4,8}$/.test(ham)) {
+      // Bicim hatasi bir hak YAKMAZ ama cihaza gitmesine de gerek yok.
+      process.stderr.write("  gecersiz bicim (4-8 rakam bekleniyor) —"
+        + " hicbir sey denenmedi.\n");
+      return null;
+    }
+    return ham;
+  })();
+}
+
 // Cekirdek cagrisinin sonucuna `ok`'u PROBLEMLERDEN turetir. Bazi salt-okuma
 // fonksiyonlari (readMsisdn/readSimLock) `ok` alani DONDURMUYOR: kismi sonuc
 // da gecerli bir sonuc. Ama CLI sozlesmesi "cikis kodu ok'tan" diyor, yani
@@ -279,6 +326,10 @@ async function komutuCalistir() {
           ? Number(bayrak("--internet-bekle")) : 150,
         kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
         telefonSor,          // dongu: her modem icin sorar
+        // SIM PIN kilitliyse operatore sorulur ve kilit SIM'den KALICI
+        // kaldirilir. --pin verildiyse cekirdek sormaz: o zaman PIN ayarlarla
+        // ayni yazma pasina girer (tek reboot).
+        pinSor,
       };
       const dongu = argv.includes("--dongu");
       if (dongu) {

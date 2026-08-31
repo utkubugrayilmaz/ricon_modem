@@ -133,6 +133,28 @@ export function ilerlemeIzleyici({ simdi = Date.now } = {}) {
         case "pin_deneniyor":
           return ["      SIM PIN yaziliyor (TEK deneme)"];
 
+        // PIN ISTENIYOR — operator klavyeye gidecek. Akista GORUNUR olmali ve
+        // riski ACIKCA yazmali: uc yanlis deneme SIM'i PUK'a kilitler.
+        case "pin_isteniyor":
+          return [
+            "",
+            `  ⏸ SIM PIN KILITLI — devam etmek icin PIN gerekiyor`
+            + ` (kalan hak: ${o.pin_kalan ?? "?"})`,
+            "     PIN girilince kilit SIM'den KALICI kaldirilir; bir daha sorulmaz.",
+          ];
+
+        case "pin_kaldirma_sonuc":
+          if (o.kilit_kaldirildi) {
+            return ["  ✓ PIN kilidi KALICI kaldirildi — numara artik okunabilir"];
+          }
+          if (o.acildi) {
+            uyarilar.push("SIM acildi ama kilit KALICI kaldirilamadi");
+            return ["  ! SIM acildi, kilit KALICI kaldirilamadi"
+              + " — sonraki acilista yine PIN sorabilir"];
+          }
+          uyarilar.push(`PIN kabul edilmedi (kalan hak: ${o.pin_kalan ?? "?"})`);
+          return [`  ✗ PIN kabul edilmedi — kalan hak: ${o.pin_kalan ?? "?"}`];
+
         // Numara okunur okunmaz ekrana: operator hangi hattin kaydedildigini
         // kurulum bitmeden gormeli.
         case "telefon":

@@ -17,7 +17,7 @@ import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "../domain/profile.js";
 import { normalizePhone } from "../device/sim.js";
 import { readIdentity, simTakiliMi, waitForInternet, pcPreflight } from "../device/cihaz.js";
 import { problem } from "../domain/problems.js";
-import { readMsisdn } from "../device/at.js";
+import { readMsisdn, simPinKaldir } from "../device/at.js";
 import { pinDenemesiUygunMu, hakYakilmisMi } from "../domain/pin-karar.js";
 
 const now = () => new Date().toISOString();
@@ -246,8 +246,18 @@ export function nextAction(fabrikaVar, sahaVar, sahaDryRunDurum) {
 }
 
 // Bir modemi hazırlar (algıla → provizyon → doğrula → retry).
+//
 // opts: { fabrikaHost, fabrikaKaynak, sahaHost, sahaKaynak, kimlik, profil,
-//         denemeler=3, ilerle }
+//         denemeler=3, ilerle, olay, kayit,
+//         telefonSor(sira), pinSor(kilitBilgi) }
+//
+// telefonSor / pinSor: cekirdek NE ZAMAN soracagina karar verir, tuketici
+// NASIL soracagina. CLI operatore terminalden sorar, baska bir tuketici
+// baska bir yerden alir. Ikisi de OPSIYONEL: verilmezse cekirdek sormaz ve
+// eksigi problems[] ile bildirip duzgun basarisiz olur.
+//   telefonSor(sira)      -> "05xxxxxxxxx" | null
+//   pinSor({ durum, pin_kalan, puk_kalan }) -> "1234" | null
+// pinSor'a KALAN HAK gecilir: operator neyi riske attigini denemeden gormeli.
 export async function provisionModem(opts) {
   const {
     fabrikaHost = "192.168.1.1", fabrikaKaynak,
@@ -395,6 +405,58 @@ export async function provisionModem(opts) {
       rapor.problems.push(problem("SIM_MISSING", kimlikBilgiOnce.sim_durumu));
       rapor.durum = "sim_yok"; rapor.deneme = deneme; rapor.ok = false;
       return bitir(konum, kimlikBilgiOnce);
+    }
+
+    // SIM PIN KILITLI: kilidi KALICI KALDIR — PIN'i tuketiciden isteyerek.
+    //
+    // NEDEN BURADA: numara okumasindan HEMEN ONCE. Zincir su: kilitli SIM
+    // abone verisini (EF_MSISDN) acmiyor, yani kilit kalkmadan numara
+    // OKUNAMIYOR (2026-08-27 canli olculdu). Kilit kalkinca numara
+    // kendiliginden geliyor ve akis tam otomatik surebiliyor.
+    //
+    // NEDEN nvram'a PIN YAZMAK DEGIL: o yol SIM'i PIN'li BIRAKIR, parolayi
+    // sahadaki cihazda duz metin tutar ve SIM baska cihaza takilinca yine
+    // kilitli gelir. Bu yol kilidi SIM'in KENDISINDEN kaldirir: saklanacak
+    // sir kalmaz. Projenin karari bu (bkz. at.js simPinKaldir).
+    //
+    // KORUMALARIN TAMAMI CEKIRDEKTE ve simPinKaldir'in icinde: bicim
+    // kontrolu, kalan hakki okuma, SON HAK'ta denememe, TEK deneme, yanlissa
+    // tekrar DENEMEME. Burada yeni bir karar URETILMIYOR.
+    //
+    // elleOnay:true — PIN'i INSAN yazdi. "Bir hak yakildiysa bir daha deneme"
+    // kurali OTOMATIK yol icindir; dogru PIN'i bilen operatoru engellemek
+    // yanlis olur. Insanin da gecemedigi tek kural SON HAK.
+    //
+    // `pin` VERILMISSE sorulmaz: o zaman eski yol islesin (PIN ayarlarla ayni
+    // yazma pasina girer, tek reboot). Iki yol birbirinin yerine gecmiyor.
+    if (konum && !pin && kimlikBilgiOnce?.sim?.kilit === "pin"
+        && typeof opts.pinSor === "function") {
+      const kilitBilgi = {
+        durum: kimlikBilgiOnce.sim_durumu,
+        pin_kalan: kimlikBilgiOnce.sim.pin_kalan,
+        puk_kalan: kimlikBilgiOnce.sim.puk_kalan,
+      };
+      olayla(opts, { tur: "pin_isteniyor", ...kilitBilgi });
+      const girilen = await opts.pinSor(kilitBilgi);
+      if (girilen) {
+        bildir(opts, "SIM PIN kilidi kaldiriliyor (TEK deneme)");
+        const k = await simPinKaldir({ ...konum, kimlik, ilerle: opts.ilerle,
+          olay: opts.olay }, girilen, { elleOnay: true });
+        rapor.pin_kaldirma = { acildi: k.acildi,
+          kilit_kaldirildi: k.kilit_kaldirildi, pin_kalan: k.pin_kalan };
+        rapor.problems.push(...k.problems);
+        olayla(opts, { tur: "pin_kaldirma_sonuc", acildi: k.acildi,
+          kilit_kaldirildi: k.kilit_kaldirildi, pin_kalan: k.pin_kalan });
+        // SIM ACILDIYSA kimligi YENIDEN oku: artik abone verisi geliyor, yani
+        // numara okunabilir ve kilit durumu degisti. Eski okumayla devam etmek
+        // asagida "hala kilitli" varsayimiyla calismak olurdu.
+        if (k.acildi) {
+          bildir(opts, "SIM acildi — kimlik yeniden okunuyor");
+          try {
+            kimlikBilgiOnce = await readIdentity({ ...konum, kimlik });
+          } catch { /* kismi sonuc gecerli; asagidaki yollar yine calisir */ }
+        }
+      }
     }
 
     // NUMARAYI CIHAZDAN OKU — verilmediyse. SIM KONTROLUNDEN SONRA: SIM yoksa
