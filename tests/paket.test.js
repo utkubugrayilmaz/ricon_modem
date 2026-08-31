@@ -64,3 +64,30 @@ test("paket: CLI komutu yardim metnini basip 0 ile cikar", async () => {
     assert.ok(!r.stderr.includes(gitmis), `kaldirilan komut yardimda: ${gitmis}`);
   }
 });
+
+// BEKCI: README'nin mimari tablosu diskle uyusuyor mu?
+//
+// NEDEN VAR: README bu projede tek onboarding dokumani ve mimari tablosu
+// dosya dosya yazili. Bir dosya tasindiginda ya da kaldirildiginda tablo
+// sessizce yalan soylemeye basliyor — nitekim src/ katmanlara bolundugunde
+// tam bu oldu. Ucuz bir kontrol: tabloda gecen her yol GERCEKTEN var mi.
+test("README: anilan her src/ dosyasi diskte var", async () => {
+  const metin = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const yollar = [...metin.matchAll(/`(src\/[A-Za-z0-9/_.-]+\.js)`/g)]
+    .map((m) => m[1]);
+  assert.ok(yollar.length > 15, `README'de yalniz ${yollar.length} yol bulundu`
+    + " — mimari tablosu bozulmus olabilir");
+  const kayip = [...new Set(yollar)].filter((y) => !existsSync(KOK + y));
+  assert.deepEqual(kayip, [], `README olmayan dosyalari anlatiyor: ${kayip.join(", ")}`);
+});
+
+test("README: kaldirilan yuzeyleri artik anlatmiyor", async () => {
+  const metin = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  // Tarayici arayuzu, HTTP katmani ve gelistirme komutlari kaldirildi.
+  for (const gitmis of ["ricon.js sunucu", "examples/", "/api/hazirla",
+    "src/server.js", "src/report/metrics.js", "src/flow/izleme.js",
+    "ricon.js olcum", "sim-pin-kilitle"]) {
+    assert.ok(!metin.includes(gitmis),
+      `README kaldirilan yuzeyi anlatiyor: ${gitmis}`);
+  }
+});

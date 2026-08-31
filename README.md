@@ -7,21 +7,14 @@ RVM makinelerindeki bu modem sahada elle hazırlanıyor (web arayüzünden APN,
 WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
 şeyi çekmek, (2) bu hazırlama sürecini **tek komuta** indirmek.
 
-## Durum
+Ürün iki yüzeyden tüketilir ve ikisi de **aynı** çekirdek fonksiyonları çağırır:
 
-> Oturum devri / kaldigimiz yer: **[docs/DEVAM.md](docs/DEVAM.md)**
+| Biçim | Nasıl |
+|---|---|
+| Terminal | `node ricon.js hazirla` |
+| npm paketi | `import { provisionModem } from "ricon-modem"` |
 
-- **Faz 1 — Her şeyi çek:** ✅ Canlı doğrulandı (sistem + SIM/hücresel + tam nvram).
-- **Faz 2 — Arayüz→nvram haritası:** ✅ Tüm ayarlar nvram diff'i ile eşlendi
-  (bkz. `docs/arayuz-haritasi.md`, `docs/hazirlama-profili.md`).
-- **Faz 3 — Otomatik provizyon:** ✅ Motor + tak-çalıştır pipeline; sıfır
-  cihazda tek komutla uçtan uca doğrulandı, idempotent.
-- **Faz 4 — Arayüz:** ✅ HTTP endpoint (SSE) + tarayıcı UI; çekirdeğin
-  **üçüncü tüketicisi** (terminal · npm paketi · HTTP/UI).
-- **148 test** (`npm test`), sıfır bağımlılık.
-- **Faz 5 — SIM ile konuşma:** ✅ Telefon numarası **cihazdan** okunuyor
-  (`AT+CNUM`), SIM PIN/PUK kilidi ve kalan hak modülden geliyor.
-- **Sırada:** bkz. [docs/DEVAM.md](docs/DEVAM.md) — 1 açık hata + iş listesi.
+**238 test** (`npm test`), sıfır bağımlılık.
 
 ## Kurulum
 
@@ -50,7 +43,6 @@ node --env-file=.env ricon.js oku         # HER ŞEYİ çek (sistem+SIM+ayar+nvr
 node --env-file=.env ricon.js konsol --nvram   # telnet root: tam nvram
 node --env-file=.env ricon.js sim              # SIM/hücresel özet
 node --env-file=.env ricon.js sim --telefon 05xxxxxxxxx   # MSISDN'i dışarıdan ver
-node --env-file=.env ricon.js izle --sure 60   # fark tabanlı canlı alan tespiti
 
 # TEK İŞ YAPAN komutlar — aracın tamamına girmeden tek bilgi
 node --env-file=.env ricon.js degerlendir      # durum + NE EKSİK (numara dahil, ~5 sn)
@@ -61,26 +53,16 @@ node --env-file=.env ricon.js sim-kilit        # SADECE kilit + KALAN HAK (hak h
 # Varsayılan KURU: ne yapılacağını söyler, hiçbir şey denemez.
 node --env-file=.env ricon.js sim-pin-kaldir --pin 1234
 node --env-file=.env ricon.js sim-pin-kaldir --pin 1234 --uygula   # TEK deneme
-node --env-file=.env ricon.js fark A.json B.json   # iki nvram anlık görüntüsü diff
 
 # Provizyon (yazma) — varsayılan KURU (dry-run); gerçek yazma --uygula ister
 node --env-file=.env ricon.js uygula                # ne değişecek (yazmaz)
 node --env-file=.env ricon.js uygula --uygula --yeni-host 5.5.5.1 --yeni-kaynak 5.5.5.100
 
 # Tak-çalıştır: algıla → provizyon → doğrula → başarıya kadar
-# TELEFON ZORUNLU. Cihazdan okunabiliyorsa otomatik gelir; okunamazsa sorar.
-node --env-file=.env ricon.js hazirla --telefon 05321234567   # bir modem
-#   NOT: numara artık cihazdan okunabiliyor (AT+CNUM); elle giriş FALLBACK
-node --env-file=.env ricon.js hazirla --dongu   # çok modem: her modemde sorar
-node --env-file=.env ricon.js hazirla --telefon 05321234567 --internet-bekle 0
-                                                # SIM doğrulamasını atla
-
-# Tarayıcı arayüzü (UI) — çekirdeği tüketen üçüncü katman
-node --env-file=.env ricon.js sunucu          # http://127.0.0.1:8080
-
-# Metrik: süreler kalıcı kaydedilir, tek komutla özetlenir
-node ricon.js olcum-elle --dk 15.5 --kim "teknisyen A"   # elle sürecin kronometresi
-node ricon.js olcum --modem-sayisi 400                   # özet + karşılaştırma
+node --env-file=.env ricon.js hazirla           # numarayı SIM'den kendisi okur
+node --env-file=.env ricon.js hazirla --telefon 05321234567   # numarayı EZER
+node --env-file=.env ricon.js hazirla --dongu   # çok modem: tak → hazır → çıkar
+node --env-file=.env ricon.js hazirla --internet-bekle 0      # SIM doğrulamasını atla
 
 # ortak: --json <dosya> · --kaynak <dosya> (kayıttan, cihazsız)
 #        --host <ip> · --kaynak-ip <ip> (.env'i ezer; modem o an neredeyse)
@@ -88,76 +70,62 @@ node ricon.js olcum --modem-sayisi 400                   # özet + karşılaşt�
 
 stdout **her zaman saf JSON**; ilerleme/özet stderr'a; çıkış kodu 0 (ok)/1.
 
-## Ne ÜRÜN, ne ÖRNEK
+## Terminalde ne görünür
 
-**Ürün:** `src/` altındaki çekirdek + HTTP API. Üç biçimde tüketilir, hepsi
-**aynı** fonksiyonları çağırır:
+`hazirla` ve `uygula` adım adım ilerlemeyi ve süreleri basar — operatör 60-90
+saniye boyunca aracın ne yaptığını görür:
 
-| Biçim | Nasıl |
-|---|---|
-| Terminal | `node ricon.js hazirla --telefon 05...` |
-| npm paketi | `import { provisionModem } from "ricon-modem"` |
-| HTTP endpoint | `GET /api/hazirla?telefon=05...` (SSE) |
+```
+[1/7] modem algilandi — 192.168.1.1 (provizyon_fabrika)      0.4 sn
+  → telefon: 0535 063 47 47  (SIM'den okundu)
+[2/7] ayarlar okundu (plan hazir) — 14 ayar degisecek        5.7 sn
+[3/7] yazma basladi — Modem/WAN (8 ayar)                     6.0 sn
+[5/7] reboot gonderildi                                      8.4 sn
+[6/7] cihaz geri geldi, dogrulandi — 31 sn bekledi          38.4 sn
+[7/7] internet dogrulandi (SIM calisiyor) — WAN 178.245...  49.4 sn
 
-**Örnek (ürün DEĞİL):** `examples/` — bizim test arayüzümüz ve kullanım
-örnekleri. Bkz. [examples/README.md](examples/README.md) ·
-[paket-kullanimi.js](examples/paket-kullanimi.js) ·
-[endpoint-kullanimi.md](examples/endpoint-kullanimi.md).
-
-İş kuralları **tüketicide değil çekirdektedir**: telefon zorunluluğu, SIM
-yoksa reddetme, PIN/PUK kilidi teşhisi ve son PIN hakkının korunması,
-idempotency, LAN IP'nin en sona yazılması, yazma sırası, defter kaydının
-üretilmesi. Yeni bir arayüz yazan kişi bunları yeniden yazmaz; yanlışlıkla
-atlaması da mümkün değil.
-
-## Test arayüzü (examples/test-ui)
-
-```bash
-node --env-file=.env ricon.js sunucu              # arayüzle
-node --env-file=.env ricon.js sunucu --arayuz yok # SALT API, arayüz yok
+  ADIM SURELERI
+     modem algilandi                      0.4 sn  (0.4 sn'de)
+   ▲ cihaz geri geldi, dogrulandi        30.0 sn  (38.4 sn'de)
+     TOPLAM                              49.4 sn
+     kaydedilen hat                    0535 063 47 47
 ```
 
-İki ekran: (1) büyük telefon numarası girişi — 11 hane hücresi, eksik/fazla
-giremez; (2) sol **beyaz** panel kurulum öncesi, sağ **yeşil** panel kurulum
-sonrası — satırlar geldikçe `yazılıyor → yazıldı → doğrulandı` olarak güncellenir.
-Onaylayınca ilk ekrana döner, sıradaki modem takılır.
+Numara **bulunduğu anda** yazılır: yanlış SIM takılmışsa operatör kurulumun
+bitmesini beklemeden anlar. Tekrarlayan olaylar (reboot beklemesi, internet
+yoklaması — gerçek kurulumda ~70 olay) akışa satır **eklemez**, aynı satırda
+güncellenir; `▲` en uzun adımı işaretler.
 
-Arayüz sunucuya **gömülü değil**: `staticDir` verilmezse sunucu salt API'dir.
-Tarayıcı nvram anahtarı bile bilmez — satırlar ekrana hazır gelir. Çekirdek
-sunucuyu **tanımaz**.
+SIM PIN kilitliyse akış durup **PIN'i sorar** ve kilidi SIM'den kalıcı kaldırır:
 
-Güvenlik: sunucu varsayılan olarak **yalnız `127.0.0.1`**'i dinler — bu servis
-cihaza yazar, ağa açılması açık bir karar olmalı (`--dinle 0.0.0.0`).
-
-## Hazırlama defteri (rollout kaydı)
-
-`hazirla` her modem için **bir satır** JSONL yazar (`data/hazirlanan.jsonl`,
-`--kayit` ile değiştirilebilir):
-
-```json
-{"zaman":"...","durum":"hazir","ok":true,"deneme":1,"profil":"saha",
- "modem_ip":"5.5.5.1","telefon":"5321234567","lan_mac":"00:0c:43:...",
- "iccid":"8990...","imsi":"28601...","imei":"867...","operator":"Turkcell"}
+```
+  ⏸ SIM PIN KILITLI — devam etmek icin PIN gerekiyor (kalan hak: 3)
+     PIN girilince kilit SIM'den KALICI kaldirilir; bir daha sorulmaz.
+  SIM PIN (4-8 hane, kalan hak 3): ____
+  ✓ PIN kilidi KALICI kaldirildi — numara artik okunabilir
 ```
 
-Sahada "bu modem hazırlanmış mıydı, hangi hat takılıydı" sorusunun tek kanıtı.
-Cihazın **etiket seri numarası ne HTTP'de ne nvram'da yok** (arandı) — kalıcı
-kimlik `lan_mac` + `imei` + `iccid`. Dosya `data/` altında ve **gitignore'da**:
-telefon/ICCID/IMEI abonelik verisidir, commit edilmez.
+Kilidi **nvram'a PIN yazarak** değil SIM'in kendisinden kaldırıyoruz: sahadaki
+cihazda saklanacak parola kalmaz ve SIM her cihazda açık gelir. Kilit
+kalkmadan telefon numarası okunamıyor (kilitli SIM abone verisini açmıyor), o
+yüzden zincirin sırası budur.
 
-## Modülerlik düsturu
+## İş kuralları çekirdekte
 
-redbox-device kalıbı: çekirdek `src/index.js`'te importlanabilir fonksiyonlar
-(`readDevice`, `checkDevice`, `discoverDevice`, `applyProvisioning`,
-`provisionModem`...) — hepsi `opts` alır, `process.env`/argv OKUMAZ, throw
-etmez (sonuç + `problems[]`). Aynı çekirdek üç ayrı tüketiciye bakar:
-**terminal** (ince CLI, .env okur), **npm paketi**
-(`import { readMsisdn } from "ricon-modem"`), **HTTP endpoint** (`src/server.js`).
-Arayüz dördüncü tüketici ve `examples/` altında — üründe değil.
+Telefon zorunluluğu, SIM yoksa reddetme, PIN/PUK kilidi teşhisi ve son PIN
+hakkının korunması, idempotency, LAN IP'nin en sona yazılması, yazma sırası,
+defter kaydının üretilmesi — hepsi `src/` altında. Yeni bir tüketici yazan
+kişi bunları yeniden yazmaz; yanlışlıkla atlaması da mümkün değil.
 
-**Kural:** bir yetenek eklendiğinde çekirdeğe eklenir ve **her üç tüketiciden
-de** erişilebilir olur. Yalnız endpoint'ten ya da yalnız arayüzden ulaşılan bir
-yetenek, çekirdeğin bir parçası değil o katmanın gizli mantığıdır.
+**Kural:** bir yetenek eklendiğinde çekirdeğe eklenir ve **her tüketiciden**
+erişilebilir olur. Yalnız CLI'dan ulaşılan bir yetenek, çekirdeğin bir parçası
+değil o katmanın gizli mantığıdır.
+
+Çekirdek **ne zaman** soracağına karar verir, tüketici **nasıl** soracağına:
+`provisionModem` telefon numarası ya da SIM PIN gerektiğinde `opts.telefonSor`
+/ `opts.pinSor` çağırır. CLI bunları terminalden sorar; başka bir tüketici
+başka bir yerden alır. İkisi de opsiyonel — verilmezse çekirdek sormaz ve
+eksiği `problems[]` ile bildirip düzgün başarısız olur.
 
 **PIN kuralı — otomatik yol / insan yolu:** "bir hak yakıldıysa bir daha
 deneme" kuralı **aracın kendi kendine tekrarlamasına** karşıdır. Operatör
@@ -176,32 +144,36 @@ Tek iş yapan çağrılar (aracın tamamını kullanmaya gerek yok):
 | "Ne eksik" kararı (SAF, cihazsız) | `provisionEksikleri({...})` | — |
 | Kendi kabuk komutum | `runConsole(opts, ["uname -a"])` | `ricon.js konsol` |
 
-Çalışan örnek: `examples/paket-kullanimi.js`.
-
-### Parça parça import
-
-Başka bir proje (ör. uzaktaki makineleri gösteren bir panel) tümünü almak
-zorunda değil — her katman kendi alt yolundan gelir:
+Paket **tek kapıdan** gelir — `src/index.js`. Her fonksiyon `opts` alır, sonuç
+nesnesi döner, throw etmez:
 
 ```js
-import { readIdentity } from "ricon-modem/okuma";        // sadece modem bilgisi
-import { readMsisdn } from "ricon-modem/at";             // sadece telefon numarası
-import { assessDevice } from "ricon-modem/degerlendirme";// sadece "ne eksik"
-import { pinDenemesiUygunMu } from "ricon-modem/pin-karar"; // sadece karar (cihazsız)
+import { assessDevice, readMsisdn, provisionModem } from "ricon-modem";
 ```
 
-Her biri `opts` alır, sonuç nesnesi döner, throw etmez. Aynı fonksiyon
-terminalden de (`ricon.js numara`) HTTP ucundan da çağrılabilir — endpoint'e
-çevirmek `examples/endpoint-kullanimi.md`'de 8 satır.
+## Hazırlama defteri (rollout kaydı)
+
+`hazirla` her modem için **bir satır** JSONL yazar (`data/hazirlanan.jsonl`,
+`--kayit` ile değiştirilebilir):
+
+```json
+{"zaman":"...","durum":"hazir","ok":true,"deneme":1,"profil":"saha",
+ "modem_ip":"5.5.5.1","telefon":"5321234567","lan_mac":"00:0c:43:...",
+ "iccid":"8990...","imsi":"28601...","imei":"867...","operator":"Turkcell"}
+```
+
+Sahada "bu modem hazırlanmış mıydı, hangi hat takılıydı" sorusunun tek kanıtı.
+Cihazın **etiket seri numarası ne HTTP'de ne nvram'da yok** (arandı) — kalıcı
+kimlik `lan_mac` + `imei` + `iccid`. Dosya `data/` altında ve **gitignore'da**:
+telefon/ICCID/IMEI abonelik verisidir, commit edilmez.
 
 ## Mimari
 
 | Modül | İş |
 |---|---|
 | **Giris** | *hangi kapidan girilirse ayni cekirdek* |
-| `ricon.js` | İnce CLI — argv + .env + `index` çağrısı |
-| `src/index.js` | **Public API — TEK KAPI.** Uygulama yok, yalnız ne dışa açıldığı (58 satır) |
-| `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez. `staticDir` verilmezse SALT API |
+| `ricon.js` | İnce CLI — argv + .env + `index` çağrısı + terminale yazma |
+| `src/index.js` | **Public API — TEK KAPI.** Uygulama yok, yalnız ne dışa açıldığı |
 | **domain/** | *IO YOK — saf kural, sabit, karar* |
 | `src/domain/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
 | `src/domain/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
@@ -218,37 +190,44 @@ terminalden de (`ricon.js numara`) HTTP ucundan da çağrılabilir — endpoint'
 | `src/parse/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
 | `src/parse/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + diff |
 | **device/** | *cihazdan okuma* |
-| `src/device/at.js` | ⭐ AT komut katmanı — telefon numarası (`AT+CNUM`), SIM kilidi, PIN kaldırma/açma |
+| `src/device/at.js` | ⭐ AT komut katmanı — telefon numarası (`AT+CNUM`), SIM kilidi, PIN kaldırma |
 | `src/device/sim.js` | SIM/hücresel okuma (HTTP) + `Status of SIM` çözümleyici |
 | `src/device/cihaz.js` | ⭐ **En alt katman:** `readIdentity`, `simTakiliMi`, `waitForInternet`, `pcPreflight`. Okuma yolu da yazma yolu da buna bakar |
 | `src/device/okuma.js` | Cihaz okuma işlemleri: `dogrula` / `oku` / `kesif` / `konsol` |
 | **flow/** | *akis / orkestrasyon* |
 | `src/flow/degerlendirme.js` | ⭐ "Ne durumda, ne eksik, **tekrar bakmalı mıyım**?" — tekrar politikası PURE ve çekirdekte |
 | `src/flow/provisioning.js` | Provizyon motoru (oku→planla→yaz→doğrula, idempotent) |
-| `src/flow/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü). Numarayı **SIM'den kendisi okur** |
-| `src/flow/izleme.js` | Dönemsel örnekleme + zaman çizelgesi (canlı alan tespiti) |
-| **report/** | *cikti ve metrik* |
+| `src/flow/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü). Numarayı **SIM'den kendisi okur**, PIN'i tüketiciden ister |
+| **report/** | *cikti ve gorunum* |
 | `src/report/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |
-| `src/report/metrics.js` | Ölçüm özetleyici (PURE) — süre istatistikleri, karşılaştırma |
+| `src/report/ilerleme.js` | Terminal ilerleme görünümü (PURE) — adım damgalama, süre, gürültü kuralı |
 
-Bagimlilik yonu TEK YON: `flow` → `device` → `transport`/`parse` → `domain`. `domain` hicbir seye bagli degil, `transport` cihaza gider ama karar vermez. Dongu yok.
-| `examples/` | **ÖRNEKLER — ürün değil:** test arayüzü, paket/endpoint kullanımı |
-| `arsiv/` | Repoda değil (gitignore): eski yakalamalar, ekran görüntüleri, ham dökümler |
+Bagimlilik yonu TEK YON: `flow` → `device` → `transport`/`parse` → `domain`.
+`domain` hicbir seye bagli degil, `transport` cihaza gider ama karar vermez.
+Dongu yok — `tests/mimari.test.js` bu yonu kodla sabitliyor.
+
+`arsiv/` repoda değil (gitignore): eski yakalamalar, ekran görüntüleri, ham
+dökümler.
 
 ## Değişmeyen kurallar
 
-- **Okuma komutları salt okunur** (oku/kesif/dogrula/izle/konsol): yalnızca
+- **Okuma komutları salt okunur** (oku/kesif/dogrula/konsol): yalnızca
   GET / nvram okuma; yazma reddedilir. Yazma **yalnızca** `uygula`/`hazirla`
   içinde ve gerçek yazma için açık `--uygula` şart.
 - Kütüphane **throw etmez** — her sonuç `problems[]` taşır; kısmi sonuç geçerli.
+- Çekirdek **`process.env`/argv OKUMAZ, stdout'a YAZMAZ.** Girdi `opts` ile
+  gelir, çıktı bir sonuç nesnesidir. Ortamı okuyan ve yazan taraf `ricon.js`.
 - Çıktı **ham/geçirgen** — cihazın alan adları korunur; eşlenmiş görünüm ek.
-- **Sır çıktıya yazılmaz** — parola/kimlik rapordan temizlenir.
+- **Sır çıktıya yazılmaz** — parola/kimlik/SIM PIN/PPP parolası rapordan
+  temizlenir, ekranda maskelenir.
 - **Kayıtsız modem sahaya çıkmaz** — `hazirla` telefon numarası (MSISDN)
-  olmadan başlamaz; kural **çekirdekte** (`provisionModem`), yalnız CLI'da
-  değil — HTTP endpoint/UI aynı kuralı devralır.
+  olmadan başlamaz; kural **çekirdekte** (`provisionModem`), yalnız CLI'da değil.
 - **SIM'siz modem onaylanmaz** — kimlik en başta okunur, ICCID yoksa hiçbir şey
   yazılmadan reddedilir. SIM'siz provizyon "başarılı" görünür ama cihaz
   şebekeye kaydolamaz (canlı doğrulandı).
+- **Saf girdi doğrulaması ortam kontrolünden önce gelir** — bozuk bir telefon
+  numarası, makinenin ağ yapılandırmasına bakılmadan reddedilir. Aksi hâlde
+  aynı girdi farklı makinelerde farklı teşhis alır.
 - **İki ayrı soru, iki ayrı cevap:** *"ayarlar doğru mu"* (nvram geri-okuma,
   ~45 sn) ve *"SIM çalışıyor mu"* (WAN IP geldi mi). İkincisi teknisyenin elle
   yaptığı kontrolün otomatiği — **PIN kilitli SIM'i yakalayan tek şey bu.**
@@ -259,7 +238,7 @@ Bagimlilik yonu TEK YON: `flow` → `device` → `transport`/`parse` → `domain
   sözlüğü). Bkz. `docs/`.
 
 ## Kapsam dışı
-Ham paket yakalama · UI/DB/entegrasyon · zaman serisi saklama.
+Ham paket yakalama · tarayıcı arayüzü · DB/entegrasyon · zaman serisi saklama.
 
 ---
 
@@ -268,18 +247,22 @@ Ham paket yakalama · UI/DB/entegrasyon · zaman serisi saklama.
 Zero-dependency Node.js tool to **discover, fully read, and automatically
 provision** the Ricon **S9922M44-DOA** industrial cellular router.
 
-All three phases are done and verified on the live device: read-everything
-(system + SIM/cellular + full nvram), UI→nvram mapping (every setting matched
-via nvram diff), and one-command provisioning (fresh device → fully
-provisioned → verified at 5.5.5.1, idempotent). 95 tests, zero deps.
+Verified end to end on the live device: read-everything (system + SIM/cellular
++ full nvram), UI→nvram mapping (every setting matched via nvram diff), and
+one-command provisioning (fresh device → fully provisioned → verified at
+5.5.5.1, idempotent). The phone number is read from the SIM itself
+(`AT+CNUM`), and a PIN-locked SIM is unlocked **permanently on the SIM** rather
+than by storing the PIN in nvram. 238 tests, zero deps.
 
-Core logic lives in importable `opts`-taking functions in `src/index.js`
-(`readDevice`, `applyProvisioning`, `provisionModem`...) consumed as a CLI, an
-npm package, or (later) an HTTP endpoint. The library never throws (results
-carry `problems[]`). Read commands are read-only; writing happens only in
-`uygula`/`hazirla` and requires an explicit `--uygula` flag. Identifiers are
-English; comments, CLI command names, `.env` vars and JSON output keys are
-Turkish (the team's surface/domain vocabulary).
+Core logic lives in importable `opts`-taking functions behind a single door,
+`src/index.js` (`readDevice`, `applyProvisioning`, `provisionModem`...),
+consumed as a CLI or as an npm package. The core never reads `process.env` or
+argv, never writes to stdout, and never throws — results carry `problems[]`.
+Read commands are read-only; writing happens only in `uygula`/`hazirla` and
+requires an explicit `--uygula` flag. Identifiers are English; comments, CLI
+command names, `.env` vars and JSON output keys are Turkish (the team's
+surface/domain vocabulary).
+
 ```
 node --env-file=.env ricon.js hazirla   # detect → provision → verify
 ```
