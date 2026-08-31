@@ -185,6 +185,21 @@ function askPhone(index) {
   })();
 }
 
+// --pin verilmediyse PIN'i SOR. sim-pin-enable / sim-pin-disable icin.
+//
+// Neden: PIN'i komut satirina yazmak onu KABUK GECMISINE dusuruyor
+// (PowerShell'de ConsoleHost_history.txt, kalici bir dosya). Sorarak almak
+// hem daha guvenli hem de `npm run` ile tek kelimelik komut yazmayi mumkun
+// kiliyor — bayrak tasimaya gerek kalmiyor.
+// PIN hicbir yere yazilmaz; yalnizca cekirdege gecer.
+function promptPin() {
+  if (!process.stdin.isTTY) return Promise.resolve(undefined);
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  return new Promise((done) => {
+    rl.question("  SIM PIN: ", (raw) => { rl.close(); done(raw.trim() || undefined); });
+  });
+}
+
 // SIM PIN kilitliyse operatore PIN sorar. Cekirdek (provisionModem) kilidi
 // gorunce burayi cagirir; kaldirma isini de kendisi yapar.
 //
@@ -405,7 +420,7 @@ async function runCommand() {
     // KURU calisir (yalniz durumu bildirir), gercek deneme --uygula ister.
     // Sebep: yanlis PIN bir hak yakar, uc yanlis PUK demek.
     case "sim-pin-disable": {
-      const pin = flags.pin;
+      const pin = flags.pin ?? await promptPin();
       const real = flags.apply === true;
       if (!real) {
         const k = await withDerivedOk(readSimLock(opts));
@@ -432,7 +447,7 @@ async function runCommand() {
     // KALDIRMA yolunu gercek bir kilitli SIM'de sinamak icin var. Ayni
     // sozlesme: bayraksiz KURU, gercek deneme --uygula ister.
     case "sim-pin-enable": {
-      const pin = flags.pin;
+      const pin = flags.pin ?? await promptPin();
       if (flags.apply !== true) {
         const k = await withDerivedOk(readSimLock(opts));
         // Kilit ZATEN acik mi? Sorgu (AT+CLCK="SC",2) hak HARCAMAZ. Bunu

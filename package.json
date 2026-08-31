@@ -24,11 +24,13 @@
     "assess": "node --env-file-if-exists=.env bin/ricon.js assess",
     "read": "node --env-file-if-exists=.env bin/ricon.js read",
     "verify": "node --env-file-if-exists=.env bin/ricon.js verify",
-    "sim-lock": "node --env-file-if-exists=.env bin/ricon.js sim-lock",
+    "sim-lock": "node --env-file-if-exists=.env bin/ricon.js sim-pin-enable --apply",
     "call": "node --env-file-if-exists=.env bin/ricon.js call",
     "metrics": "node bin/ricon.js metrics",
     "reset:dry": "node --env-file-if-exists=.env bin/ricon.js apply --host 5.5.5.1 --profile factory --new-host 192.168.1.1",
-    "reset": "node --env-file-if-exists=.env bin/ricon.js apply --host 5.5.5.1 --profile factory --new-host 192.168.1.1 --apply"
+    "reset": "node --env-file-if-exists=.env bin/ricon.js apply --host 5.5.5.1 --profile factory --new-host 192.168.1.1 --apply",
+    "sim-unlock": "node --env-file-if-exists=.env bin/ricon.js sim-pin-disable --apply",
+    "sim-state": "node --env-file-if-exists=.env bin/ricon.js sim-lock"
   },
   "license": "UNLICENSED",
   "private": true
