@@ -66,8 +66,8 @@ const SORUN_TR = {
 // Bir sorunun OPERATORE gosterilecek Turkce halini verir.
 //
 // Bilinmeyen kod PATLAMAZ ve ham Ingilizce metni SIZDIRMAZ: kodu gosterip
-// ne yapilacagini soyler. Yeni bir kod ceviri almadan eklenirse test yakalar
-// (bkz. tests/sorun-metni.test.js) — ama uretimde ekran yine anlamli kalir.
+// ne yapilacagini soyler. Yeni bir sorun kodu eklerken buraya da Turkce
+// karsiligini yaz; yazilmazsa ekran anlamli kalir ama operator kod gorur.
 export function sorunTr(kod) {
   const t = SORUN_TR[kod];
   if (t) return { kod, ...t };

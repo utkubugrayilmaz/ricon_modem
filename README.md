@@ -14,7 +14,7 @@ WLAN, LAN IP, Backup Link... ~13 ayar). Amaç: (1) cihazdan alınabilecek her
 | Terminal | `node ricon.js hazirla` |
 | npm paketi | `import { provisionModem } from "ricon-modem"` |
 
-**238 test** (`npm test`), sıfır bağımlılık.
+Sıfır bağımlılık: yalnızca Node.js'in yerleşik modülleri.
 
 ## Kurulum
 
@@ -204,7 +204,8 @@ telefon/ICCID/IMEI abonelik verisidir, commit edilmez.
 
 Bagimlilik yonu TEK YON: `flow` → `device` → `transport`/`parse` → `domain`.
 `domain` hicbir seye bagli degil, `transport` cihaza gider ama karar vermez.
-Dongu yok — `tests/mimari.test.js` bu yonu kodla sabitliyor.
+Dongu yok. Yeni bir dosya eklerken bu yon korunmali: `domain` bir `flow`
+modulunu import ederse klasor yapisi yerinde durur ama mimari coker.
 
 `arsiv/` repoda değil (gitignore): eski yakalamalar, ekran görüntüleri, ham
 dökümler.
@@ -252,7 +253,7 @@ Verified end to end on the live device: read-everything (system + SIM/cellular
 one-command provisioning (fresh device → fully provisioned → verified at
 5.5.5.1, idempotent). The phone number is read from the SIM itself
 (`AT+CNUM`), and a PIN-locked SIM is unlocked **permanently on the SIM** rather
-than by storing the PIN in nvram. 238 tests, zero deps.
+than by storing the PIN in nvram. Zero dependencies — Node.js built-ins only.
 
 Core logic lives in importable `opts`-taking functions behind a single door,
 `src/index.js` (`readDevice`, `applyProvisioning`, `provisionModem`...),
