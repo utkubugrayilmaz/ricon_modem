@@ -10,7 +10,7 @@
 // arayuze gomulmez, cekirdekte durur ve CLI/endpoint/UI ayni cevaba bakar.
 
 import { isReachable } from "../transport/scanner.js";
-import { readSim, normalizePhone, parseSimStatus } from "../device/sim.js";
+import { normalizePhone } from "../device/sim.js";
 import { readMsisdn, readSimLock, simKilidiUygunMu } from "../device/at.js";
 import { problem, isOk } from "../domain/problems.js";
 // Alt katman: OKUMA yolu da YAZMA yolu da buraya bakiyor (bkz. cihaz.js).

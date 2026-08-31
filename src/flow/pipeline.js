@@ -542,9 +542,9 @@ export async function provisionLoop(opts) {
 
 // Modem takılana kadar bekler (fabrika ya da saha adresinde cevap).
 async function modemBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
-  sahaHost = "5.5.5.1", sahaKaynak, ilerle } = {}) {
+  sahaHost = "5.5.5.1", sahaKaynak } = {}) {
   for (;;) {
-    if (await isReachable(fabrikaHost, kFabrika)) return;
+    if (await isReachable(fabrikaHost, fabrikaKaynak)) return;
     if (await isReachable(sahaHost, sahaKaynak)) return;
     await bekle(3000);
   }
@@ -554,7 +554,7 @@ async function modemBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
 async function modemCikarmaBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
   sahaHost = "5.5.5.1", sahaKaynak } = {}) {
   for (;;) {
-    const f = await isReachable(fabrikaHost, kFabrika);
+    const f = await isReachable(fabrikaHost, fabrikaKaynak);
     const s = f ? true : await isReachable(sahaHost, sahaKaynak);
     if (!f && !s) return;
     await bekle(3000);

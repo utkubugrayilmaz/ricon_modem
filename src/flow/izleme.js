@@ -7,7 +7,6 @@
 
 import { Client } from "../transport/client.js";
 import { parsePairs } from "../parse/ddwrt.js";
-import { problem, isOk } from "../domain/problems.js";
 
 // --- izle: DONEMSEL ornekleme + zaman cizelgesi ---
 //
