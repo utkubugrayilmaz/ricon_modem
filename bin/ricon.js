@@ -210,12 +210,12 @@ function askPin({ pinRemaining, pinTotal }) {
           ? "  ! An attempt was already burnt. BE SURE of the PIN.\n" : "")
         + "  A SINGLE attempt is made; the lock is removed PERMANENTLY.\n"
         + "  Leave it empty and press Enter to skip.\n");
-      const raw = (await ask("  SIM PIN (4-8 digits): ")).trim();
+      const raw = (await ask("  SIM PIN: ")).trim();
       if (!raw) return null;
       if (!/^\d{4,8}$/.test(raw)) {
         // Bicim kontrolu cekirdekte de var (disableSimPin cihaza HIC gitmez),
         // ama burada durmak operatore aninda soyluyor ve bir tur kazandiriyor.
-        process.stderr.write("  invalid format — 4-8 digits expected, skipping\n");
+        process.stderr.write("  invalid format — a SIM PIN is 4 to 8 digits, skipping\n");
         return null;
       }
       return raw;

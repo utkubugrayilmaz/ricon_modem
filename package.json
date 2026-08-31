@@ -26,6 +26,7 @@
     "verify": "node --env-file-if-exists=.env bin/ricon.js verify",
     "call": "node --env-file-if-exists=.env bin/ricon.js call",
     "metrics": "node bin/ricon.js metrics",
+    "sim-lock":"node bin/ricon.js sim-lock",
     "reset:dry": "node --env-file-if-exists=.env bin/ricon.js apply --host 5.5.5.1 --profile factory --new-host 192.168.1.1",
     "reset": "node --env-file-if-exists=.env bin/ricon.js apply --host 5.5.5.1 --profile factory --new-host 192.168.1.1 --apply"
   },
