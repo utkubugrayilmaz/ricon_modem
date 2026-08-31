@@ -3,7 +3,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextAction, provisionModem, provisionRecord } from "../src/flow/pipeline.js";
+import {
+  nextAction, provisionModem, provisionLoop, provisionRecord,
+} from "../src/flow/pipeline.js";
 // pcPreflight ve simTakiliMi ALT KATMANDA (cihaz.js): okuma yolu da yazma
 // yolu da onlara bakiyor, pipeline'a ait degiller.
 import { pcPreflight, simTakiliMi } from "../src/device/cihaz.js";
@@ -168,6 +170,40 @@ test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
   assert.equal(yazilan[0].telefon, "5350641858");
 });
 
+
+// --- Cok modem dongusu (--dongu) ---
+//
+// NEDEN BU TEST VAR: `modemBekle` ve `modemCikarmaBekle` icinde `kFabrika`
+// yaziliydi — o provisionModem'in YEREL degiskeni, bu iki fonksiyonun
+// kapsaminda TANIMSIZ. Yani dongunun ILK yoklamasi ReferenceError atiyordu ve
+// `hazirla --dongu` hic calismiyordu. Hicbir test bu yolu isletmedigi icin
+// kusur sessizce durdu. Testin kendisi de bir tasarim duzeltmesi gerektirdi:
+// dongu durdurulabilir olmadan (dur) ve kaynak IP disaridan verilemeden
+// (fabrikaKaynak/sahaKaynak) bu yol hicbir makinede sinanamiyordu.
+test("provisionLoop: modem beklerken PATLAMAZ ve dur() ile durur", async () => {
+  // TEST-NET adresleri + var olmayan kaynak IP: yoklama aninda basarisiz olur
+  // (bind edilemez), cihaza gidilmez, makinenin ag ayarina bagimlilik yok.
+  let bakis = 0;
+  const r = await provisionLoop({
+    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
+    fabrikaHost: "192.0.2.1", sahaHost: "198.51.100.1",
+    fabrikaKaynak: "192.0.2.50", sahaKaynak: "198.51.100.50",
+    dur: () => { bakis += 1; return bakis > 2; },
+  });
+  assert.equal(r.komut, "hazirla-dongu");
+  assert.deepEqual(r.hazirlanan, [], "hicbir modem hazirlanmadi, dongu durduruldu");
+  assert.ok(bakis > 2, "dur() bekleme dongusunun ICINDE de soruldu");
+});
+
+test("provisionLoop: kaynak IP turetilemezse dongu hic baslamaz", async () => {
+  const r = await provisionLoop({
+    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
+    fabrikaHost: "192.0.2.1", sahaHost: "198.51.100.1",
+  });
+  assert.equal(r.ok, false);
+  assert.ok(r.problems.some((p) => p.kod === "NO_SOURCE_IP"));
+  assert.deepEqual(r.hazirlanan, []);
+});
 
 test("provisionRecord: wan_ip yoksa null (kurulum HATASI degil, sadece kayit)", () => {
   const yok = provisionRecord({ kimlikBilgi: { iccid: "899", sim_durumu: "OK" } });

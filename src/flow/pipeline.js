@@ -516,25 +516,44 @@ export async function provisionModem(opts) {
 
 // Döngü: çok modem için. Bir modem hazırlanınca çıkarılmasını (link/erisim
 // kaybı) bekler, sonra sıradakine geçer. maxModem ile sınırlanabilir.
-// opts: provisionModem opts + { maxModem=Infinity, cikarmaBekle=true }
+//
+// opts: provisionModem opts + { maxModem=Infinity, cikarmaBekle=true, dur() }
+//   dur : true donerse dongu biter. Bekleme dongulerinin ICINDE de bakilir —
+//         yoksa "modem takilmasi bekleniyor" hali sonsuza kadar surer ve
+//         cagiran onu ancak sureci oldurerek kesebilir. Ayni sozlesme
+//         degerlendirmeyiIzle'de de var (bkz. degerlendirme.js).
 export async function provisionLoop(opts) {
-  const on = pcPreflight(
-    (opts.fabrikaHost || "192.168.1.1").split(".").slice(0, 3).join(".") + ".",
-    (opts.sahaHost || "5.5.5.1").split(".").slice(0, 3).join(".") + ".",
-  );
   const sonuc = { zaman: now(), komut: "hazirla-dongu", hazirlanan: [], problems: [] };
-  if (!on.hazir) {
-    sonuc.problems.push(...on.problems);
-    sonuc.ok = false;
-    return sonuc;
+
+  // Kaynak IP'ler CAGIRIDAN gelebilir; gelmeyeni pcPreflight tamamlar.
+  // provisionModem ile AYNI sozlesme (bkz. orada `kFabrika`/`kSaha`): cekirdek
+  // ortami zorunlu okumaz, girdi acikca opts ile gelir. Eskiden burada kosulsuz
+  // pcPreflight vardi, yani fonksiyon MAKINENIN ag ayarina bagliydi ve
+  // cagirinin elindeki bilgiyi kullanamiyordu.
+  let kFabrika = opts.fabrikaKaynak;
+  let kSaha = opts.sahaKaynak;
+  if (!kFabrika || !kSaha) {
+    const on = pcPreflight(
+      (opts.fabrikaHost || "192.168.1.1").split(".").slice(0, 3).join(".") + ".",
+      (opts.sahaHost || "5.5.5.1").split(".").slice(0, 3).join(".") + ".",
+    );
+    kFabrika = kFabrika || on.fabrikaKaynak;
+    kSaha = kSaha || on.sahaKaynak;
+    if (!kFabrika || !kSaha) {
+      sonuc.problems.push(...on.problems);
+      sonuc.ok = false;
+      return sonuc;
+    }
   }
-  const modemOpts = { ...opts, fabrikaKaynak: on.fabrikaKaynak, sahaKaynak: on.sahaKaynak };
+  const modemOpts = { ...opts, fabrikaKaynak: kFabrika, sahaKaynak: kSaha };
   const maxModem = opts.maxModem ?? Infinity;
+  const durduMu = () => typeof opts.dur === "function" && opts.dur() === true;
 
   let sayac = 0;
-  while (sayac < maxModem) {
+  while (sayac < maxModem && !durduMu()) {
     bildir(opts, "modem takilmasi bekleniyor...");
-    await modemBekle(modemOpts);
+    await modemBekle(modemOpts, durduMu);
+    if (durduMu()) break;
     bildir(opts, "modem algilandi, hazirlaniyor");
     // Numarayi SORMUYORUZ: provisionModem onu SIM'den okuyor. Okuyamazsa
     // yine opts.telefonSor'a dusuyor — yani yedek yol duruyor, ama artik
@@ -546,29 +565,39 @@ export async function provisionLoop(opts) {
     });
     sayac += 1;
     bildir(opts, r.ok ? `HAZIR (${r.durum}) — cihazi cikarabilirsin` : `BASARISIZ (${r.durum})`);
-    if (opts.cikarmaBekle !== false) await modemCikarmaBekle(modemOpts);
+    if (opts.cikarmaBekle !== false) await modemCikarmaBekle(modemOpts, durduMu);
   }
   sonuc.ok = sonuc.hazirlanan.every((h) => h.ok);
   return sonuc;
 }
 
 // Modem takılana kadar bekler (fabrika ya da saha adresinde cevap).
+//
+// DIKKAT: kaynak IP'yi PARAMETREDEN alir. Burada bir ara `kFabrika` yaziliydi
+// — o provisionModem'in YEREL degiskeni, bu kapsamda tanimsiz. Sonuc:
+// dongunun ilk yoklamasinda ReferenceError, yani `hazirla --dongu` hic
+// calismiyordu.
 async function modemBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
-  sahaHost = "5.5.5.1", sahaKaynak, ilerle } = {}) {
+  sahaHost = "5.5.5.1", sahaKaynak } = {}, durduMu = () => false) {
   for (;;) {
-    if (await isReachable(fabrikaHost, kFabrika)) return;
+    if (durduMu()) return;
+    if (await isReachable(fabrikaHost, fabrikaKaynak)) return;
     if (await isReachable(sahaHost, sahaKaynak)) return;
+    // Uyumadan ONCE bak: durdurma emri 3 saniye bekletilmez.
+    if (durduMu()) return;
     await bekle(3000);
   }
 }
 
 // Modem çıkarılana kadar bekler (her iki adreste de erişim kaybolunca).
 async function modemCikarmaBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
-  sahaHost = "5.5.5.1", sahaKaynak } = {}) {
+  sahaHost = "5.5.5.1", sahaKaynak } = {}, durduMu = () => false) {
   for (;;) {
-    const f = await isReachable(fabrikaHost, kFabrika);
+    if (durduMu()) return;
+    const f = await isReachable(fabrikaHost, fabrikaKaynak);
     const s = f ? true : await isReachable(sahaHost, sahaKaynak);
     if (!f && !s) return;
+    if (durduMu()) return;
     await bekle(3000);
   }
 }
