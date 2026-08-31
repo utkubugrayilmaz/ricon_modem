@@ -27,7 +27,7 @@ import * as core from "../src/index.js";
 import {
   writeJson, summaryText, planRows, planText, callByName, parseArgv,
 } from "../src/report.js";
-import { isOk } from "../src/problems.js";
+import { isOk, localizeProblems } from "../src/problems.js";
 
 const argv = process.argv.slice(2);
 const command = argv[0];
@@ -268,8 +268,22 @@ function streamWatcher() {
       case "reboot": stamp({ step: STEP.reboot }); break;
       case "verified": stamp({ step: STEP.verified }); break;
       case "internet": stamp(o.up ? { step: STEP.internet } : null); break;
-      case "done":
-      case "result": stamp(null); break;
+      case "done": stamp(null); break;
+      // SONUC: modem basina SORUNLARI DA BAS.
+      //
+      // Dongude her modemin raporu ekrana HIC ULASMIYORDU: provisionLoop
+      // yalnizca dongu bitince tek bir ozet donuyor, o da suresiz akista
+      // hicbir zaman basilmiyor. Operator `FAILED (no_modem)` gibi tek bir
+      // durum kelimesi goruyor, problem katalogunun yazdigi "ne oldu / ne
+      // yapmali" ise uretiliyor ama hicbir yere gitmiyordu.
+      // (2026-08-31: kablo sokuldu, ekranda yalniz FAILED (no_modem) yazdi.)
+      case "result":
+        stamp(null);
+        for (const p of localizeProblems(o.problems ?? [])) {
+          process.stderr.write(`  ${p.severity === "error" ? "✗" : "!"} ${p.operator.title}\n`
+            + `      ${p.operator.whatToDo}  [${p.code}]\n`);
+        }
+        break;
       default: break;
     }
   };
