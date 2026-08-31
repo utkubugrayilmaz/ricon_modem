@@ -126,14 +126,46 @@ function askPhone(index) {
   })();
 }
 
-// Cekirdegin olay akisini TERMINALE cevirir ve adim surelerini olcer.
+// SIM PIN kilitliyse operatore PIN sorar. Cekirdek (provisionModem) kilidi
+// gorunce burayi cagirir; kaldirma isini de kendisi yapar.
 //
-// Iki isi birden yapiyor cunku ikisi de ayni akisi dinliyor:
-//   1) `plan` olayinda ONCE -> SONRA tablosunu basar. Teknisyen ham nvram
-//      anahtari gormez; ad/sayfa/deger sozlukten gelir (planRows).
-//   2) Olaylar arasi gecen sureyi toplar -> data/olcumler.jsonl'in `adimlar`
-//      alani. Etiketler SABIT tutulur, yoksa metrics.js'in kovalari dagilir.
+// NEDEN NUMARA DEGIL PIN SORULUYOR: kilitli SIM abone verisini acmaz, yani
+// AT+CNUM bos doner. Numarayi elle yazdirmak kilidi cozmez — bir sonraki
+// cihazda ayni sorun. Kilidi SIM'den kaldirinca numara zaten kendiliginden
+// gelir ve SIM her cihazda acik acilir. Arayuzun akisi da buydu.
 //
+// PIN EKRANA YAZILMAZ, hicbir yere kaydedilmez; yalnizca cekirdege gecer.
+function askPin({ pinRemaining, pinTotal }) {
+  if (!process.stdin.isTTY) {
+    process.stderr.write("[hazirla] SIM PIN kilitli ama etkilesimli terminal yok\n");
+    return Promise.resolve(null);
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const ask = (question) => new Promise((c) => rl.question(question, c));
+  return (async () => {
+    try {
+      const total = pinTotal ?? 3;
+      process.stderr.write(
+        `\n  SIM PIN KILITLI — kalan hak: ${pinRemaining ?? "?"}/${total}\n`
+        + (pinRemaining != null && pinRemaining < total
+          ? "  ! Daha once bir deneme yanmis. PIN'den EMIN OL.\n" : "")
+        + "  TEK deneme yapilir; kilit SIM'den KALICI kalkar.\n"
+        + "  Bos birakip Enter'a basarsan atlanir.\n");
+      const raw = (await ask("  SIM PIN (4-8 hane): ")).trim();
+      if (!raw) return null;
+      if (!/^\d{4,8}$/.test(raw)) {
+        // Bicim kontrolu cekirdekte de var (disableSimPin cihaza HIC gitmez),
+        // ama burada durmak operatore aninda soyluyor ve bir tur kazandiriyor.
+        process.stderr.write("  gecersiz bicim — 4-8 hane bekleniyor, atlaniyor\n");
+        return null;
+      }
+      return raw;
+    } finally {
+      rl.close();
+    }
+  })();
+}
+
 // ADIM ETIKETLERI TARIHSEL SATIRLARLA BIREBIR AYNI. data/olcumler.jsonl'de
 // 2026-08-27'den beri bu etiketler yaziyor ve stepSummary kovalari ADA gore
 // topluyor. Yeni bir etiket uydurmak kovayi ikiye boler; medyan
@@ -148,6 +180,14 @@ const ADIM = Object.freeze({
   internet: "internet doğrulandı (SIM çalışıyor)",
 });
 
+// Cekirdegin olay akisini TERMINALE cevirir ve adim surelerini olcer.
+//
+// Iki isi birden yapiyor cunku ikisi de ayni akisi dinliyor:
+//   1) `plan` olayinda ONCE -> SONRA tablosunu basar. Teknisyen ham nvram
+//      anahtari gormez; ad/sayfa/deger sozlukten gelir (planRows).
+//   2) Olaylar arasi gecen sureyi toplar -> data/olcumler.jsonl'in `adimlar`
+//      alani. Etiketler SABIT tutulur, yoksa metrics.js'in kovalari dagilir.
+//
 // Doner: `event` dinleyicisi; uzerinde .steps() ile kirilim alinir.
 function streamWatcher() {
   const steps = [];
@@ -465,6 +505,7 @@ async function runCommand() {
           ? Number(flag("--internet-bekle")) : 150,
         record: lineWriter(flag("--kayit") || LEDGER_FILE),
         askPhone,          // dongu: her modem icin sorar
+        askPin,            // SIM kilitliyse PIN sorar, cekirdek kaldirir
         progress,
         event: streamWatcher(),   // plan tablosu + adim sureleri
       };

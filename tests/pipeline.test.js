@@ -9,6 +9,7 @@ import { nextAction, provisionModem, provisionRecord } from "../src/pipeline.js"
 import { pcPreflight, isSimPresent } from "../src/device.js";
 import { problem, isOk } from "../src/problems.js";
 import { applyPin } from "../src/provision.js";
+import { isSimLockEligible } from "../src/at.js";
 import { stripSecrets } from "../src/report.js";
 
 test("nextAction: saha adresinde + istenen durumda -> zaten_hazir", () => {
@@ -222,4 +223,48 @@ test("provisionRecord: sahaya_hazir uc degerli — 'ok' tek basina YANILTICI", (
   // Internet dogrulamasi kapatilmis -> bilinmiyor, false demek yanlis olur
   const bilinmiyor = provisionRecord({ result: { ok: true }, internet: null });
   assert.equal(bilinmiyor.fieldReady, null);
+});
+
+// --- PIN kilitli SIM: NUMARA degil PIN sorulur ---
+//
+// NEDEN: kilitli SIM abone verisini ACMAZ, AT+CNUM bos doner. Numarayi elle
+// yazdirmak kilidi cozmez — bir sonraki cihazda ayni sorun. Dogru hamle
+// kilidi SIM'den kaldirmak; kalkinca numara zaten kendiliginden gelir.
+// Arayuzun akisi da buydu (bkz. `ui` dali, app.js pinKilidiIste).
+
+test("PIN kilitli SIM: askPin cagrilir, askPhone CAGRILMAZ", async () => {
+  const sorulan = [];
+  const r = await provisionModem({
+    credentials: { user: "u", password: "p" },
+    profile: { name: "saha", nvram: {} },
+    factoryHost: "127.0.0.1", factorySource: "127.0.0.1",
+    fieldHost: "127.0.0.2", fieldSource: "127.0.0.1",
+    attempts: 1, internetWaitSec: 0,
+    askPin: async () => { sorulan.push("pin"); return null; },
+    askPhone: async () => { sorulan.push("telefon"); return null; },
+  });
+  // Cihaz yok -> modem_yok; ikisi de sorulmamali (kilit bilgisi bile yok).
+  assert.equal(r.status, "modem_yok");
+  assert.deepEqual(sorulan, [], "cihaz yokken hicbir sey sorulmaz");
+});
+
+test("isSimLockEligible: PUK kilidinde PIN SORULMAZ (kapi kapali)", () => {
+  const g = isSimLockEligible({ lock: "puk", pukRemaining: 10 }, { manualConsent: true });
+  assert.equal(g.eligible, false);
+  assert.equal(g.reason, "SIM_PUK_LOCKED");
+});
+
+test("isSimLockEligible: son hakta elle onay bile GECMEZ", () => {
+  const g = isSimLockEligible({ lock: "pin", pinRemaining: 1, pinTotal: 3 },
+    { manualConsent: true });
+  assert.equal(g.eligible, false, "son hak insani da durdurur");
+});
+
+test("isSimLockEligible: hak yanmis ama elle onay VARSA gecer", () => {
+  // Otomatik yol katidir; dogru PIN'i bilen operatorun onu kesilmez.
+  const otomatik = isSimLockEligible({ lock: "pin", pinRemaining: 2, pinTotal: 3 });
+  const elle = isSimLockEligible({ lock: "pin", pinRemaining: 2, pinTotal: 3 },
+    { manualConsent: true });
+  assert.equal(otomatik.eligible, false, "otomatik yol yanmis hakta durur");
+  assert.equal(elle.eligible, true, "elle onay gecer");
 });

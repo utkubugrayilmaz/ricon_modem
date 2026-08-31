@@ -17,7 +17,7 @@ import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./settings.js";
 import { normalizePhone } from "./device.js";
 import { readIdentity, isSimPresent, waitForInternet, pcPreflight } from "./device.js";
 import { problem } from "./problems.js";
-import { readMsisdn } from "./at.js";
+import { readMsisdn, disableSimPin, isSimLockEligible } from "./at.js";
 import { canSpendPinAttempt, isAttemptBurned } from "./at.js";
 
 const now = () => new Date().toISOString();
@@ -386,6 +386,58 @@ export async function provisionModem(opts) {
       report.problems.push(problem("SIM_MISSING", identityBefore.simStatus));
       report.status = "sim_yok"; report.attempt = attempt; report.ok = false;
       return finish(location, identityBefore);
+    }
+
+    // PIN KILIDI: numaradan ONCE. Kilitli SIM abone verisini ACMAZ — AT+CNUM
+    // bos doner. Yani kilitli bir SIM'de "numarayi elle yaz" YANLIS cozumdur;
+    // dogrusu kilidi SIM'den kaldirmak. Kalkinca numara zaten kendiliginden
+    // gelir ve SIM her cihazda acik acilir (saklanacak sir kalmaz).
+    //
+    // Bu, arayuzun akisinin ta kendisi (bkz. `ui` dali, app.js pinKilidiIste
+    // -> /api/pin-kaldir -> yeniden degerlendirme). Orada arayuze gomuluydu;
+    // burada CEKIRDEKTE, yani CLI de HTTP ucu de ayni yolu aliyor.
+    //
+    // ⚠ TEK DENEME. Yanlis PIN bir hak yakar, uc yanlis PUK demektir.
+    // Korumalarin TAMAMI disableSimPin'de: bicim kontrolu, son hak, yanmis
+    // hak. Burada yeni bir karar URETILMIYOR — PIN yalnizca gecip gidiyor ve
+    // hicbir yere (kayit, olay, defter) yazilmiyor.
+    if (location && !phoneNormalized && identityBefore?.sim?.lock === "pin"
+        && typeof opts.askPin === "function") {
+      const lock = identityBefore.sim;
+      const gate = isSimLockEligible(lock, { manualConsent: true });
+      emitEvent(opts, { kind: "pin_kilidi", lock: lock.lock,
+        pinRemaining: lock.pinRemaining, eligible: gate.eligible ?? true,
+        reason: gate.reason ?? null });
+      if (gate.eligible === false) {
+        // Uygun degilse SORMA: operatore yanlislikla basilacak bir kapi
+        // birakmiyoruz (arayuzde de dugme hic gorunmuyordu).
+        report.problems.push(...(gate.problems ?? []));
+      } else {
+        notify(opts, `SIM PIN kilitli — kalan hak ${lock.pinRemaining ?? "?"}`);
+        const pinGiris = await opts.askPin({
+          attempt, pinRemaining: lock.pinRemaining, pinTotal: lock.pinTotal,
+        });
+        if (pinGiris) {
+          notify(opts, "PIN kilidi kaldiriliyor (TEK deneme)");
+          const u = await disableSimPin(
+            { ...location, credentials, progress: opts.progress, event: opts.event },
+            pinGiris, { manualConsent: true },
+          );
+          emitEvent(opts, { kind: "pin_kilidi_sonuc", ok: u.ok,
+            unlocked: u.unlocked, lockRemoved: u.lockRemoved,
+            pinRemaining: u.pinRemaining });
+          report.problems.push(...u.problems);
+          if (u.unlocked) {
+            // Kilit kalkti: kimligi YENIDEN oku. Eski `identityBefore` hala
+            // "kilitli" diyor; onunla devam etmek numarayi bir daha
+            // okutmazdi.
+            notify(opts, "kilit kalkti — kimlik yeniden okunuyor");
+            try {
+              identityBefore = await readIdentity({ ...location, credentials });
+            } catch { /* kismi sonuc gecerli */ }
+          }
+        }
+      }
     }
 
     // NUMARAYI CIHAZDAN OKU — verilmediyse. SIM KONTROLUNDEN SONRA: SIM yoksa
