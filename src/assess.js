@@ -89,9 +89,15 @@ export async function assessDevice(opts) {
     if (k) {
       report.identity = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
         lan_mac: k.lan_mac, operator: k.operator };
+      report.identityRead = k.readOk !== false;
       report.sim = { present: isSimPresent(k), ...k.sim };
       report.internet = { up: Boolean(k.wan_ip), wan_ip: k.wan_ip };
-      if (!isSimPresent(k)) report.problems.push(problem("SIM_MISSING", k.simStatus));
+      // Okuma olmadiysa "SIM yok" DEME — o bir teshis degil tahmin olurdu.
+      // Cihazin okunamamasi zaten bir sorun ve retryDecision onu gecici
+      // sayip tekrar bakiyor; SIM_MISSING ise insan mudahalesi isteyen
+      // kalici bir teshis. Ikisini karistirmak yanlis yonlendirir.
+      if (k.readOk === false) report.problems.push(...k.problems);
+      else if (!isSimPresent(k)) report.problems.push(problem("SIM_MISSING", k.simStatus));
       else if (k.sim?.lock === "pin") report.problems.push(problem("SIM_PIN_LOCKED", k.sim.pinRemaining));
       else if (k.sim?.lock === "puk") report.problems.push(problem("SIM_PUK_LOCKED", k.sim.pukRemaining));
     }

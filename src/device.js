@@ -27,11 +27,30 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // kimlik: LAN MAC (cihaza ait, kimliksiz okunur) + IMEI (modül) + ICCID (SIM).
 export async function readIdentity({ host, sourceIp, credentials }) {
   const result = { lan_mac: null, iccid: null, imsi: null, imei: null,
-    operator: null, simStatus: null, wan_ip: null };
+    operator: null, simStatus: null, wan_ip: null, problems: [], readOk: true };
   const c = new Client({ host, sourceIp, credentials });
   const info = await c.get("/asp/status/Info.live.htm");
   result.lan_mac = parsePairs(info.body || "").lan_mac || null;
   const s = await readSim({ host, sourceIp, credentials });
+  // OKUMA BASARISIZ MI, SIM GERCEKTEN YOK MU — bunu AYIRT ETMEK ZORUNDAYIZ.
+  //
+  // Eskiden readSim'in problems'i BURADA DUSUYORDU. Okuma basarisiz olunca
+  // (401, bos govde, reboot sonrasi henuz acilmamis web sunucusu) sonuc
+  // `iccid: null` oluyordu — yani SIM'siz bir cihazdan AYIRT EDILEMEZ hale
+  // geliyordu. Cagiran `isSimPresent()` false gorup "SIM yok" diyordu.
+  //
+  // Olculdu (2026-08-31, canli): fabrikaya donmus modem tak-calistir'da
+  // 2.4 saniyede "no_sim" ile REDDEDILDI; SIM takiliydi ve ayni SIM bir
+  // dakika sonra sorunsuz okundu. Gercek sebep: cihaz reboot'tan yeni
+  // cikmisti ve tek baglantili web sunucusu daha cevap vermiyordu.
+  //
+  // Ayrim onemli cunku SONUCLARI ZIT: "SIM yok" insan mudahalesi ister
+  // (kapat, tak, ac) ve tekrar denemek anlamsizdir; "okunamadi" ise tam
+  // olarak tekrar denenmesi gereken seydir.
+  result.problems = [
+    ...info.problems.filter((p) => p.severity === "error"),
+    ...(s.problems ?? []).filter((p) => p.severity === "error"),
+  ];
   const s1 = s.sim1 || {};
   result.iccid = s1.iccidClean || s1.iccid || null;
   result.imsi = s1.imsi || null;
@@ -45,6 +64,14 @@ export async function readIdentity({ host, sourceIp, credentials }) {
   // Beklemiyoruz, yoksa yok yazıyoruz; kurulum süresine tek saniye eklemiyor.
   const wanFields = (s1.wan_ip || "").trim();
   result.wan_ip = wanFields && wanFields !== "0.0.0.0" ? wanFields : null;
+  // Okuma GERCEKTEN oldu mu? Iki kosul:
+  //   1) error seviyesinde problem yok, VE
+  //   2) sayfa gercekten ayristi.
+  // Ikinci kosulun olcusu IMEI: o MODULUN kimligi, SIM'in degil. SIM'siz bir
+  // modem bile IMEI bildirir. IMEI de simStatus da yoksa sayfa hic okunmamis
+  // demektir — o durumda "SIM yok" demek bir teshis degil, bir tahmindir.
+  result.readOk = result.problems.length === 0
+    && (result.imei != null || result.simStatus != null);
   return result;
 }
 

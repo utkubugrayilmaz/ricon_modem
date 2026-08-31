@@ -358,7 +358,11 @@ export async function provisionModem(opts) {
 
   // Tuketici kimligi zaten okuduysa ve SIM yoksa: cihaza HIC GITMEDEN reddet.
   // (Ayni kontrol asagida, kimligi kendimiz okudugumuz yolda da var.)
-  if (readyIdentityInfo && !isSimPresent(readyIdentityInfo)) {
+  //
+  // AMA okuma basarisizsa reddetme: o kimlik bir CEVAP degil, bir BOSLUK.
+  // Kendimiz okuyup tekrar deneriz — asagidaki dongu tam bunun icin var.
+  if (readyIdentityInfo?.readOk === false) identityBefore = null;
+  else if (readyIdentityInfo && !isSimPresent(readyIdentityInfo)) {
     report.problems.push(problem("SIM_MISSING", readyIdentityInfo.simStatus));
     report.status = "no_sim"; report.ok = false;
     return finish(null, readyIdentityInfo);
@@ -381,6 +385,31 @@ export async function provisionModem(opts) {
       try {
         identityBefore = await readIdentity({ ...location, credentials });
       } catch { identityBefore = null; }
+    }
+    // OKUMA BASARISIZ ile "SIM YOK" AYNI SEY DEGIL.
+    //
+    // Olculdu (2026-08-31, canli): fabrikaya donmus modem tak-calistir'da
+    // 2.4 saniyede "no_sim" ile reddedildi — SIM takiliydi ve ayni SIM bir
+    // dakika sonra sorunsuz okundu. Cihaz reboot'tan yeni cikmisti; TCP
+    // portu acilmisti ama tek baglantili web sunucusu daha cevap vermiyordu.
+    // readIdentity bunu `iccid: null` diye donduruyordu, yani SIM'siz bir
+    // cihazdan ayirt edilemiyordu.
+    //
+    // Sonuclari ZIT oldugu icin ayirmak sart:
+    //   SIM yok    -> insan mudahalesi (kapat, tak, ac). Tekrar denemek bosa.
+    //   okunamadi  -> tam olarak tekrar denenmesi gereken sey. `attempts`
+    //                 zaten bunun icin var; numara okuma yolu da boyle
+    //                 davraniyor. SIM kontrolunde bu asimetri duruyordu.
+    if (location && identityBefore && identityBefore.readOk === false) {
+      if (attempt < attempts) {
+        notify(opts, "identity unreadable, will retry");
+        identityBefore = null;    // SART: yoksa sonraki tur bayat sonucu kullanir
+        await wait(2000);
+        continue;
+      }
+      report.problems.push(...identityBefore.problems);
+      report.status = "no_identity"; report.attempt = attempt; report.ok = false;
+      return finish(location, identityBefore);
     }
     if (location && identityBefore && !isSimPresent(identityBefore)) {
       report.problems.push(problem("SIM_MISSING", identityBefore.simStatus));

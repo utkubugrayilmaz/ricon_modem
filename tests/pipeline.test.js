@@ -140,6 +140,51 @@ test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
 });
 
 
+// --- OKUMA BASARISIZ ile "SIM YOK" AYNI SEY DEGIL ---
+//
+// NEDEN VAR — gonderilmis GERCEK bir kusur (2026-08-31, canli):
+// Fabrikaya donmus modem tak-calistir'da 2.4 SANIYEDE "no_sim" ile
+// reddedildi. SIM TAKILIYDI ve ayni SIM bir dakika sonra sorunsuz okundu
+// (ICCID, IMEI, Turkcell, WAN IP). Gercek sebep: cihaz reboot'tan yeni
+// cikmisti, TCP portu acilmisti ama tek baglantili web sunucusu daha cevap
+// vermiyordu. readIdentity readSim'in problems'ini DUSURUYORDU, yani
+// basarisiz okuma `iccid: null` olarak geliyor ve SIM'siz cihazdan
+// AYIRT EDILEMIYORDU.
+//
+// Sonuclari ZIT oldugu icin bu ayrim zorunlu:
+//   SIM yok   -> insan mudahalesi ister, tekrar denemek bosa
+//   okunamadi -> tam olarak tekrar denenmesi gereken sey
+
+test("okuma BASARISIZSA 'SIM yok' DEMEZ", async () => {
+  // readOk:false = "okuyamadim", iccid:null = "SIM yok" DEGIL.
+  const written = [];
+  const r = await provisionModem({
+    credentials: { user: "u", password: "p" }, profile: { name: "field", nvram: {} },
+    phone: "05350641858",
+    factorySource: null, fieldSource: null,   // cihaza gitmesin
+    identity: { iccid: null, imei: null, simStatus: null, lan_mac: null,
+      readOk: false,
+      problems: [{ code: "REQUEST_FAILED", severity: "error",
+        message: "empty body", check: "" }] },
+    record: (line) => written.push(line),
+  });
+  assert.notEqual(r.status, "no_sim", "okunamayan cihaza 'SIM yok' denmemeli");
+  assert.ok(!r.problems.some((p) => p.code === "SIM_MISSING"),
+    "SIM_MISSING kalici bir teshis; gecici okuma hatasinda uretilmemeli");
+});
+
+test("okuma BASARILI ve SIM gercekten yoksa: no_sim (teshis korunuyor)", async () => {
+  // Duzeltmenin eski davranisi bozmadiginin kaniti.
+  const r = await provisionModem({
+    credentials: { user: "u", password: "p" }, profile: { name: "field", nvram: {} },
+    phone: "05350641858",
+    identity: { iccid: null, simStatus: "Not Insert", imei: "867", lan_mac: "aa",
+      readOk: true, problems: [] },
+  });
+  assert.equal(r.status, "no_sim");
+  assert.equal(r.problems[0].code, "SIM_MISSING");
+});
+
 test("provisionRecord: wan_ip yoksa null (kurulum HATASI degil, sadece kayit)", () => {
   const yok = provisionRecord({ identity: { iccid: "899", simStatus: "OK" } });
   assert.equal(yok.wan_ip, null, "o an internet yoktu -> null");
