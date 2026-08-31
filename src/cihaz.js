@@ -106,7 +106,14 @@ export async function waitForInternet({ host, kaynakIp, kimlik }, maxSn = 150, o
     }
     bildir(opts, `internet bekleniyor (${gecen()} sn / ${maxSn} sn)`);
     olayla(opts, { tur: "internet_bekleniyor", gecen_sn: gecen(), max_sn: maxSn });
-    await bekle(5000);
+    // Yoklama araligi. Olculdu (2026-08-31, enstrumanli reboot): tek readSim
+    // 0.10-0.19 sn suruyor, yani yoklamanin MALIYETI yok — kayip tamamen
+    // GRANULASYONDAN geliyordu. Ayni olcumde WAN IP, nvram okunabilir hale
+    // geldikten 2.6 sn sonra gelmisti; 5 sn'lik aralik boyle bir ani 5 sn'ye
+    // kadar gec goruyor (canli kurulum kaydinda: gercek 6.3-11.2 arasi, biz
+    // 11.2 dedik). 2 sn hem bu kaybi ~1 sn'ye indiriyor hem de tek baglantili
+    // cihazi zorlamiyor (2 sn'de bir 0.1 sn'lik istek).
+    await bekle(2000);
   }
 }
 
