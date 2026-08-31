@@ -1,13 +1,12 @@
-// Gosterim katmani testleri — ayar sozlugu + UI satirlari.
-// Cihaz GEREKTIRMEZ, sunucu DINLEMEZ (createServer cagrilmiyor).
+// Gosterim katmani testleri — ayar sozlugu + plan satirlari.
+// Cihaz GEREKTIRMEZ, ag DINLENMEZ: hepsi saf fonksiyon.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { settingLabel } from "../src/report/report.js";
+import { settingLabel, planRows } from "../src/report/report.js";
 import { SETTING_LABELS } from "../src/domain/constants.js";
 import { FIELD_PROFILE, FACTORY_PROFILE } from "../src/domain/profile.js";
 import { planProvisioning } from "../src/flow/provisioning.js";
-import { planRows } from "../src/server.js";
 
 test("settingLabel: ham deger okunabilir etikete cevrilir", () => {
   const r = settingLabel("w1_wan_proto", "m13g");

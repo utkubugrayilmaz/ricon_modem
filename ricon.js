@@ -13,7 +13,8 @@
 //   node ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
 //                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
 //                                --reboot-yok
-//   node ricon.js sunucu         Tarayici arayuzu (UI) — http://127.0.0.1:8080
+//   node ricon.js calistir <fn>  Cekirdegin HERHANGI bir fonksiyonunu cagir
+//                                adsiz cagrilirsa tum yuzeyi listeler
 //   node ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
 //                                Numara SIM'den okunur; --telefon 05xx EZER
 //                                --dongu (cok modem: tak -> hazir -> cikar)
@@ -38,8 +39,10 @@ import {
   readMsisdn, readSimLock, simPinKaldir,
   simPinKilitle, atKomut, parseClck,
 } from "./src/index.js";
-import { writeJson, summaryText } from "./src/report/report.js";
+import { writeJson, summaryText, planRows, planMetni } from "./src/report/report.js";
 import { isOk } from "./src/domain/problems.js";
+import * as cekirdek from "./src/index.js";
+import { cagir, argvAyikla, listeMetni } from "./src/cli/cagirici.js";
 
 const argv = process.argv.slice(2);
 const komut = argv[0];
@@ -91,6 +94,11 @@ function kayitYazici(dosya, etiket = "kayit") {
   };
 }
 
+// Operatorun numarayi girerken gecirdigi sure — INSANIN MESGUL OLDUGU TEK AN.
+// Olcum ozetinin en anlamli sayisi bu (gerisi gozetimsiz geciyor), o yuzden
+// ayri tutuluyor. Satir yazilinca sifirlanir: her modem kendi suresini alsin.
+let girisSn = null;
+
 // Telefon numarasini sorar (stderr'a; stdout saf JSON kalir). Gecerli olana
 // kadar ya da bos girise kadar sorar. Doner: 5xxxxxxxxx | null
 function telefonSor(sira) {
@@ -102,17 +110,107 @@ function telefonSor(sira) {
   }
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   const sor = (soru) => new Promise((c) => rl.question(soru, c));
+  const basladi = Date.now();
   return (async () => {
-    for (let i = 0; i < 3; i += 1) {
-      const ham = (await sor(`\n[${sira}. modem] SIM telefon numarasi (05xxxxxxxxx): `)).trim();
-      if (!ham) break;
-      const n = normalizePhone(ham);
-      if (n) { rl.close(); return n; }
-      process.stderr.write("  gecersiz — TR mobil bekleniyor (05xxxxxxxxx / +905xxxxxxxxx)\n");
+    try {
+      for (let i = 0; i < 3; i += 1) {
+        const ham = (await sor(`\n[${sira}. modem] SIM telefon numarasi (05xxxxxxxxx): `)).trim();
+        if (!ham) break;
+        const n = normalizePhone(ham);
+        if (n) return n;
+        process.stderr.write("  gecersiz — TR mobil bekleniyor (05xxxxxxxxx / +905xxxxxxxxx)\n");
+      }
+      return null;
+    } finally {
+      rl.close();
+      girisSn = Number(((Date.now() - basladi) / 1000).toFixed(1));
     }
-    rl.close();
-    return null;
   })();
+}
+
+// Cekirdegin olay akisini TERMINALE cevirir ve adim surelerini olcer.
+//
+// Iki isi birden yapiyor cunku ikisi de ayni akisi dinliyor:
+//   1) `plan` olayinda ONCE -> SONRA tablosunu basar. Teknisyen ham nvram
+//      anahtari gormez; ad/sayfa/deger sozlukten gelir (planRows).
+//   2) Olaylar arasi gecen sureyi toplar -> data/olcumler.jsonl'in `adimlar`
+//      alani. Etiketler SABIT tutulur, yoksa metrics.js'in kovalari dagilir.
+//
+// Doner: `olay` dinleyicisi; uzerinde .adimlar() ile kirilim alinir.
+function akisIzleyici() {
+  const adimlar = [];
+  // Ilk olaya kadar gecen sure de bir adimdir (modem aranmasi/algilanmasi);
+  // etiketsiz baslarsak o sure sessizce kaybolurdu.
+  let sonAd = "algilama";
+  let sonAn = Date.now();
+  const damgala = (ad) => {
+    const simdi = Date.now();
+    if (sonAd) adimlar.push({ ad: sonAd, sure_sn: Number(((simdi - sonAn) / 1000).toFixed(1)) });
+    sonAd = ad;
+    sonAn = simdi;
+  };
+
+  const olay = (o) => {
+    switch (o.tur) {
+      // Yeni cihaz/deneme basladi: onceki kirilimi at, sifirdan olc. Dongude
+      // her modem KENDI adim surelerini alsin diye gerekli.
+      case "algilandi":
+        adimlar.length = 0;
+        sonAd = "algilama";
+        sonAn = Date.now();
+        break;
+      case "plan":
+        damgala("plan");
+        process.stderr.write("\n  PLAN — once -> sonra (* = degisecek)\n"
+          + planMetni(planRows(o.plan)) + "\n\n");
+        break;
+      case "yaziliyor": damgala(`yazma:${o.grup}`); break;
+      case "reboot": damgala("reboot"); break;
+      case "dogrulama": damgala("dogrulama"); break;
+      case "pin_deneniyor": damgala("pin_denemesi"); break;
+      case "internet_bekleniyor": damgala("internet_bekleme"); break;
+      case "internet":
+      case "bitti":
+      case "sonuc": damgala(null); break;
+      default: break;
+    }
+  };
+  olay.adimlar = () => { damgala(null); return adimlar; };
+  return olay;
+}
+
+// provisionModem sonucunu OLCUM satirina cevirir (data/olcumler.jsonl).
+// Sema: src/report/metrics.js — summarizeMetrics'in bekledigi alanlar.
+//
+// Bu is neden CEKIRDEKTE DEGIL: olcum bir rapor kaygisi, provizyonun degil.
+// Cekirdek yalnizca `toplam_sn`'i bildiriyor; satiri kuran, dosyaya yazan ve
+// "bu kosuyu kaydet" diyen tuketici.
+function olcumSatiri(r, adimlar) {
+  const k = r.kayit || {};
+  const satir = {
+    zaman: new Date().toISOString(),
+    tur: "kurulum",
+    kaynak: "cli",
+    durum: r.durum ?? null,
+    ok: Boolean(r.ok),
+    deneme: r.deneme ?? 1,
+    lan_mac: k.lan_mac ?? null,
+    iccid: k.iccid ?? null,
+    telefon: k.telefon ?? null,
+    toplam_sn: r.toplam_sn ?? null,
+    giris_sn: girisSn,
+    adimlar,
+  };
+  girisSn = null;   // sonraki modem kendi suresini olcsun
+  return satir;
+}
+
+// Tek modem: hazirla + olcum satirini yaz. Dongude ayni isi cekirdegin
+// olcumKayit geri cagrisi yapiyor (her modemden sonra).
+async function olculerekHazirla(hOpts, ek, olcumYaz) {
+  const r = await provisionModem({ ...hOpts, ...ek });
+  olcumYaz(olcumSatiri(r, hOpts.olay?.adimlar?.() ?? []));
+  return r;
 }
 
 // Cekirdek cagrisinin sonucuna `ok`'u PROBLEMLERDEN turetir. Bazi salt-okuma
@@ -252,6 +350,7 @@ async function komutuCalistir() {
         reboot: !argv.includes("--reboot-yok"),
         yeniHost: bayrak("--yeni-host"),
         yeniKaynakIp: bayrak("--yeni-kaynak"),
+        olay: akisIzleyici(),
       }, profil);
     }
     case "olcum-elle": {
@@ -298,7 +397,7 @@ async function komutuCalistir() {
         return { zaman: new Date().toISOString(), komut: "olcum", ok: false,
           problems: [{ kod: "OLCUM_DOSYA_YOK", severity: "error",
             message: `Metric file not found or unreadable: ${dosya}`,
-            check: "Run the UI flow (node ricon.js sunucu) a few times first;"
+            check: "Run `npm start` (or `ricon.js hazirla`) a few times first;"
               + " each finished run appends one line." }] };
       }
       const elleDk = Number(bayrak("--elle-dk"));
@@ -309,45 +408,22 @@ async function komutuCalistir() {
         modemSayisi: Number(bayrak("--modem-sayisi")) || undefined,
       });
     }
-    case "sunucu": {
-      // UI/HTTP katmani: cekirdegi TUKETIR. Kural eklemez — telefon
-      // zorunlulugu ve defter kaydi zaten cekirdekte.
-      const profilAd = bayrak("--profil") || "saha";
-      const profil = PROFILES[profilAd];
-      if (!profil) {
-        return { zaman: new Date().toISOString(), komut: "sunucu", ok: false,
-          problems: [{ kod: "ARGS", severity: "error",
-            message: `Bilinmeyen profil: ${profilAd}`,
-            check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
-      }
-      const { createServer } = await import("./src/server.js");
-      const port = Number(bayrak("--port")) || 8080;
-      // Varsayilan YALNIZCA 127.0.0.1: bu servis cihaza YAZAR, agda
-      // yayinlanmasi acik bir karar olmali.
-      const adres = bayrak("--dinle") || "127.0.0.1";
-      const sunucu = createServer({
-        fabrikaHost: opts.host,
-        sahaHost: bayrak("--saha-host") || profil.nvram.lan_ipaddr || "5.5.5.1",
-        kimlik: opts.kimlik,
-        profil,
-        // Arayuzdeki "Fabrikaya dondur" dugmesi bu profili uygular. DIKKAT:
-        // gercek factory reset DEGIL — yalniz bizim dokundugumuz anahtarlari
-        // default'a alir (bkz. profile.js).
-        sifirlamaProfil: PROFILES.fabrika,
-        // Test arayuzu bir ORNEK: urun cekirdek + API. Bu yol verilmezse
-        // sunucu salt API olarak calisir.
-        staticDir: bayrak("--arayuz") === "yok" ? null
-          : (bayrak("--arayuz") || new URL("./examples/test-ui/", import.meta.url).pathname
-            .replace(/^\/([A-Za-z]:)/, "$1")),
-        kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
-        olcumKayit: kayitYazici(bayrak("--olcum") || OLCUM_DOSYA, "olcum"),
-        ilerle,
+    // Cekirdegin HERHANGI bir export'unu adiyla cagirir. Yeni bir yetenek
+    // eklendiginde buraya `case` yazmak GEREKMEZ — src/index.js'e eklenen her
+    // sey aninda terminalden erisilebilir olur. Karar/ayristirma saf ve
+    // test edilebilir: src/cli/cagirici.js.
+    case "calistir": {
+      const ad = argv[1] && !argv[1].startsWith("-") ? argv[1] : null;
+      const { bayraklar, konumsallar } = argvAyikla(argv.slice(ad ? 2 : 1));
+      // opts'a karismayan CLI bayraklari: fonksiyona gitmemeli.
+      const { saf, json, kaynak, ...fonksiyonBayraklari } = bayraklar;
+      return cagir(cekirdek, ad, {
+        opts: { host: opts.host, kaynakIp: opts.kaynakIp, kimlik: opts.kimlik,
+          community: opts.community, ilerle },
+        bayraklar: fonksiyonBayraklari,
+        konumsallar,
+        saf: saf === true,
       });
-      await new Promise((c) => sunucu.listen(port, adres, c));
-      process.stderr.write(`\nModem kurulum arayuzu: http://${adres}:${port}\n`
-        + `  profil: ${profil.ad} · fabrika: ${opts.host}\n`
-        + "  Ctrl+C ile kapat.\n\n");
-      return null;   // sunucu calisir; JSON ciktisi/cikis yok
     }
     case "hazirla": {
       const profilAd = bayrak("--profil") || "saha";
@@ -377,18 +453,24 @@ async function komutuCalistir() {
         kayit: kayitYazici(bayrak("--kayit") || KAYIT_DOSYA),
         telefonSor,          // dongu: her modem icin sorar
         ilerle,
+        olay: akisIzleyici(),   // plan tablosu + adim sureleri
       };
+      const olcumYaz = kayitYazici(bayrak("--olcum") || OLCUM_DOSYA, "olcum");
       const dongu = argv.includes("--dongu");
       if (dongu) {
         // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli);
         // numara her modemde o modemin SIM'inden okunuyor.
-        return provisionLoop({ ...hOpts, maxModem: Number(bayrak("--max")) || Infinity });
+        return provisionLoop({
+          ...hOpts,
+          olcumKayit: (r) => olcumYaz(olcumSatiri(r, hOpts.olay.adimlar())),
+          maxModem: Number(bayrak("--max")) || Infinity,
+        });
       }
       // Tek modem: --telefon VERMEK ARTIK ZORUNLU DEGIL. Cekirdek numarayi
       // SIM'den okuyor (AT+CNUM); okuyamazsa telefonSor ile burayi cagirip
       // operatore soruyor. Verilirse operator bilerek eziyor; gecersizse
       // cekirdek MSISDN_INVALID der (sessizce yeniden sormaz).
-      return provisionModem({ ...hOpts, telefon: bayrak("--telefon") });
+      return olculerekHazirla(hOpts, { telefon: bayrak("--telefon") }, olcumYaz);
     }
     default: return null;
   }
@@ -396,7 +478,7 @@ async function komutuCalistir() {
 
 const KOMUTLAR = new Set(["dogrula", "kesif", "oku", "izle", "konsol", "sim",
   "degerlendir", "numara", "sim-kilit", "sim-pin-kaldir", "sim-pin-kilitle",
-  "fark", "uygula", "hazirla", "sunucu", "olcum", "olcum-elle"]);
+  "fark", "uygula", "hazirla", "calistir", "olcum", "olcum-elle"]);
 
 async function main() {
   if (!komut || komut === "-h" || komut === "--help" || !KOMUTLAR.has(komut)) {
@@ -426,8 +508,10 @@ async function main() {
       + "         [--dongu]             cok modem: tak -> hazir -> cikar -> sonraki\n"
       + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
       + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
-      + "  sunucu                       tarayici arayuzu (UI) — cekirdegi tuketir\n"
-      + "         [--port 8080] [--dinle 127.0.0.1] [--profil ad] [--kayit <dosya>]\n"
+      + "  calistir [<fonksiyon>]       cekirdegin HERHANGI bir fonksiyonunu cagir\n"
+      + "         (adsiz)               cagrilabilir tum yuzeyi listeler\n"
+      + "         [-- arg1 arg2]        `--` sonrasi konumsal arguman\n"
+      + "         [--saf]               opts enjeksiyonunu kapat\n"
       + "  olcum-elle --dk 15.5         ELLE surecin kronometresini kaydet\n"
       + "         [--kim \"teknisyen A\"] [--not \"...\"]\n"
       + "  olcum                        kaydedilmis surelerden metrik ozeti (cihazsiz)\n"
@@ -442,10 +526,6 @@ async function main() {
     const yardimIstendi = !komut || komut === "-h" || komut === "--help";
     return yardimIstendi ? 0 : 1;
   }
-
-  // sunucu: surekli calisir — JSON basmaz, cikmaz. Dinleyen sunucu olay
-  // dongusunu acik tutar; asagidaki process.exit'e DUSMEMESI gerekir.
-  if (komut === "sunucu") { await komutuCalistir(); return null; }
 
   const kaynak = bayrak("--kaynak");
   const rapor = kaynak

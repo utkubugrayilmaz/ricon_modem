@@ -224,6 +224,13 @@ async function kaydiTamamla({ rapor, konum, hazirKimlik, kimlik, telefon,
   }
   rapor.kimlik_bilgi = kimlikBilgi;
   if (konum && kimlik) olayla(opts, { tur: "kimlik", kimlik_bilgi: kimlikBilgi });
+  // Duvar saati: cagrinin basindan buraya. Tuketici bunu bir olcum satirina
+  // cevirebilir (bkz. summarizeMetrics). Cekirdek dosyaya YAZMAZ, sadece
+  // sureyi bildirir — "ne kadar surdu" sorusunun cevabi cihaz isine ait.
+  if (rapor.baslangic_ms) {
+    rapor.toplam_sn = Number(((Date.now() - rapor.baslangic_ms) / 1000).toFixed(1));
+    delete rapor.baslangic_ms;
+  }
   rapor.kayit = provisionRecord({
     sonuc: rapor, telefon: normalizePhone(telefon), kimlikBilgi,
     profilAd: profil?.ad, host: konum?.host ?? null, internet,
@@ -263,7 +270,7 @@ export async function provisionModem(opts) {
     // — tek baglantili cihazda gereksiz ~4 sn demek.
     kimlikBilgi: hazirKimlikBilgi = null,
   } = opts;
-  const rapor = { zaman: now(), komut: "hazirla", problems: [] };
+  const rapor = { zaman: now(), komut: "hazirla", baslangic_ms: Date.now(), problems: [] };
   // Numara CAGRIDAN gelebilir ya da CIHAZDAN okunur (asagida, SIM hazirsa).
   // `let` cunku cozum algilamadan sonra olusuyor; bitir()/etkinProfilYap()
   // cagri aninda gecerli degeri goruyor.
@@ -529,9 +536,15 @@ export async function provisionLoop(opts) {
     // her modemde operatoru bekletmiyor. Dongunun amaci tam bu: tak, cikar.
     const r = await provisionModem({ ...modemOpts, telefon: opts.telefon });
     sonuc.hazirlanan.push({
-      durum: r.durum, ok: r.ok, deneme: r.deneme,
+      durum: r.durum, ok: r.ok, deneme: r.deneme, toplam_sn: r.toplam_sn ?? null,
       telefon: r.kayit?.telefon ?? null, iccid: r.kayit?.iccid ?? null,
     });
+    // Dongu SURESIZ calisir; sonuc nesnesi cikista donuyor. Olcum satiri
+    // MODEM BASINA yazilmali, yoksa hicbir zaman yazilmaz. Cekirdek yine
+    // dosyaya dokunmuyor — tuketicinin geri cagrisini calistiriyor.
+    if (typeof opts.olcumKayit === "function") {
+      try { opts.olcumKayit(r); } catch { /* olcum yazimi akisi bozmaz */ }
+    }
     sayac += 1;
     bildir(opts, r.ok ? `HAZIR (${r.durum}) — cihazi cikarabilirsin` : `BASARISIZ (${r.durum})`);
     if (opts.cikarmaBekle !== false) await modemCikarmaBekle(modemOpts);

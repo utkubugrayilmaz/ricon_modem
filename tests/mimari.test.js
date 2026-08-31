@@ -5,9 +5,13 @@
 // domain bir flow modulunu import eder ve dosyalar yerinde dururken mimari
 // coker. Bu test o yonu KODLA sabitliyor.
 //
-// Izin verilen yon:  flow → device → transport/parse → domain
+// Izin verilen yon:  cli → flow → device → transport/parse → domain
 // domain hicbir seye bagli degildir. transport cihaza gider ama KARAR VERMEZ.
-// Giris noktalari (index.js, server.js) her katmani cagirabilir — isleri bu.
+// Giris noktasi (index.js) her katmani cagirabilir — isi bu.
+//
+// cli/ 2026-08-31'de eklendi (genel cagirici). En ustte durur: kimse onu
+// import ETMEZ, kendisi de bugun hicbir sey import etmiyor — cekirdek modul
+// namespace'i ona PARAMETRE olarak veriliyor.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -24,6 +28,7 @@ const IZIN = {
   device: ["domain", "parse", "transport", "device"],
   flow: ["domain", "parse", "transport", "device", "flow"],
   report: ["domain", "report"],
+  cli: ["domain", "parse", "transport", "device", "flow", "report", "cli"],
 };
 const KATMANLAR = Object.keys(IZIN);
 
@@ -67,5 +72,17 @@ test("katman klasorleri bos degil ve src kokunde yalnizca giris dosyalari var", 
     .map((e) => e.name)
     .sort();
   // Kokte uygulama kodu BIRIKMESIN: yeni dosya bir katmana ait olmali.
-  assert.deepEqual(kokte, ["index.js", "server.js"]);
+  // server.js 2026-08-31'de main'den cikti (ui dalinda duruyor); kokte artik
+  // yalnizca PUBLIC API kapisi var.
+  assert.deepEqual(kokte, ["index.js"]);
+});
+
+// cli/ en ust katman: hicbir src modulu onu import ETMEMELI. Ederse cekirdek
+// bir CLI kaygisina baglanmis olur ve "paket olarak import" yolu kirilir.
+test("hicbir katman cli/'yi import etmiyor", () => {
+  const ihlal = moduller()
+    .filter((m) => m.katman !== "cli")
+    .filter((m) => ithaller(m.metin).some((s) => s.includes("cli/")))
+    .map((m) => `${m.katman}/${m.ad}`);
+  assert.deepEqual(ihlal, []);
 });

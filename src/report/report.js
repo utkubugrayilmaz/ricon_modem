@@ -48,6 +48,49 @@ export function settingLabel(anahtar, deger) {
   return { anahtar, ad: t?.ad || anahtar, sayfa: t?.sayfa || null, gosterim, ham };
 }
 
+// Provizyon planini EKRANA HAZIR satirlara cevirir. once = kurulum oncesi,
+// sonra = hedef. Tuketici (terminal ozeti ya da baska bir arayuz) nvram
+// anahtari bilmez; satirlar hazir gelir.
+//
+// Sira: profil sirasi DEGIL, sozluk sirasi. Profil "motorun yazma sirasi"na
+// gore dizili (WLAN basta, LAN sonda); teknisyen ise cihazin ARAYUZ sirasiyla
+// okur (Main Link -> Others -> Backup Link -> Wireless -> LAN).
+// SETTING_LABELS tam o sirada yazildi.
+export function planRows(plan) {
+  const sozlukSirasi = Object.keys(SETTING_LABELS);
+  const anahtarlar = Object.keys(plan.hedef || {}).sort((a, b) => {
+    const ia = sozlukSirasi.indexOf(a);
+    const ib = sozlukSirasi.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+  return anahtarlar.map((k) => {
+    const once = settingLabel(k, plan.onceki?.[k]);
+    const sonra = settingLabel(k, plan.hedef[k]);
+    return {
+      anahtar: k,
+      ad: once.ad,
+      sayfa: once.sayfa,
+      once: once.gosterim,
+      sonra: sonra.gosterim,
+      degisecek: Boolean(plan.degisecek && k in plan.degisecek),
+    };
+  });
+}
+
+// Plan satirlarini terminale basilacak metne cevirir. Sayfa basliklariyla
+// gruplar; degisecek satiri * ile isaretler. Bu, arayuzdeki iki panelin
+// (once/sonra) terminal karsiligi.
+export function planMetni(satirlar) {
+  const s = [];
+  let sonSayfa = null;
+  for (const r of satirlar) {
+    if (r.sayfa !== sonSayfa) { s.push(`  ${r.sayfa || "(sayfasiz)"}`); sonSayfa = r.sayfa; }
+    s.push(`    ${String(r.ad).padEnd(24)}${String(r.once).padEnd(16)}`
+      + ` -> ${String(r.sonra).padEnd(16)}${r.degisecek ? " *" : ""}`);
+  }
+  return s.join("\n");
+}
+
 // Olcum ozeti metni. Dagilimi saklamaz: medyanin yaninda min-maks da yazar,
 // cunku tek sayi soylemek kucuk orneklemde yanlis guven verir.
 function olcumMetni(r) {
@@ -248,6 +291,16 @@ export function summaryText(rapor) {
     }
   }
   if (rapor.komut === "olcum") s.push(...olcumMetni(rapor));
+  // `calistir`: ad verilmemisse cagrilabilir yuzeyin listesi, verilmisse
+  // fonksiyonun kendi ciktisi. Liste metnini cagirici uretir (saf), rapor
+  // katmani onu yalnizca yerlestirir.
+  if (rapor.komut === "calistir") {
+    if (rapor.listeMetni) s.push("\n  CAGRILABILIR YUZEY\n" + rapor.listeMetni);
+    else if (rapor.deger !== undefined) {
+      s.push(`\n  ${rapor.fonksiyon} -> ${typeof rapor.deger === "object"
+        ? JSON.stringify(rapor.deger) : String(rapor.deger)}`);
+    }
+  }
   if (rapor.problems?.length) {
     s.push("\n  Sorunlar:");
     for (const p of rapor.problems) {
