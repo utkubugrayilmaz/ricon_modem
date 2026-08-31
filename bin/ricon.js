@@ -27,19 +27,21 @@
 import { writeFileSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
-import { DEFAULT_HOST } from "./src/domain/constants.js";
-import { findSourceIp } from "./src/transport/network.js";
 import {
-  checkDevice, readDevice, readConsole, computeNvramDiff,
+  checkDevice, readDevice, readConsole, computeNvramDiff, DEFAULT_HOST, findSourceIp,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
   normalizePhone, summarizeMetrics, assessDevice, degerlendirmeyiIzle,
   readMsisdn, readSimLock, simPinKaldir,
   simPinKilitle, atKomut, parseClck,
-} from "./src/index.js";
-import { writeJson, summaryText, planRows, planMetni } from "./src/report/report.js";
-import { isOk } from "./src/domain/problems.js";
-import * as cekirdek from "./src/index.js";
-import { cagir, argvAyikla, listeMetni } from "./src/cli/cagirici.js";
+} from "../src/index.js";
+import * as cekirdek from "../src/index.js";
+// Cikti/cagirma tesisati: bunlar TUKETICI API'si degil, CLI'in kendi araclari
+// — index.js'i CLI ayrintisiyla doldurmamak icin dogrudan aliniyor. bin/ zaten
+// paketin ICINDE; disaridan import eden biri yalnizca index.js'i gorur.
+import {
+  writeJson, summaryText, planRows, planMetni, cagir, argvAyikla,
+} from "../src/report.js";
+import { isOk } from "../src/problems.js";
 
 const argv = process.argv.slice(2);
 const komut = argv[0];

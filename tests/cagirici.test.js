@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import * as cekirdek from "../src/index.js";
 import {
   ilkParametre, optsAlirMi, argvAyikla, fonksiyonlariListele, listeMetni, cagir,
-} from "../src/cli/cagirici.js";
+} from "../src/report.js";
 
 // --- imza cikarma ---
 

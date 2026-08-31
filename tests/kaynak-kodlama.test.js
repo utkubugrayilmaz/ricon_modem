@@ -33,7 +33,7 @@ function metinDosyalari() {
       cikti.push({ ad: `${dizin}/${ad.name}`, bayt: readFileSync(join(KOK, dizin, ad.name)) });
     }
   };
-  for (const dizin of ["src", "tests", "examples", "."]) yuru(dizin);
+  for (const dizin of ["src", "bin", "tests", "examples", "."]) yuru(dizin);
   return cikti;
 }
 
@@ -64,5 +64,5 @@ test("kaynakta BOZUK KARAKTER (U+FFFD) yok", () => {
 });
 
 test("taramanin kendisi calisiyor (dosya buluyor)", () => {
-  assert.ok(metinDosyalari().length > 40, "dosya taramasi bozuk olabilir");
+  assert.ok(metinDosyalari().length > 30, "dosya taramasi bozuk olabilir");
 });

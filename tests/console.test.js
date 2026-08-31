@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   iacReply, extractOutput, parseNvramShow, runConsole, konsolKimligi,
-} from "../src/transport/console.js";
+} from "../src/console.js";
 
 test("iacReply: DO->WONT, WILL->DONT", () => {
   // IAC DO ECHO(1), IAC WILL SGA(3)

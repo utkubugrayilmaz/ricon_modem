@@ -3,10 +3,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { settingLabel, planRows } from "../src/report/report.js";
-import { SETTING_LABELS } from "../src/domain/constants.js";
-import { FIELD_PROFILE, FACTORY_PROFILE } from "../src/domain/profile.js";
-import { planProvisioning } from "../src/flow/provisioning.js";
+import { settingLabel, planRows } from "../src/report.js";
+import { SETTING_LABELS } from "../src/settings.js";
+import { FIELD_PROFILE, FACTORY_PROFILE } from "../src/settings.js";
+import { planProvisioning } from "../src/provision.js";
 
 test("settingLabel: ham deger okunabilir etikete cevrilir", () => {
   const r = settingLabel("w1_wan_proto", "m13g");

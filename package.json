@@ -1,41 +1,31 @@
 {
   "name": "ricon-modem",
   "version": "0.1.0",
-  "description": "Ricon S9922M44 endustriyel hucresel router: kesif, tam veri cekme ve hazirlama otomasyonu",
+  "description": "Ricon S9922M44 endustriyel hucresel router: okuma ve saha hazirlama (provizyon) otomasyonu",
   "type": "module",
-  "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./okuma": "./src/okuma.js",
-    "./izleme": "./src/izleme.js",
-    "./degerlendirme": "./src/degerlendirme.js",
-    "./provizyon": "./src/provisioning.js",
-    "./at": "./src/at.js",
-    "./konsol": "./src/console.js",
-    "./sim": "./src/sim.js",
-    "./nvram": "./src/nvram.js",
-    "./pin-karar": "./src/pin-karar.js",
-    "./sorunlar": "./src/problems.js",
-    "./sorun-metni": "./src/sorun-metni.js",
-    "./profil": "./src/profile.js",
-    "./olcum": "./src/metrics.js",
-    "./cihaz": "./src/cihaz.js"
+    ".": "./src/index.js"
   },
   "bin": {
-    "ricon": "./ricon.js"
+    "ricon": "./bin/ricon.js"
   },
   "engines": {
     "node": ">=24"
   },
   "files": [
     "src",
-    "ricon.js",
+    "bin",
     "README.md"
   ],
   "scripts": {
     "test": "node --test",
-    "dogrula": "node ricon.js dogrula",
-    "oku": "node ricon.js oku"
+    "start": "node --env-file-if-exists=.env bin/ricon.js hazirla --dongu",
+    "hazirla": "node --env-file-if-exists=.env bin/ricon.js hazirla",
+    "degerlendir": "node --env-file-if-exists=.env bin/ricon.js degerlendir",
+    "oku": "node --env-file-if-exists=.env bin/ricon.js oku",
+    "dogrula": "node --env-file-if-exists=.env bin/ricon.js dogrula",
+    "calistir": "node --env-file-if-exists=.env bin/ricon.js calistir",
+    "olcum": "node bin/ricon.js olcum"
   },
   "license": "UNLICENSED",
   "private": true

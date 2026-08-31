@@ -13,8 +13,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PROBLEM_CODES } from "../src/domain/problems.js";
-import { SORUN_TR } from "../src/domain/sorun-metni.js";
+import { PROBLEM_CODES } from "../src/problems.js";
+import { SORUN_TR } from "../src/problems.js";
 
 const SRC = new URL("../src/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 

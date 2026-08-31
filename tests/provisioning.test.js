@@ -3,9 +3,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planProvisioning, groupPlan, applyProvisioning } from "../src/flow/provisioning.js";
-import { FIELD_PROFILE, FACTORY_PROFILE, LAN_IP_KEYS } from "../src/domain/profile.js";
-import { consoleWrite, shQuote } from "../src/transport/console.js";
+import { planProvisioning, groupPlan, applyProvisioning } from "../src/provision.js";
+import { FIELD_PROFILE, FACTORY_PROFILE, LAN_IP_KEYS } from "../src/settings.js";
+import { consoleWrite, shQuote } from "../src/console.js";
 
 test("planProvisioning: sadece farkli anahtarlari degisecek isaretler", () => {
   const mevcut = { wl0_net_mode: "mixed", m1s1wanapn: "internet", lan_ipaddr: "192.168.1.1" };

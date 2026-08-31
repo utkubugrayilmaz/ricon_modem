@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   simKilitKaldirmaKarari, simKilidiUygunMu, PIN_TOPLAM_VARSAYILAN,
-} from "../src/device/at.js";
+} from "../src/at.js";
 
 const kilitli = (pin_kalan, ek = {}) => ({
   durum: "SIM PIN", kilit: "pin", hazir: false, pin_kalan, puk_kalan: 10, ...ek,

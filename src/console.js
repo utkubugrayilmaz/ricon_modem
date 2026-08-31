@@ -14,8 +14,8 @@
 // ayri; ayristirma cihaz olmadan test edilebilir. Katman throw etmez.
 
 import net from "node:net";
-import { MAX_TIMER_MS } from "../domain/constants.js";
-import { problem } from "../domain/problems.js";
+import { MAX_TIMER_MS } from "./settings.js";
+import { problem } from "./problems.js";
 
 const CONSOLE_PORT = 5123;
 const BASLA = "__RCN_BASLA__";

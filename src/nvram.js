@@ -10,7 +10,7 @@
 // ddns_*, ipsec_*, openvpn*, snmpd_*, et0macaddr, ... Faz 2/3'te "bir ayar
 // hangi anahtari degistirir" sorusunun kesin cevabi iki yedegin farkidir.
 
-import { problem } from "../domain/problems.js";
+import { problem } from "./problems.js";
 
 const IMZA = "ROUTER";
 

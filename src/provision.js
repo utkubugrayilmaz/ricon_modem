@@ -9,10 +9,10 @@
 // GÜVENLİK: yazma yalnızca uygula:true iken. LAN IP anahtarları en sona
 // alınır (bağlantı kopar). Reboot açık bildirilir.
 
-import { consoleNvram, consoleWrite, runConsole } from "../transport/console.js";
-import { LAN_IP_KEYS, WRITE_GROUPS, SIM_PIN_KEY } from "../domain/profile.js";
-import { problem, isOk } from "../domain/problems.js";
-import { isReachable } from "../transport/scanner.js";
+import { consoleNvram, consoleWrite, runConsole } from "./console.js";
+import { LAN_IP_KEYS, WRITE_GROUPS, SIM_PIN_KEY } from "./settings.js";
+import { problem, isOk } from "./problems.js";
+import { isReachable } from "./net.js";
 
 const now = () => new Date().toISOString();
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -9,12 +9,12 @@
 // zorunda kaliyordu. "Tekrar bakalim mi, ne kadar sonra?" bir KARAR'dir —
 // arayuze gomulmez, cekirdekte durur ve CLI/endpoint/UI ayni cevaba bakar.
 
-import { isReachable } from "../transport/scanner.js";
-import { normalizePhone } from "../device/sim.js";
-import { readMsisdn, readSimLock, simKilidiUygunMu } from "../device/at.js";
-import { problem, isOk } from "../domain/problems.js";
+import { isReachable } from "./net.js";
+import { normalizePhone } from "./device.js";
+import { readMsisdn, readSimLock, simKilidiUygunMu } from "./at.js";
+import { problem, isOk } from "./problems.js";
 // Alt katman: OKUMA yolu da YAZMA yolu da buraya bakiyor (bkz. cihaz.js).
-import { readIdentity, simTakiliMi, pcPreflight } from "../device/cihaz.js";
+import { readIdentity, simTakiliMi, pcPreflight } from "./device.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";

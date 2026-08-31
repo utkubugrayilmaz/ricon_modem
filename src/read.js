@@ -7,14 +7,14 @@
 // KURAL (index.js ile ayni): process.env OKUMAZ, argv OKUMAZ, stdout'a
 // YAZMAZ. Girdi `opts`, cikti sonuc nesnesi (throw yok, problems[]).
 
-import { ENDPOINTS } from "../domain/constants.js";
-import { Client, isHostBusy, lockHost, unlockHost } from "../transport/client.js";
-import { parsePairs, simView } from "../parse/ddwrt.js";
-import { parseNvram } from "../parse/nvram.js";
-import { localInterfaces, guessVendor } from "../transport/network.js";
-import { isReachable } from "../transport/scanner.js";
-import { consoleRecon, consoleNvram } from "../transport/console.js";
-import { problem, isOk } from "../domain/problems.js";
+import { ENDPOINTS } from "./settings.js";
+import { Client, isHostBusy, lockHost, unlockHost } from "./net.js";
+import { parsePairs, simView } from "./device.js";
+import { parseNvram } from "./nvram.js";
+import { localInterfaces, guessVendor } from "./net.js";
+import { isReachable } from "./net.js";
+import { consoleRecon, consoleNvram } from "./console.js";
+import { problem, isOk } from "./problems.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (host) => host.split(".").slice(0, 3).join(".") + ".";
