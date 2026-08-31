@@ -80,7 +80,7 @@ console.log("saf karar    :", provisioningGaps({
 const shell = await runConsole(opts, ["uname -a"]);
 console.log("uname        :", (shell.outs?.["uname -a"] ?? "").trim() || "okunamadi");
 
-// GERÇEK yazma için: applyProvisioning({ ...opts, uygula: true, ... })
+// GERÇEK yazma için: applyProvisioning({ ...opts, apply: true, ... })
 // SIM PIN kilidini KALICI kaldırmak için: disableSimPin(opts, "1234")
 //   ⚠ yanlış PIN bir deneme yakar; korumalar fonksiyonun içinde.
 // Tam akış (SIM kontrolu + telefon zorunlulugu + defter) için: provisionModem()

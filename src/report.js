@@ -1,7 +1,7 @@
 // Rapor katmani — sonucu JSON'a ve insan-okunur metne cevirir.
 //
 // Sir hijyeni: JSON'a kimlik (kullanici/sifre) ASLA yazilmaz. Cikti nesnesi
-// zaten kimlik tasimaz; yine de guvenlik agi olarak temizle() ile ozyinelemeli
+// zaten kimlik tasimaz; yine de guvenlik agi olarak stripSecrets() ile ozyinelemeli
 // alan-adi + regex suzgeci uygulanir. Rapor paylasilabilir olmali.
 
 import { SETTING_LABELS } from "./settings.js";
@@ -525,6 +525,7 @@ export function takesOptions(fn) {
 // koda benzedigi icin cevrildi ve kopru sessizce koptu. Tirnak onu engelliyor.
 export const FLAG_TO_OPTION = Object.freeze({
   "kaynak-ip": "sourceIp",
+  "saf": "pure",
   "saha-host": "fieldHost",
   "fabrika-host": "factoryHost",
   "yeni-host": "newHost",

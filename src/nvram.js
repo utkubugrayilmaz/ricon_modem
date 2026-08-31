@@ -23,7 +23,7 @@ export function parseNvram(buf) {
   if (!buf || buf.length < SIGNATURE.length ||
       buf.subarray(0, SIGNATURE.length).toString("latin1") !== SIGNATURE) {
     problems.push(problem("NVRAM_BAD_HEADER"));
-    return { values, finiteOrNull: 0, problems };
+    return { values, count: 0, problems };
   }
 
   // Basluk boyutu firmware'e gore degisebilir; imza sonrasindan itibaren
@@ -31,20 +31,20 @@ export function parseNvram(buf) {
   const start = findStart(buf);
   if (start === -1) {
     problems.push(problem("NVRAM_BAD_HEADER"));
-    return { values, finiteOrNull: 0, problems };
+    return { values, count: 0, problems };
   }
 
   let off = start;
-  let finiteOrNull = 0;
+  let count = 0;
   while (off < buf.length) {
     const kl = buf.readUInt8(off); off += 1;
     const key = buf.subarray(off, off + kl).toString("latin1"); off += kl;
     const vl = buf.readUInt16LE(off); off += 2;
     const val = buf.subarray(off, off + vl).toString("latin1"); off += vl;
     values[key] = val;
-    finiteOrNull += 1;
+    count += 1;
   }
-  return { values, finiteOrNull, problems };
+  return { values, count, problems };
 }
 
 // Imzadan sonra, dosya sonuna tam oturan ve anahtarlari ASCII olan offset.

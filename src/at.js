@@ -87,9 +87,9 @@ export function parseCpin(answer) {
 export function parsePinCounter(answer) {
   if (!answer) return null;
   const q = answer.match(/\+QPINC:\s*"?SC"?\s*,\s*(\d+)\s*,\s*(\d+)/i);
-  if (q) return { pin: Number(q[1]), pukText: Number(q[2]) };
+  if (q) return { pin: Number(q[1]), puk: Number(q[2]) };
   const c = answer.match(/\+CPINC:\s*(\d+),(\d+),(\d+),(\d+)/);
-  if (c) return { pin: Number(c[1]), pukText: Number(c[3]) };
+  if (c) return { pin: Number(c[1]), puk: Number(c[3]) };
   return null;
 }
 
@@ -392,8 +392,8 @@ export async function disableSimPin(opts, pin, { manualConsent = false, persistO
     report.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
     return report;
   }
-  const verifyPin = await lockQuery(atOptions);
-  report.lockRemoved = verifyPin === false;
+  const lockAfter = await lockQuery(atOptions);
+  report.lockRemoved = lockAfter === false;
   if (!report.lockRemoved) report.problems.push(problem("PIN_LOCK_NOT_DISABLED"));
   return report;
 }
@@ -498,7 +498,7 @@ export async function readSimLock(opts) {
     ready: status === "READY",
     lock: status === "SIM PIN" ? "pin" : status.includes("PUK") ? "puk" : null,
     pinRemaining: counter?.pin ?? null,
-    pukRemaining: counter?.pukText ?? null,
+    pukRemaining: counter?.puk ?? null,
     atPort: atOptions.atPort,
     problems: [],
   };

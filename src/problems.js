@@ -68,8 +68,8 @@ const CATALOG = {
   CONSOLE_AUTH_REQUIRED: (host) => ({
     message: `No console credentials were supplied for ${host}, so the telnet`
       + " login could not even be attempted.",
-    check: "Set MODEM_KULLANICI / MODEM_SIFRE, or pass {kullanici, sifre}"
-      + " (or {kimlik:{...}}) to the console layer. Failing fast here is"
+    check: "Set MODEM_KULLANICI / MODEM_SIFRE, or pass {user, password}"
+      + " (or {credentials:{...}}) to the console layer. Failing fast here is"
       + " deliberate: without credentials the login can only time out, and"
       + " retries would burn ~2 minutes to reach the same answer.",
   }),
@@ -87,7 +87,7 @@ const CATALOG = {
   HTTP_ERROR: (path, code) => ({
     message: `${path} returned an unexpected HTTP status ${code}.`,
     check: "The endpoint path may differ on this firmware. Compare with the"
-      + " verified list in constants.js (ENDPOINTS).",
+      + " verified list in settings.js (ENDPOINTS).",
   }),
   REQUEST_FAILED: (path, reason) => ({
     message: `The request to ${path} could not be completed: ${reason}`,
@@ -110,7 +110,7 @@ const CATALOG = {
   }),
   PROFILE_MISSING: (name) => ({
     message: `No profile named "${name}" is configured, so there is nothing to apply.`,
-    check: "Pass --profil with a known name (see profile.js PROFILES), or start"
+    check: "Pass --profil with a known name (see settings.js PROFILES), or start"
       + " the server with a sifirlamaProfil so the reset button has a target.",
   }),
   NVRAM_BAD_HEADER: () => ({
@@ -191,7 +191,7 @@ const CATALOG = {
   AT_PORT_NOT_FOUND: (candidates) => ({
     message: `None of the candidate AT ports answered AT with OK (${candidates}).`,
     check: "The device exposes many /dev/ttyUSB* nodes and most are dead, so we"
-      + " probe instead of assuming. Widen AT_PORT_ADAYLARI in at.js, or run"
+      + " probe instead of assuming. Widen AT_PORT in at.js, or run"
       + " 'ls -la /dev/ttyUSB*' on the device to find the live node.",
   }),
   MSISDN_MISMATCH: (manual, deviceInfo) => ({

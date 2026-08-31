@@ -157,7 +157,7 @@ export function parseSimStatus(raw) {
     return m ? { remaining: Number(m[1]), total: Number(m[2]) } : { remaining: null, total: null };
   };
   const pin = counter("PIN");
-  const pukText = counter("PUK");
+  const puk = counter("PUK");
   let lock = null;
   if (/verification\s+puk|puk\s+(code\s+)?required|puk\s+lock/i.test(text)) lock = "puk";
   else if (/verification\s+pin|pin\s+(code\s+)?required|pin\s+lock/i.test(text)) lock = "pin";
@@ -167,7 +167,7 @@ export function parseSimStatus(raw) {
     // "hazir": SIM kullanıma hazır. Kilit varsa ya da metin boş/OK değilse hayır.
     ready: lock === null && /^ok$/i.test(text),
     pinRemaining: pin.remaining, pinTotal: pin.total,
-    pukRemaining: pukText.remaining, pukTotal: pukText.total,
+    pukRemaining: puk.remaining, pukTotal: puk.total,
   };
 }
 

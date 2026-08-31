@@ -219,7 +219,7 @@ export function retryDecision(report = {}) {
 export async function watchAssessment(opts = {}) {
   const atMost = opts.maxRounds ?? Infinity;
   let report = null;
-  for (let kind = 0; kind < atMost; kind += 1) {
+  for (let round = 0; round < atMost; round += 1) {
     report = await assessDevice(opts);
     report.retry = retryDecision(report);
     if (typeof opts.event === "function") {

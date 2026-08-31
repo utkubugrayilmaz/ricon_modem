@@ -40,8 +40,8 @@ test("parseCpin: kilit durumu", () => {
 });
 
 test("parsePinCounter: Quectel (+QPINC) ve standart (+CPINC)", () => {
-  assert.deepEqual(parsePinCounter('+QPINC: "SC",3,10\nOK'), { pin: 3, pukText: 10 });
-  assert.deepEqual(parsePinCounter("+CPINC: 2,3,10,10\nOK"), { pin: 2, pukText: 10 });
+  assert.deepEqual(parsePinCounter('+QPINC: "SC",3,10\nOK'), { pin: 3, puk: 10 });
+  assert.deepEqual(parsePinCounter("+CPINC: 2,3,10,10\nOK"), { pin: 2, puk: 10 });
   assert.equal(parsePinCounter("ERROR"), null, "okunamadi -> null (0 DEGIL)");
 });
 

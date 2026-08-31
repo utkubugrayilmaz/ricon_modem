@@ -414,14 +414,14 @@ export async function provisionModem(opts) {
         report.problems.push(...(gate.problems ?? []));
       } else {
         notify(opts, `SIM PIN kilitli — kalan hak ${lock.pinRemaining ?? "?"}`);
-        const pinGiris = await opts.askPin({
+        const pinEntry = await opts.askPin({
           attempt, pinRemaining: lock.pinRemaining, pinTotal: lock.pinTotal,
         });
-        if (pinGiris) {
+        if (pinEntry) {
           notify(opts, "PIN kilidi kaldiriliyor (TEK deneme)");
           const u = await disableSimPin(
             { ...location, credentials, progress: opts.progress, event: opts.event },
-            pinGiris, { manualConsent: true },
+            pinEntry, { manualConsent: true },
           );
           emitEvent(opts, { kind: "pin_kilidi_sonuc", ok: u.ok,
             unlocked: u.unlocked, lockRemoved: u.lockRemoved,

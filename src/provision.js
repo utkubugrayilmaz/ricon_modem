@@ -95,9 +95,9 @@ export async function applyProvisioning(opts, profile) {
 
   // 1) Oku
   notify(opts, "nvram okunuyor");
-  const { values, finiteOrNull, problems: readProblem } = await consoleNvram(consoleOptions);
+  const { values, count, problems: readProblem } = await consoleNvram(consoleOptions);
   report.problems.push(...readProblem);
-  if (finiteOrNull === 0) { report.ok = false; return report; }
+  if (count === 0) { report.ok = false; return report; }
 
   // 2) Planla
   const planObj = planProvisioning(values, profile);
@@ -171,7 +171,7 @@ export async function applyProvisioning(opts, profile) {
   const verifySource = opts.newSourceIp || sourceIp;
   if (opts.newHost || !lanChanging) {
     notify(opts, `dogrulama: ${verifyHost} bekleniyor`);
-    const verify = await verifyPin(
+    const verify = await verifyPlanSettled(
       { host: verifyHost, sourceIp: verifySource, credentials }, profile, opts,
       report.rebootSent === true,
     );
@@ -230,8 +230,8 @@ export async function applyPin(opts, pin) {
 
   // (3) Aynı PIN zaten yazılı mı? Yazılıysa denenmiş; tekrarlamak deneme yakar.
   notify(opts, "PIN kontrolu (ayni PIN daha once denenmis mi)");
-  const { values, finiteOrNull } = await consoleNvram(consoleOptions);
-  if (finiteOrNull === 0) {
+  const { values, count } = await consoleNvram(consoleOptions);
+  if (count === 0) {
     report.problems.push(problem("REQUEST_FAILED", "nvram", "PIN oncesi okuma basarisiz"));
     report.skipped = "nvram_okunamadi";
     return report;
@@ -276,7 +276,7 @@ async function rebootFireForget(consoleOptions) {
 //                                 görülürse artık oturmuştur: gerçek uyuşmazlık)
 //   3) okunuyor, eksik yok     -> TAMAM
 // Doner: { tamam, stillChanging, waitedSec, sebep }
-async function verifyPin(opts, profile, mainOptions, rebootWasSent = false) {
+async function verifyPlanSettled(opts, profile, mainOptions, rebootWasSent = false) {
   const consoleOptions = { host: opts.host, sourceIp: opts.sourceIp,
     user: opts.credentials.user, password: opts.credentials.password };
   const UPPER_BOUND_MS = 100000;   // reboot suresinden rahat uzun
@@ -323,8 +323,8 @@ async function verifyPin(opts, profile, mainOptions, rebootWasSent = false) {
     }
     attempt += 1;
     notify(mainOptions, `dogrulama denemesi ${attempt} (${elapsedSec()} sn)`);
-    const { values, finiteOrNull } = await consoleNvram(consoleOptions);
-    if (finiteOrNull === 0) {                       // TCP acik ama konsol henuz hazir degil
+    const { values, count } = await consoleNvram(consoleOptions);
+    if (count === 0) {                       // TCP acik ama konsol henuz hazir degil
       emitEvent(mainOptions, { kind: "dogrulama", attempt, status: "cihaz_bekleniyor" });
       await wait(POLL_GAP_MS);
       continue;

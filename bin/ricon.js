@@ -469,7 +469,7 @@ async function runCommand() {
       const name = argv[1] && !argv[1].startsWith("-") ? argv[1] : null;
       const { flags, positionals } = parseArgv(argv.slice(name ? 2 : 1));
       // opts'a karismayan CLI bayraklari: fonksiyona gitmemeli.
-      const { pure, jsonText, source, ...fnFlags } = flags;
+      const { pure, json, kaynak, ...fnFlags } = flags;
       return callByName(core, name, {
         opts: { host: opts.host, sourceIp: opts.sourceIp, credentials: opts.credentials,
           progress },

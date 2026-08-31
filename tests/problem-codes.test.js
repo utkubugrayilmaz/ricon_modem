@@ -27,7 +27,7 @@ function kaynaklar() {
     for (const name of readdirSync(dizin, { withFileTypes: true })) {
       if (name.isDirectory()) { yuru(join(dizin, name.name)); continue; }
       if (!name.name.endsWith(".js")) continue;
-      if (name.name === "problems.js" || name.name === "sorun-metni.js") continue;
+      if (name.name === "problems.js") continue;
       out.push({ name: name.name, text: readFileSync(join(dizin, name.name), "utf8") });
     }
   };
@@ -35,9 +35,12 @@ function kaynaklar() {
   return out;
 }
 
-// Kod URETEN cagrilar: dogrudan problem(), karar modullerindeki red(),
-// gosterim tarafindaki problemText()/hataYolla().
-const CAGRILAR = /(?:problem|red|sorunTr|hataYolla)\(\s*(?:gonder,\s*)?"([A-Z_0-9]+)"/g;
+// Kod URETEN cagrilar. ADLAR GERCEK OLMALI: bu regex bir donem `red`,
+// `sorunTr`, `hataYolla` ariyordu — uc ad da yeniden adlandirilmisti ve
+// bekci SESSIZCE daraldi. Olculdu (2026-08-31): eski desen 57, dogrusu 62
+// kod uretimi goruyordu; 5 cagri denetim disinda kaliyordu.
+// Bir daha olmasin diye asagidaki oz-denetim bu sayiyi savunuyor.
+const CAGRILAR = /(?:problem|refuse|problemText)\(\s*"([A-Z_0-9]+)"/g;
 
 test("kodda gecen HER sorun kodu katalogda var", () => {
   const bilinen = new Set(PROBLEM_CODES);
@@ -51,9 +54,9 @@ test("kodda gecen HER sorun kodu katalogda var", () => {
 });
 
 test("taramanin kendisi CALISIYOR (bos regex yanlis yesil vermesin)", () => {
-  let finiteOrNull = 0;
-  for (const { text } of kaynaklar()) finiteOrNull += [...text.matchAll(CAGRILAR)].length;
-  assert.ok(finiteOrNull > 30, `yalniz ${finiteOrNull} kod uretimi bulundu — tarama bozuk olabilir`);
+  let found = 0;
+  for (const { text } of kaynaklar()) found += [...text.matchAll(CAGRILAR)].length;
+  assert.ok(found >= 60, `yalniz ${found} kod uretimi bulundu — tarama bozuk olabilir`);
 });
 
 test("katalogdaki her kodun TURKCE karsiligi var (ters yon)", () => {

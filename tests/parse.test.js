@@ -58,17 +58,17 @@ test("simView: ham alanlar okunabilir gorunume eslenir", () => {
 
 test("parseNvram: yedegi anahtar/deger olarak cozer (gercek format basligi)", () => {
   const buf = readFileSync(fx("nvram.sample.bin"));
-  const { values, finiteOrNull, problems } = parseNvram(buf);
+  const { values, count, problems } = parseNvram(buf);
   assert.equal(problems.length, 0);
-  assert.ok(finiteOrNull >= 10, `beklenen >=10 anahtar, gelen ${finiteOrNull}`);
+  assert.ok(count >= 10, `beklenen >=10 anahtar, gelen ${count}`);
   assert.equal(values.et0macaddr, "00:11:22:33:44:55");
   assert.equal(values.snmpd_rocommunity, "public");
   assert.equal(values.telnet_lanport, "5123");
 });
 
 test("parseNvram: bozuk basluk NVRAM_BAD_HEADER verir, throw etmez", () => {
-  const { problems, finiteOrNull } = parseNvram(Buffer.from("COPUK123"));
-  assert.equal(finiteOrNull, 0);
+  const { problems, count } = parseNvram(Buffer.from("COPUK123"));
+  assert.equal(count, 0);
   assert.equal(problems[0].code, "NVRAM_BAD_HEADER");
 });
 

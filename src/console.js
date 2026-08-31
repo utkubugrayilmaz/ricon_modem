@@ -242,9 +242,9 @@ function _trySession(opts, commands) {
 // Kolaylik: tam nvram'i CLI'den cekip {anahtar:deger} olarak dondurur.
 export async function consoleNvram(opts) {
   const r = await runConsole(opts, ["nvram show 2>/dev/null"]);
-  if (!r.ok) return { values: {}, finiteOrNull: 0, problems: r.problems };
+  if (!r.ok) return { values: {}, count: 0, problems: r.problems };
   const values = parseNvramShow(r.outs["nvram show 2>/dev/null"]);
-  return { values, finiteOrNull: Object.keys(values).length, problems: [] };
+  return { values, count: Object.keys(values).length, problems: [] };
 }
 
 // Kolaylik: kimlik/sistem kesfi (salt okunur).

@@ -67,9 +67,9 @@ export async function readDevice(opts) {
       if (uc.format === "ddwrt") {
         Object.assign(report.rawFields, parsePairs(r.body));
       } else if (uc.format === "nvram") {
-        const { values, finiteOrNull, problems } = parseNvram(r.bodyBuffer);
+        const { values, count, problems } = parseNvram(r.bodyBuffer);
         report.nvram = values;
-        report.nvramKeyCount = finiteOrNull;
+        report.nvramKeyCount = count;
         report.problems.push(...problems);
       } else {
         report.endpoints[uc.name].rawHtmlBytes = r.body.length;
@@ -114,9 +114,9 @@ export async function readConsole(opts) {
   const report = { timestamp: now(), command: "konsol", modemIp: host, problems: [] };
   if (nvram) {
     notify(opts, "nvram tam dokumu (CLI)");
-    const { values, finiteOrNull, problems } = await consoleNvram(consoleOptions);
+    const { values, count, problems } = await consoleNvram(consoleOptions);
     report.nvram = values;
-    report.nvramKeyCount = finiteOrNull;
+    report.nvramKeyCount = count;
     report.problems.push(...problems);
   } else {
     notify(opts, "sistem kesfi");
