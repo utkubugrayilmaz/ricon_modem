@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { settingLabel } from "../src/report/report.js";
+import { settingLabel, summaryText, stripSecrets } from "../src/report/report.js";
 import { SETTING_LABELS } from "../src/domain/constants.js";
 import { FIELD_PROFILE, FACTORY_PROFILE } from "../src/domain/profile.js";
 import { planProvisioning } from "../src/flow/provisioning.js";
@@ -73,4 +73,104 @@ test("settingLabel: profildeki her anahtar cihazin ARAYUZ sayfasini soyler", () 
   for (const s of sayfalar) assert.ok(s, "profil anahtarinin sayfasi bos olamaz");
   assert.ok(sayfalar.includes("Modem/WAN → Main Link"));
   assert.ok(sayfalar.includes("LAN"));
+});
+
+// --- Terminal plan dokumu: sozlukten basar, parolayi maskeler ---
+
+test("summaryText: plan HAM NVRAM ANAHTARI degil ARAYUZ ADI basar", () => {
+  const r = {
+    komut: "uygula", profil: "saha", uygula: false, modem_ip: "192.168.1.1",
+    plan: { degisecek_sayisi: 2, ayni_sayisi: 0, degisecek: {
+      w1_wan_proto: { mevcut: "dhcp", hedef: "m13g" },
+      lan_ipaddr: { mevcut: "192.168.1.1", hedef: "5.5.5.1" },
+    } },
+    problems: [],
+  };
+  const metin = summaryText(r);
+  assert.match(metin, /Connection Type/, "sozlukteki arayuz adi yazilir");
+  assert.match(metin, /M1-PPP/, "ham 'm13g' degil okunabilir deger");
+  assert.ok(!metin.includes("w1_wan_proto"), "ham nvram anahtari ekrana basilmaz");
+  assert.match(metin, /5\.5\.5\.1/, "IP degeri oldugu gibi kalir");
+});
+
+test("summaryText: PPP PAROLASI plan dokumunde MASKELENIR", () => {
+  // Sozlukte gizli:true idi ama terminal ozeti degeri duz metin basiyordu.
+  const metin = summaryText({
+    komut: "uygula", profil: "saha", uygula: true,
+    plan: { degisecek_sayisi: 1, ayni_sayisi: 0, degisecek: {
+      m1s1ppppwd: { mevcut: "eskiparola", hedef: "yeniparola" },
+    } },
+    problems: [],
+  });
+  assert.ok(!metin.includes("eskiparola"), "eski parola ekrana sizmaz");
+  assert.ok(!metin.includes("yeniparola"), "yeni parola ekrana sizmaz");
+  assert.match(metin, /••••/, "yerine maske yazilir");
+});
+
+test("stripSecrets: PPP parolalari JSON ciktisindan da silinir", () => {
+  const temiz = stripSecrets({
+    m1s1ppppwd: "card", m1s2ppppwd: "card",
+    m1s1simpin: "1234", m1s1wanapn: "internet", telefon: "5350634747",
+  });
+  assert.equal(temiz.m1s1ppppwd, undefined);
+  assert.equal(temiz.m1s2ppppwd, undefined);
+  assert.equal(temiz.m1s1simpin, undefined);
+  assert.equal(temiz.m1s1wanapn, "internet", "APN sir DEGIL, kalir");
+  assert.equal(temiz.telefon, "5350634747");
+});
+
+test("summaryText: plan satirlari ARAYUZ sirasinda dizilir", () => {
+  // Motorun yazma sirasi LAN'i en sona koyar; operator ekrani cihazin arayuz
+  // sirasiyla okur. Girdi TERS verilip siranin duzeltildigi dogrulaniyor.
+  const metin = summaryText({
+    komut: "uygula", profil: "saha", uygula: false,
+    plan: { degisecek_sayisi: 2, ayni_sayisi: 0, degisecek: {
+      lan_ipaddr: { mevcut: "192.168.1.1", hedef: "5.5.5.1" },
+      w1_wan_proto: { mevcut: "dhcp", hedef: "m13g" },
+    } },
+    problems: [],
+  });
+  assert.ok(metin.indexOf("Connection Type") < metin.indexOf("5.5.5.1"),
+    "Main Link ayari LAN'dan ONCE gorunur");
+});
+
+test("summaryText: sozlukte OLMAYAN anahtar kaybolmaz, sona duser", () => {
+  const metin = summaryText({
+    komut: "uygula", profil: "saha", uygula: false,
+    plan: { degisecek_sayisi: 2, ayni_sayisi: 0, degisecek: {
+      bilinmeyen_anahtar: { mevcut: "1", hedef: "2" },
+      w1_wan_proto: { mevcut: "dhcp", hedef: "m13g" },
+    } },
+    problems: [],
+  });
+  assert.match(metin, /bilinmeyen_anahtar/, "sozlukte yoksa adi kendisi olur");
+  assert.ok(metin.indexOf("Connection Type") < metin.indexOf("bilinmeyen_anahtar"),
+    "bilinen ayarlar once, bilinmeyen sonda");
+});
+
+test("summaryText: CAKISAN ayar adlari sayfayla ayirt edilir", () => {
+  // Cihazin arayuzunde "Connection Type" iki yerde var (Main Link ve Backup
+  // Link). Ham anahtar ekrandan kaldirildigi icin iki satir ayni gorunurdu.
+  const metin = summaryText({
+    komut: "uygula", profil: "saha", uygula: false,
+    plan: { degisecek_sayisi: 2, ayni_sayisi: 0, degisecek: {
+      w1_wan_proto: { mevcut: "dhcp", hedef: "m13g" },
+      w2_wan_proto: { mevcut: null, hedef: "disable" },
+    } },
+    problems: [],
+  });
+  assert.match(metin, /Connection Type \(Main Link\)/);
+  assert.match(metin, /Connection Type \(Backup Link\)/);
+});
+
+test("summaryText: CAKISMAYAN adlara sayfa EKLENMEZ (ekran sismesin)", () => {
+  const metin = summaryText({
+    komut: "uygula", profil: "saha", uygula: false,
+    plan: { degisecek_sayisi: 1, ayni_sayisi: 0, degisecek: {
+      lan_ipaddr: { mevcut: "192.168.1.1", hedef: "5.5.5.1" },
+    } },
+    problems: [],
+  });
+  assert.match(metin, /Local IP\s+192\.168\.1\.1/);
+  assert.ok(!metin.includes("Local IP (LAN)"), "tek basina olan ada sayfa eklenmez");
 });

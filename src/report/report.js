@@ -8,8 +8,14 @@ import { SETTING_LABELS } from "../domain/constants.js";
 
 // Cikti nesnesinden sir tasiyabilecek alanlari ozyinelemeli siler.
 // SIM PIN de sir: nvram anahtar adiyla da gelebilir, alan adiyla da.
+//
+// PPP PAROLALARI DA (m1s1ppppwd/m1s2ppppwd): sozlukte `gizli: true` olarak
+// isaretliydiler, yani "ekranda maskele" karari coktan verilmisti — ama bu
+// suzgecte YOKLARDI ve `--json` ciktisi ile plan dokumu onlari duz metin
+// yaziyordu. Rapor paylasilabilir olmali; sozlukte gizli olan bir alanin
+// JSON'da acikta durmasi o sozu tutmamak demekti.
 const SIR_ALANLARI = new Set(["sifre", "password", "kimlik", "auth", "authorization",
-  "pin", "m1s1simpin", "m1s2simpin"]);
+  "pin", "m1s1simpin", "m1s2simpin", "m1s1ppppwd", "m1s2ppppwd"]);
 const SIR_DESENI = /Basic\s+[A-Za-z0-9+/=]+/g;
 
 export function stripSecrets(deger) {
@@ -46,6 +52,43 @@ export function settingLabel(anahtar, deger) {
   else if (ham === "") gosterim = "(bos)";
   else gosterim = t?.birim ? `${ham} ${t.birim}` : ham;
   return { anahtar, ad: t?.ad || anahtar, sayfa: t?.sayfa || null, gosterim, ham };
+}
+
+// Anahtarlari cihazin ARAYUZ sirasina dizer (profil sirasi degil).
+//
+// Profil sirasi motorun YAZMA sirasidir (LAN en sonda, cunku baglanti kopar).
+// Operator ise ekrani cihazin arayuzunde gordugu sirayla okur: Main Link ->
+// Others -> Backup Link -> Wireless -> DHCP -> LAN. SETTING_LABELS tam o
+// sirada yazildi, sozlugun anahtar sirasi kullaniliyor.
+//
+// Sozlukte olmayan anahtar SONA duser (kaybolmaz).
+function planSirasi(anahtarlar) {
+  const sozluk = Object.keys(SETTING_LABELS);
+  return anahtarlar.slice().sort((a, b) => {
+    const ia = sozluk.indexOf(a);
+    const ib = sozluk.indexOf(b);
+    return (ia === -1 ? Infinity : ia) - (ib === -1 ? Infinity : ib);
+  });
+}
+
+// Plan satirlarinin GORUNEN adlarini uretir: anahtar -> ad.
+//
+// Sozlukte AYNI ad iki ayri ayarda gecebiliyor — cihazin arayuzunde de oyle:
+// "Connection Type" hem Main Link'te hem Backup Link'te var. Ham anahtari
+// ekrandan kaldirdigimizda bu iki satir ayirt edilemez hale geldi. Cozum:
+// yalnizca CAKISAN adlara sayfanin son parcasi ekleniyor
+// ("Connection Type (Backup Link)"). Her satira sayfa yazmak ekrani
+// gereksiz sisirirdi.
+function planAdlari(anahtarlar) {
+  const etiketler = anahtarlar.map((k) => ({ k, ...settingLabel(k, null) }));
+  const sayim = new Map();
+  for (const e of etiketler) sayim.set(e.ad, (sayim.get(e.ad) ?? 0) + 1);
+  const cikti = new Map();
+  for (const e of etiketler) {
+    const sonParca = String(e.sayfa || "").split("→").pop().trim();
+    cikti.set(e.k, sayim.get(e.ad) > 1 && sonParca ? `${e.ad} (${sonParca})` : e.ad);
+  }
+  return cikti;
 }
 
 // Insan-okunur ozet (stderr'a; stdout saf JSON kalir).
@@ -121,11 +164,25 @@ export function summaryText(rapor) {
     s.push(`  Durum: ${g(rapor.durum)}`);
     if (rapor.plan) {
       s.push(`  Degisecek: ${rapor.plan.degisecek_sayisi}, ayni: ${rapor.plan.ayni_sayisi}`);
-      for (const [k, v] of Object.entries(rapor.plan.degisecek || {})) {
-        s.push(`    ~ ${k}: ${g(v.mevcut)}  ->  ${g(v.hedef)}`);
+      // SOZLUKTEN BAS: ham nvram anahtari (`w1_wan_proto: m13g`) operatore
+      // hicbir sey anlatmiyor; sozluk cihazin ARAYUZUNDEKI adi ve okunabilir
+      // degeri veriyor ("Connection Type: M1-PPP"). Ayrica parola alanlarini
+      // MASKELIYOR — asagidaki plan dokumu eskiden `m1s1ppppwd` degerini duz
+      // metin basiyordu (sozlukte gizli:true olmasina ragmen).
+      //
+      // Ayni satirda hem arayuz sayfasi hem anahtar tutulmuyor: sayfa bilgisi
+      // ekrani sisirir, anahtar zaten stdout'taki JSON'da tam duruyor.
+      const anahtarlar = planSirasi(Object.keys(rapor.plan.degisecek || {}));
+      const adlar = planAdlari(anahtarlar);
+      for (const k of anahtarlar) {
+        const v = rapor.plan.degisecek[k];
+        const once = settingLabel(k, v.mevcut);
+        const sonra = settingLabel(k, v.hedef);
+        s.push(`    ~ ${adlar.get(k).padEnd(26)} ${g(once.gosterim)}  ->  ${g(sonra.gosterim)}`);
       }
       if (rapor.plan.eksik_anahtarlar?.length) {
-        s.push(`    ⚠ cihazda olmayan (yeni yazilacak): ${rapor.plan.eksik_anahtarlar.join(", ")}`);
+        const adlar = rapor.plan.eksik_anahtarlar.map((k) => settingLabel(k, null).ad);
+        s.push(`    ⚠ cihazda olmayan (yeni yazilacak): ${adlar.join(", ")}`);
       }
     }
     if (rapor.dogrulama) {
