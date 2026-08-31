@@ -75,6 +75,36 @@ test("provisionModem: gecersiz telefon -> MSISDN_INVALID, CIHAZA GITMEZ", async 
   assert.ok(Date.now() - t < 500, "girdi hatasi aga cikmadan donmeli");
 });
 
+// BEKCI: saf girdi dogrulamasi ORTAM kontrolunden ONCE gelmeli.
+//
+// Neden var: kaynak IP turetimi (pcPreflight) makinenin ag arayuzlerini OKUR.
+// Bu iki kontrol onun ALTINDA dururken, ikincil IP'si tanimli olmayan bir
+// makinede bozuk numara ve SIM'siz kimlik icin "pc_hazir_degil" doniyordu —
+// yani cevap CAGIRININ GIRDISINE degil MAKINENIN AYARINA gore degisiyordu.
+// Bu testler o iki bloğun yerini kilitliyor.
+test("provisionModem: bozuk numara MAKINENIN AGINDAN BAGIMSIZ reddedilir", async () => {
+  // Kaynak IP TURETILEMEYECEK adresler veriliyor: eski sirada burasi
+  // pc_hazir_degil donerdi.
+  const r = await provisionModem({
+    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
+    fabrikaHost: "192.0.2.1", sahaHost: "192.0.2.2",
+    telefon: "1234",
+  });
+  assert.equal(r.durum, "telefon_yok", "girdi hatasi ortam hatasini ONCELER");
+  assert.equal(r.problems[0].kod, "MSISDN_INVALID");
+});
+
+test("provisionModem: SIM'siz hazir kimlik MAKINENIN AGINDAN BAGIMSIZ reddedilir", async () => {
+  const r = await provisionModem({
+    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
+    fabrikaHost: "192.0.2.1", sahaHost: "192.0.2.2",
+    telefon: "05350641858",
+    kimlikBilgi: { iccid: null, sim_durumu: "Not Insert" },
+  });
+  assert.equal(r.durum, "sim_yok");
+  assert.equal(r.problems[0].kod, "SIM_MISSING");
+});
+
 test("provisionModem: basarisiz cikista da KAYIT uretilir ve bildirilir", async () => {
   const yazilan = [];
   const r = await provisionModem({

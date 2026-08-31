@@ -289,6 +289,35 @@ export async function provisionModem(opts) {
     rapor.durum = "kimlik_yok"; rapor.ok = false; return bitir(null);
   }
 
+  // --- SAF GIRDI DOGRULAMASI — ORTAMA BAKMADAN ONCE ---
+  //
+  // Sira ONEMLI: asagidaki kaynak IP turetimi makinenin ag arayuzlerini OKUR,
+  // yani bir ORTAM kontrolu. Cagirinin verdigi girdi bozuksa cevap ortamdan
+  // BAGIMSIZ olarak bellidir ve once o soylenmeli. Ters sirada, ikincil IP'si
+  // tanimli olmayan bir makinede "1234" gibi bozuk bir numara icin
+  // "pc_hazir_degil" donuyordu — dogru teshis MSISDN_INVALID'di.
+
+  // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi — kayitsiz modem sahaya
+  // cikmasin. AMA artik cihazdan OKUNABILIYOR (AT+CNUM, ~3 sn): verilmediyse
+  // asagida SIM'den okunuyor, okunamazsa orada reddediliyor.
+  //
+  // Burada yalniz VERILMIS ama GECERSIZ numara reddediliyor: bu bir GIRDI
+  // hatasi, cihaza gitmeye gerek yok.
+  if (telefon && !telefonNorm) {
+    rapor.problems.push(problem("MSISDN_INVALID", telefon));
+    rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
+  }
+
+  // Tuketici kimligi ZATEN okuduysa ve SIM yoksa: cihaza HIC GITMEDEN reddet.
+  // Bu da saf bir girdi karari — elimizdeki kimlik ICCID'siz, aga cikmanin
+  // cevabi degistirecegi bir yani yok. (Ayni kontrol asagida, kimligi
+  // kendimiz okudugumuz yolda da var.)
+  if (hazirKimlikBilgi && !simTakiliMi(hazirKimlikBilgi)) {
+    rapor.problems.push(problem("SIM_MISSING", hazirKimlikBilgi.sim_durumu));
+    rapor.durum = "sim_yok"; rapor.ok = false;
+    return bitir(null, hazirKimlikBilgi);
+  }
+
   // KAYNAK IP OLMADAN YOKLAMA YAPILMAZ. Sebebi olculdu: kaynak baglanmadan
   // yapilan TCP connect bazi aglarda HER adrese basarili donuyor, yani
   // "modem var" diyip olmayan cihazdan kimlik okumaya calisiyor ve sonunda
@@ -305,16 +334,6 @@ export async function provisionModem(opts) {
       rapor.problems.push(...on.problems);
       rapor.durum = "pc_hazir_degil"; rapor.ok = false; return bitir(null);
     }
-  }
-  // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi — kayitsiz modem sahaya
-  // cikmasin. AMA artik cihazdan OKUNABILIYOR (AT+CNUM, ~3 sn): verilmediyse
-  // asagida SIM'den okunuyor, okunamazsa orada reddediliyor.
-  //
-  // Burada yalniz VERILMIS ama GECERSIZ numara reddediliyor: bu bir GIRDI
-  // hatasi, cihaza gitmeye gerek yok.
-  if (telefon && !telefonNorm) {
-    rapor.problems.push(problem("MSISDN_INVALID", telefon));
-    rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
   }
 
   // ETKİN PROFİL = profil + ÇALIŞMA ANINA ÖZEL anahtarlar. İkisi de profilde
@@ -346,16 +365,9 @@ export async function provisionModem(opts) {
   };
 
   // Kimlik bir kez okunur: hem SIM kontrolu hem defter kaydi ayni okumayi
-  // kullanir (cihaza iki kez gitmeyiz).
+  // kullanir (cihaza iki kez gitmeyiz). SIM'siz hazir kimlik yukarida,
+  // ortama bakilmadan reddedildi.
   let kimlikBilgiOnce = hazirKimlikBilgi;
-
-  // Tuketici kimligi zaten okuduysa ve SIM yoksa: cihaza HIC GITMEDEN reddet.
-  // (Ayni kontrol asagida, kimligi kendimiz okudugumuz yolda da var.)
-  if (hazirKimlikBilgi && !simTakiliMi(hazirKimlikBilgi)) {
-    rapor.problems.push(problem("SIM_MISSING", hazirKimlikBilgi.sim_durumu));
-    rapor.durum = "sim_yok"; rapor.ok = false;
-    return bitir(null, hazirKimlikBilgi);
-  }
 
   for (let deneme = 1; deneme <= denemeler; deneme += 1) {
     bildir(opts, `deneme ${deneme}/${denemeler}: modem algilaniyor`);
