@@ -218,6 +218,9 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
 // = ~30 sn pencere. Bos yuvali modem bu sureyi bosa harcar ve sonra dogru
 // teshisi alir — yanlis "SIM yok" demekten cok daha ucuz.
 const SIM_SETTLE_MS = 15000;
+// Kilit kalktiktan sonra kimligi kac kez okumayi deneriz. 3 x 15 sn = 30 sn
+// pencere; olculen ayaga kalkma suresi bunun altinda.
+const SIM_UNLOCK_READS = 3;
 
 async function finishRecord({ report, location, readyIdentity, credentials, phone,
   profile, internet, opts }) {
@@ -489,10 +492,25 @@ export async function provisionModem(opts) {
             // Kilit kalkti: kimligi YENIDEN oku. Eski `identityBefore` hala
             // "kilitli" diyor; onunla devam etmek numarayi bir daha
             // okutmazdi.
-            notify(opts, "lock cleared — re-reading identity");
-            try {
-              identityBefore = await readIdentity({ ...location, credentials });
-            } catch { /* kismi sonuc gecerli */ }
+            // SIM'IN AYAGA KALKMASINI BEKLE, sonra oku.
+            //
+            // Kilit kalkar kalkmaz okumak ERKEN: modul SIM'i yeniden
+            // baslatiyor ve birkac saniye `ready:false` donuyor. O aralikta
+            // okunan kimlikle devam edilince AT+CNUM adimi ATLANIYOR ve
+            // operatore numara soruluyordu — oysa kilidi kaldirmamizin TEK
+            // sebebi numarayi cihazdan okuyabilmekti.
+            // (2026-08-31 canli: kilit kalkti, hemen ardindan numara soruldu.)
+            //
+            // Ayni pencere acilista da var (bkz. SIM_SETTLE_MS); orada
+            // `attempts` turu bekliyor, burada kendi turumuzu doneriz.
+            for (let round = 1; round <= SIM_UNLOCK_READS; round += 1) {
+              notify(opts, `lock cleared — reading identity (${round}/${SIM_UNLOCK_READS})`);
+              try {
+                identityBefore = await readIdentity({ ...location, credentials });
+              } catch { /* kismi sonuc gecerli */ }
+              if (identityBefore?.sim?.ready) break;
+              if (round < SIM_UNLOCK_READS) await wait(SIM_SETTLE_MS);
+            }
           }
         }
       }
