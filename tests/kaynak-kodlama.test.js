@@ -29,11 +29,14 @@ function metinDosyalari() {
         yuru(`${dizin}/${ad.name}`);
         continue;
       }
-      if (!/\.(js|json|md|html|css)$/.test(ad.name)) continue;
+      if (!/\.(js|json|md)$/.test(ad.name)) continue;
       cikti.push({ ad: `${dizin}/${ad.name}`, bayt: readFileSync(join(KOK, dizin, ad.name)) });
     }
   };
-  for (const dizin of ["src", "tests", "examples", "."]) yuru(dizin);
+  // `docs` LISTEYE EKLENDI, `examples` CIKTI: arayuz kaldirildi, ama dokuman
+  // dosyalari da ayni kabuk boru hattiyla yazildi ve cp1252 sizmasinin ilk
+  // gorüldügü yer tam orasiydi — denetim disinda kalmalari kapsam kaybiydi.
+  for (const dizin of ["src", "tests", "docs", "."]) yuru(dizin);
   return cikti;
 }
 
