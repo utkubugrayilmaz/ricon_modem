@@ -124,11 +124,20 @@ export async function discoverDevice(opts) {
   const c = new Client({ host, kaynakIp, kimlik: null });
   bildir(opts, "HTTP parmak izi");
   const kok = await c.get("/");
+  // GOVDE NULL OLABILIR — cihaz erisilemezse Client istegi tamamlayamaz ve
+  // `govde: null` doner. Burada dogrudan .match() cagriliyordu ve komut
+  // TypeError ile COKUYORDU: yani kablo takili degilken ya da modem kapaliyken
+  // `kesif` hic cikti uretmiyordu (tam da teshis icin cagrilacagi an). Bu
+  // kutuphanenin temel sozlesmesini de bozuyordu: throw etmez, problems[] tasir.
+  const govde = kok.govde || "";
   rapor.http = {
     kod: kok.kod,
-    baslik: (kok.govde.match(/<title[^>]*>(.*?)<\/title>/i)?.[1] || "").trim() || null,
-    ddwrt_izi: /prototype\.js|WEB-ROUTER|Industrial Cellular Router/i.test(kok.govde),
+    baslik: (govde.match(/<title[^>]*>(.*?)<\/title>/i)?.[1] || "").trim() || null,
+    ddwrt_izi: /prototype\.js|WEB-ROUTER|Industrial Cellular Router/i.test(govde),
   };
+  // Erisilemedi ise SEBEBI tasi: rapor "parmak izi yok" derken neden
+  // olmadigini da soylemeli.
+  rapor.problems.push(...kok.problems.filter((p) => p.severity === "error"));
   bildir(opts, "SNMP");
   rapor.snmp = await snmpIdentity(host, community);
   rapor.ok = isOk(rapor.problems);
