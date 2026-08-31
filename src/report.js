@@ -148,9 +148,11 @@ function metricsText(r) {
 // Insan-okunur ozet (stderr'a; stdout saf JSON kalir).
 export function summaryText(report) {
   const s = [];
-  // modemIp eski komutlarin alani; degerlendirme raporu konumu
-  // `modem.host` icinde tasiyor. Ikisine de bak, yoksa "?" yaz.
-  s.push(`Ricon modem — ${report.modemIp || report.modem?.host || "?"}`
+  // modemIp eski komutlarin alani; degerlendirme raporu konumu `modem.host`
+  // icinde tasiyor. Ikisi de yoksa komut cihaza HIC gitmemis demektir
+  // (metrics, call, diff) — orada "?" yazmak "modem bulunamadi" gibi
+  // okunuyordu; komutun kendi adi dogru bilgi.
+  s.push(`Ricon modem — ${report.modemIp || report.modem?.host || report.command || "?"}`
     + `  (${report.timestamp || ""})`);
   if (report.system) {
     s.push("\n  System:");
@@ -557,6 +559,9 @@ export function parseArgv(argv = []) {
   const flags = {};
   for (let i = 0; i < beforeSeparator.length; i += 1) {
     const p = beforeSeparator[i];
+    // Tek kisa bayrak: -h. Burada taniniyor ki CLI argv'ye elle bakmak
+    // zorunda kalmasin — TEK AYRISTIRICI kurali istisna kaldirmiyor.
+    if (p === "-h") { flags.help = true; continue; }
     if (!p.startsWith("--")) { bare.push(p); continue; }
     const rawText = p.slice(2);
     // Once koprude ara; yoksa --iki-kelime -> ikiKelime.

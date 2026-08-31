@@ -625,7 +625,15 @@ const HELP = "Usage: node --env-file=.env bin/ricon.js <command>   (or: npm star
   + "Contract: stdout is ALWAYS pure JSON; progress/summary go to stderr; exit code from ok.\n";
 
 async function main() {
-  const helpAsked = !command || command === "-h" || command === "--help";
+  // Yardim ISTEMEK hata degil -> 0. Bilinmeyen komut hatadir -> 1.
+  // Eskiden `--help` de 1 donuyordu; betikte `ricon --help && ...` zinciri
+  // sessizce kiriliyordu.
+  //
+  // `<komut> --help` de yardim demektir: `provision --help` eskiden yardim
+  // basmak yerine CIHAZA GIDIYORDU. Yardim isteyen birinin modeme yazmaya
+  // baslamasi, sasirtmanin otesinde tehlikeli.
+  const helpAsked = !command || command === "-h" || command === "--help"
+    || flags.help === true;
   if (helpAsked) { process.stderr.write(HELP); return 0; }
   if (!COMMANDS.has(command)) {
     // Eski Turkce adi yazdiysa DOGRUSUNU soyle. Sessiz bir "unknown command"
