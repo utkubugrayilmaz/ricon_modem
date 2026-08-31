@@ -9,7 +9,7 @@ import {
 
 test("index: computeNvramDiff saf calisir", () => {
   const r = computeNvramDiff({ a: "1", b: "2" }, { a: "1", b: "X", c: "3" });
-  assert.equal(r.command, "fark");
+  assert.equal(r.command, "diff");
   assert.equal(r.summary.changed, 1);
   assert.equal(r.summary.added, 1);
   assert.equal(r.changed.b.next, "X");
@@ -24,13 +24,13 @@ test("index: readConsole kimliksiz AUTH_REQUIRED (I/O yok)", async () => {
 test("index: checkDevice erisilemez cihazda sonuc nesnesi doner (throw yok)", async () => {
   // kapali port -> erisilemez; hizli.
   const r = await checkDevice({ host: "127.0.0.1", sourceIp: undefined, credentials: null });
-  assert.equal(r.command, "dogrula");
+  assert.equal(r.command, "verify");
   assert.equal(typeof r.ok, "boolean");
   assert.ok(Array.isArray(r.problems));
 });
 
 test("index: readDevice process.env okumadan opts ile calisir (erisilemez)", async () => {
   const r = await readDevice({ host: "127.0.0.1", sourceIp: undefined, credentials: null });
-  assert.equal(r.command, "oku");
+  assert.equal(r.command, "read");
   assert.ok(Array.isArray(r.problems));
 });

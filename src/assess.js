@@ -54,7 +54,7 @@ export async function assessDevice(opts) {
   } = opts;
   const on = pcPreflight(prefixOf(factoryHost), prefixOf(fieldHost));
   const report = {
-    timestamp: now(), command: "degerlendir",
+    timestamp: now(), command: "assess",
     pc: { ready: on.ready, problems: on.problems },
     modem: { location: null, host: null },
     identity: null, sim: null,
@@ -79,8 +79,8 @@ export async function assessDevice(opts) {
   ]);
   const fieldUp = factoryUp ? false : fieldAnswer;
   const location = factoryUp
-    ? { host: factoryHost, sourceIp: on.factorySource, name: "fabrika" }
-    : fieldUp ? { host: fieldHost, sourceIp: on.fieldSource, name: "saha" } : null;
+    ? { host: factoryHost, sourceIp: on.factorySource, name: "factory" }
+    : fieldUp ? { host: fieldHost, sourceIp: on.fieldSource, name: "field" } : null;
   report.modem = { location: location?.name ?? null, host: location?.host ?? null };
 
   if (location && credentials) {
@@ -104,7 +104,7 @@ export async function assessDevice(opts) {
   // hak yanmis mi?" — o yuzden tahmine birakilmaz, ~3 sn'ye deger. Yalnizca
   // KILITLI durumda okunuyor: acik SIM'de gereksiz bir tur olurdu.
   if (location && credentials && report.sim?.lock === "pin") {
-    notify(opts, "SIM kilidi modulden okunuyor (kalan hak)");
+    notify(opts, "reading the SIM lock from the module (attempts left)");
     const k = await readSimLock({ ...location, credentials });
     report.atPort = k.atPort;
     if (k.atPort) {
@@ -130,7 +130,7 @@ export async function assessDevice(opts) {
   // Yalnizca SIM HAZIRSA denenir: kilitli SIM abone verisini (EF_MSISDN)
   // acmiyor, canli olculdu (2026-08-27). Kilitliyse once PIN, sonra numara.
   if (location && credentials && report.sim?.ready) {
-    notify(opts, "telefon numarasi cihazdan okunuyor (AT+CNUM)");
+    notify(opts, "reading the phone number from the device (AT+CNUM)");
     const n = await readMsisdn({ ...location, credentials });
     report.atPort = n.atPort;
     if (n.phone) {

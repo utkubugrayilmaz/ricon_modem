@@ -3,24 +3,10 @@
 // bu dosya sadece: argv ayristir + .env oku + index'i cagir + yazdir.
 // Ayni cekirdek HTTP endpoint / npm paketi olarak da tuketilebilir.
 //
-//   node bin/ricon.js dogrula        Ortam teshisi
-//   node bin/ricon.js oku            HER SEYI cek (sistem + SIM + ayar + nvram)
-//   node bin/ricon.js konsol         Telnet root shell kesfi (--nvram = tam nvram)
-//   node bin/ricon.js sim            SIM/hucresel ozet (--telefon 05xx = MSISDN girisi)
-//   node bin/ricon.js fark A.json B.json   Iki nvram anlik goruntusunu karsilastir
-//   node bin/ricon.js uygula         Provizyon (KURU varsayilan; gercek yazma --uygula)
-//                                --profil saha|fabrika · --yeni-host · --yeni-kaynak
-//                                --reboot-yok
-//   node bin/ricon.js calistir <fn>  Cekirdegin HERHANGI bir fonksiyonunu cagir
-//                                adsiz cagrilirsa tum yuzeyi listeler
-//   node bin/ricon.js hazirla        Tak-calistir: algila->provizyon->dogrula
-//                                Numara SIM'den okunur; --telefon 05xx EZER
-//                                --dongu (cok modem: tak -> hazir -> cikar)
-//                                --profil · --saha-host · --deneme N · --max N
-//                                --kayit <dosya> (varsayilan data/hazirlanan.jsonl)
-//
-// Ortak: --json <dosya> (ciktiyi yaz) · --kaynak <dosya> (kayittan goster)
-// Ortam: MODEM_HOST, MODEM_KULLANICI, MODEM_SIFRE, MODEM_KAYNAK_IP
+// KOMUT LISTESI BURADA TEKRARLANMIYOR — tek kaynak asagidaki HELP sabiti.
+// Bu blok bir donem komutlari da sayiyordu ve on besten SEKIZINI listeliyordu;
+// yardim metni ile ayri ayri guncellenmesi gereken iki liste, birbirinden
+// sessizce ayrisiyordu. Gormek icin:  node bin/ricon.js --help
 //
 // Sozlesme: stdout HER ZAMAN saf JSON; ilerleme/ozet stderr'a; cikis kodu ok'tan.
 
@@ -45,25 +31,53 @@ import { isOk } from "../src/problems.js";
 
 const argv = process.argv.slice(2);
 const command = argv[0];
-const flag = (name) => {
-  const i = argv.indexOf(name);
-  return i === -1 ? undefined : argv[i + 1];
-};
+// TEK AYRISTIRICI. Argv bir kez ayristirilir; her komut ayni tablodan gecer.
+//
+// Eskiden iki ayristirici vardi: `calistir` parseArgv+FLAG_TO_OPTION
+// kullaniyordu, diger on dort komut ise kendi `flag("--xxx")` sabitleriyle
+// argv'ye dogrudan bakiyordu. Yani "kopru" adini tasiyan tablo yuzeyin
+// ondorttebirini kapsiyordu ve bir bayrak adi degistiginde geri kalan
+// on dort komutta hicbir sey kirmizi yanmiyordu.
+//
+// `bare`: bayrak olmayan konumsal sozcukler (`diff A.json B.json`).
+const { flags, positionals, bare } = parseArgv(argv.slice(1));
 const progress = (m) => process.stderr.write(`[${command}] ${m}\n`);
+
+// v0.2.0'da yeniden adlandirilan .env degiskenleri. Eski ad hala OKUNUR:
+// tezgahtaki ve teknisyenlerdeki .env dosyalari repo ile birlikte
+// guncellenmiyor (gitignore'da, herkesin kendi makinesinde). Sessizce
+// calismamak icin bir kez uyariyoruz.
+const ENV_FALLBACK = Object.freeze({
+  MODEM_USER: "MODEM_KULLANICI",
+  MODEM_PASSWORD: "MODEM_SIFRE",
+  MODEM_SOURCE_IP: "MODEM_KAYNAK_IP",
+});
+const envWarned = new Set();
+function envVar(name) {
+  const value = process.env[name];
+  if (value !== undefined && value !== "") return value;
+  const old = ENV_FALLBACK[name];
+  const legacy = old ? process.env[old] : undefined;
+  if (legacy !== undefined && legacy !== "" && !envWarned.has(old)) {
+    envWarned.add(old);
+    process.stderr.write(`[env] ${old} is deprecated, rename it to ${name} in .env\n`);
+  }
+  return legacy;
+}
 
 // .env -> opts. Cekirdek (src/) process.env OKUMAZ; okuma burada.
 function optionsFromEnv() {
   // --host / --kaynak-ip .env'i EZER: modem o an nerede oldugunu soyleyebilmek
   // gerekir (fabrika 192.168.1.1 <-> saha 5.5.5.1 arasinda gidip gelirken).
-  const hostFlag = flag("--host");
+  const hostFlag = flags.host;
   const host = (hostFlag || process.env.MODEM_HOST || "").trim() || DEFAULT_HOST;
   const prefix = host.split(".").slice(0, 3).join(".") + ".";
   // --host verildiyse .env'deki KAYNAK_IP baska alt aga ait olabilir; yok say
   // ve dogru kaynagi onekten bul (yanlis arayuzden cikip cihazi kaybetmeyelim).
-  const sourcePick = flag("--kaynak-ip") || (hostFlag ? "" : process.env.MODEM_KAYNAK_IP);
+  const sourcePick = flags.sourceIp || (hostFlag ? "" : envVar("MODEM_SOURCE_IP"));
   const sourceIp = (sourcePick || "").trim() || findSourceIp(prefix) || undefined;
-  const user = (process.env.MODEM_KULLANICI || "").trim();
-  const password = process.env.MODEM_SIFRE || "";
+  const user = (envVar("MODEM_USER") || "").trim();
+  const password = envVar("MODEM_PASSWORD") || "";
   const credentials = user ? { user, password } : null;
   return { host, sourceIp, credentials, progress };
 }
@@ -72,22 +86,43 @@ function optionsFromEnv() {
 // Kalici rollout defteri: her hazirlanan modem icin BIR satir. Cekirdek
 // dosyaya yazmaz; yazma karari burada. Dosya `data/` altinda ve .gitignore'da
 // — icinde telefon/ICCID/IMEI (kisisel/abonelik verisi) var, commit EDILMEZ.
-const LEDGER_FILE = "data/hazirlanan.jsonl";
+const LEDGER_FILE = "data/provisioned.jsonl";
 // Sure olcumleri ayri dosyada: defter "hangi modem sahaya cikti" sorusunun
 // kaydi, olcum dosyasi "surec ne kadar suruyor" sorusunun kaydi. Karistirmak
 // ikisini de bulaniklastirir.
-const METRICS_FILE = "data/olcumler.jsonl";
+const METRICS_FILE = "data/metrics.jsonl";
+// v0.2.0 oncesi adlar. data/ gitignore'da, yani her makinede AYRI duruyor ve
+// repo guncellemesiyle yeniden adlandirilmiyor. Yeni ad yoksa eskisini oku:
+// yoksa 23 satirlik olcum tabani bir surum atlamasinda sessizce sifirlanirdi.
+const LEGACY_FILES = Object.freeze({
+  "data/provisioned.jsonl": "data/hazirlanan.jsonl",
+  "data/metrics.jsonl": "data/olcumler.jsonl",
+});
 
-function lineWriter(file, label = "kayit") {
+// JSONL oku. Yeni ad yoksa v0.2.0 oncesi adi dener (bkz. LEGACY_FILES).
+function readJsonl(file) {
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (e) {
+    const old = LEGACY_FILES[file];
+    if (!old) throw e;
+    text = readFileSync(old, "utf8");
+    process.stderr.write(`[data] reading ${old}; rename it to ${file}\n`);
+  }
+  return text.split("\n").filter((s) => s.trim()).map((s) => JSON.parse(s));
+}
+
+function lineWriter(file, label = "record") {
   return (line) => {
     try {
       mkdirSync(dirname(file), { recursive: true });
       appendFileSync(file, JSON.stringify(line) + "\n", "utf8");
-      const extra = line.totalSec != null ? `${line.totalSec} sn` : (line.iccid || "");
+      const extra = line.totalSec != null ? `${line.totalSec} s` : (line.iccid || "");
       process.stderr.write(`[${label}] ${file} <- ${line.status} `
         + `${line.phone || "—"} ${extra}\n`);
     } catch (e) {
-      process.stderr.write(`[${label}] YAZILAMADI (${file}): ${e.message}\n`);
+      process.stderr.write(`[${label}] COULD NOT WRITE (${file}): ${e.message}\n`);
     }
   };
 }
@@ -103,7 +138,7 @@ function askPhone(index) {
   // Etkilesimli degilsek (boru/servis/cron) SORMA — cekirdek MSISDN_REQUIRED
   // der ve is duzgun basarisiz olur; kapanmis stdin'de beklemek kilitlenmedir.
   if (!process.stdin.isTTY) {
-    process.stderr.write("[hazirla] etkilesimli terminal yok: --telefon zorunlu\n");
+    process.stderr.write("[provision] no interactive terminal: --phone is required\n");
     return Promise.resolve(null);
   }
   const rl = createInterface({ input: process.stdin, output: process.stderr });
@@ -112,11 +147,11 @@ function askPhone(index) {
   return (async () => {
     try {
       for (let i = 0; i < 3; i += 1) {
-        const raw = (await ask(`\n[${index}. modem] SIM telefon numarasi (05xxxxxxxxx): `)).trim();
+        const raw = (await ask(`\n[modem ${index}] SIM phone number (05xxxxxxxxx): `)).trim();
         if (!raw) break;
         const n = normalizePhone(raw);
         if (n) return n;
-        process.stderr.write("  gecersiz — TR mobil bekleniyor (05xxxxxxxxx / +905xxxxxxxxx)\n");
+        process.stderr.write("  invalid — a TR mobile number is expected (05xxxxxxxxx / +905xxxxxxxxx)\n");
       }
       return null;
     } finally {
@@ -137,7 +172,7 @@ function askPhone(index) {
 // PIN EKRANA YAZILMAZ, hicbir yere kaydedilmez; yalnizca cekirdege gecer.
 function askPin({ pinRemaining, pinTotal }) {
   if (!process.stdin.isTTY) {
-    process.stderr.write("[hazirla] SIM PIN kilitli ama etkilesimli terminal yok\n");
+    process.stderr.write("[provision] the SIM is PIN locked but there is no interactive terminal\n");
     return Promise.resolve(null);
   }
   const rl = createInterface({ input: process.stdin, output: process.stderr });
@@ -146,17 +181,17 @@ function askPin({ pinRemaining, pinTotal }) {
     try {
       const total = pinTotal ?? 3;
       process.stderr.write(
-        `\n  SIM PIN KILITLI — kalan hak: ${pinRemaining ?? "?"}/${total}\n`
+        `\n  SIM IS PIN LOCKED — attempts left: ${pinRemaining ?? "?"}/${total}\n`
         + (pinRemaining != null && pinRemaining < total
-          ? "  ! Daha once bir deneme yanmis. PIN'den EMIN OL.\n" : "")
-        + "  TEK deneme yapilir; kilit SIM'den KALICI kalkar.\n"
-        + "  Bos birakip Enter'a basarsan atlanir.\n");
-      const raw = (await ask("  SIM PIN (4-8 hane): ")).trim();
+          ? "  ! An attempt was already burnt. BE SURE of the PIN.\n" : "")
+        + "  A SINGLE attempt is made; the lock is removed PERMANENTLY.\n"
+        + "  Leave it empty and press Enter to skip.\n");
+      const raw = (await ask("  SIM PIN (4-8 digits): ")).trim();
       if (!raw) return null;
       if (!/^\d{4,8}$/.test(raw)) {
         // Bicim kontrolu cekirdekte de var (disableSimPin cihaza HIC gitmez),
         // ama burada durmak operatore aninda soyluyor ve bir tur kazandiriyor.
-        process.stderr.write("  gecersiz bicim — 4-8 hane bekleniyor, atlaniyor\n");
+        process.stderr.write("  invalid format — 4-8 digits expected, skipping\n");
         return null;
       }
       return raw;
@@ -295,72 +330,72 @@ function nvramFromFile(file) {
 async function runCommand() {
   const opts = optionsFromEnv();
   switch (command) {
-    case "dogrula": return checkDevice(opts);
-    case "oku": return readDevice(opts);
-    case "konsol": return readConsole({ ...opts, nvram: argv.includes("--nvram") });
-    case "sim": return readSim({ ...opts, phone: flag("--telefon") });
+    case "verify": return checkDevice(opts);
+    case "read": return readDevice(opts);
+    case "console": return readConsole({ ...opts, nvram: flags.nvram === true });
+    case "sim": return readSim({ ...opts, phone: flags.phone });
     // Cihazin O ANKI durumu + ne eksik. Sunucudaki /api/degerlendir ile AYNI
     // cekirdek cagrisi — endpoint bir tuketici, burasi digeri.
-    case "degerlendir": {
+    case "assess": {
       const assessOptions = {
         ...opts,
-        factoryHost: flag("--host") || undefined,
-        fieldHost: flag("--saha-host") || undefined,
-        phone: flag("--telefon") || null,
-        pin: flag("--pin") || null,
+        factoryHost: flags.host || undefined,
+        fieldHost: flags.fieldHost || undefined,
+        phone: flags.phone || null,
+        pin: flags.pin || null,
       };
       // --izle: cekirdek KENDI KENDINE tekrar bakar. Ne zaman tekrar
       // bakilacagina retryDecision karar veriyor — burada politika YOK.
       // Ayni yetenegi arayuz de kullaniyor; kural: her yetenek her tuketiciden.
-      if (!argv.includes("--izle")) return assessDevice(assessOptions);
+      if (flags.watch !== true) return assessDevice(assessOptions);
       return watchAssessment({
         ...assessOptions,
-        maxRounds: Number(flag("--tur")) || Infinity,
-        event: (o) => progress(`modem=${o.modem.location ?? "yok"}`
-          + ` telefon=${o.phone.number ?? "-"} eksik=[${o.missing}]`
-          + ` tekrar=${o.retry.retry ? `${o.retry.afterSec} sn (${o.retry.reason})` : "yok"}`),
+        maxRounds: Number(flags.maxRounds) || Infinity,
+        event: (o) => progress(`modem=${o.modem.location ?? "none"}`
+          + ` phone=${o.phone.number ?? "-"} missing=[${o.missing}]`
+          + ` retry=${o.retry.retry ? `${o.retry.afterSec} s (${o.retry.reason})` : "no"}`),
       });
     }
     // SADECE telefon numarasi. "Bu araci sadece numara okumak icin kullanmak
     // istiyorum" diyen icin tek komut; provizyon/degerlendirme gerekmez.
-    case "numara": return { timestamp: new Date().toISOString(), command: "numara",
+    case "msisdn": return { timestamp: new Date().toISOString(), command: "msisdn",
       modemIp: opts.host, ...(await withDerivedOk(readMsisdn(opts))) };
     // SADECE SIM kilidi (salt okunur): durum + KALAN HAK. Hicbir sey harcamaz.
-    case "sim-kilit": return { timestamp: new Date().toISOString(), command: "sim-kilit",
+    case "sim-lock": return { timestamp: new Date().toISOString(), command: "sim-lock",
       modemIp: opts.host, ...(await withDerivedOk(readSimLock(opts))) };
     // SIM PIN kilidini KALICI kaldir. `uygula` ile ayni sozlesme: bayraksiz
     // KURU calisir (yalniz durumu bildirir), gercek deneme --uygula ister.
     // Sebep: yanlis PIN bir hak yakar, uc yanlis PUK demek.
-    case "sim-pin-kaldir": {
-      const pin = flag("--pin");
-      const real = argv.includes("--uygula");
+    case "sim-pin-disable": {
+      const pin = flags.pin;
+      const real = flags.apply === true;
       if (!real) {
         const k = await withDerivedOk(readSimLock(opts));
         const removeLockOpen = k.atPort
           ? parseClck((await atCommand({ ...opts, atPort: k.atPort }, 'AT+CLCK="SC",2')).answer)
           : null;
-        return { timestamp: new Date().toISOString(), command: "sim-pin-kaldir",
+        return { timestamp: new Date().toISOString(), command: "sim-pin-disable",
           dryRun: true, modemIp: opts.host, ...k, lockOpen: removeLockOpen,
           todo: k.lock === "pin"
-            ? "PIN kilidi kaldirilacak (TEK deneme) — onaylamak icin --uygula ekle"
+            ? "the PIN lock will be removed (SINGLE attempt) — add --apply to confirm"
             : removeLockOpen === false
-              ? "PIN kilidi ZATEN KAPALI — yapilacak is yok"
-              : k.ready ? "SIM acik; --uygula kilit sorgusunu KALICI kapatir"
-              : `kilit durumu: ${k.status} — mudahale edilmez`,
+              ? "the PIN lock is ALREADY OFF — nothing to do"
+              : k.ready ? "the SIM is open; --apply turns the lock query off PERMANENTLY"
+              : `lock state: ${k.status} — not touched`,
         };
       }
       // --zorla: "bu SIM'de daha once bir hak yanmis ama PIN'den eminim".
       // SON hakki zorla bile yakamaz (karar cekirdekte).
-      return { timestamp: new Date().toISOString(), command: "sim-pin-kaldir",
+      return { timestamp: new Date().toISOString(), command: "sim-pin-disable",
         dryRun: false, modemIp: opts.host,
-        ...(await disableSimPin(opts, pin, { manualConsent: argv.includes("--zorla") })) };
+        ...(await disableSimPin(opts, pin, { manualConsent: flags.manualConsent === true })) };
     }
     // SADECE TEST ICIN: PIN kilidini ACAR. Uretim akisinda yeri yok — kilit
     // KALDIRMA yolunu gercek bir kilitli SIM'de sinamak icin var. Ayni
     // sozlesme: bayraksiz KURU, gercek deneme --uygula ister.
-    case "sim-pin-kilitle": {
-      const pin = flag("--pin");
-      if (!argv.includes("--uygula")) {
+    case "sim-pin-enable": {
+      const pin = flags.pin;
+      if (flags.apply !== true) {
         const k = await withDerivedOk(readSimLock(opts));
         // Kilit ZATEN acik mi? Sorgu (AT+CLCK="SC",2) hak HARCAMAZ. Bunu
         // sormadan "ACILACAK" demek yaniltiyordu: kilit acikken de ayni
@@ -368,59 +403,60 @@ async function runCommand() {
         const isOpen = k.atPort
           ? parseClck((await atCommand({ ...opts, atPort: k.atPort }, 'AT+CLCK="SC",2')).answer)
           : null;
-        return { timestamp: new Date().toISOString(), command: "sim-pin-kilitle",
+        return { timestamp: new Date().toISOString(), command: "sim-pin-enable",
           dryRun: true, modemIp: opts.host, ...k, lockOpen: isOpen,
           todo: k.lock === "pin"
-            ? "SIM zaten kilitli — yapilacak is yok"
+            ? "the SIM is already locked — nothing to do"
             : isOpen === true
-              ? "PIN kilidi ZATEN ACIK — yapilacak is yok (etkisi sonraki acilista)"
-              : k.ready ? "PIN kilidi ACILACAK (TEK deneme). Etkisi SONRAKI ACILISTA:"
-                + " modemi kapat-ac, SIM PIN soracak. Onaylamak icin --uygula ekle"
-                : `kilit durumu: ${k.status} — mudahale edilmez`,
+              ? "the PIN lock is ALREADY ON — nothing to do (takes effect on next power-up)"
+              : k.ready ? "the PIN lock WILL BE TURNED ON (SINGLE attempt). Effect on NEXT POWER-UP:"
+                + " power cycle the modem and it will ask for the SIM PIN. Add --apply to confirm"
+                : `lock state: ${k.status} — not touched`,
         };
       }
-      return { timestamp: new Date().toISOString(), command: "sim-pin-kilitle",
+      return { timestamp: new Date().toISOString(), command: "sim-pin-enable",
         dryRun: false, modemIp: opts.host,
-        ...(await enableSimPin(opts, pin, { manualConsent: argv.includes("--zorla") })) };
+        ...(await enableSimPin(opts, pin, { manualConsent: flags.manualConsent === true })) };
     }
-    case "fark": {
-      const [, before, after] = argv;
+    case "diff": {
+      const [before, after] = bare;
       if (!before || !after) {
-        return { timestamp: new Date().toISOString(), command: "fark", ok: false,
+        return { timestamp: new Date().toISOString(), command: "diff", ok: false,
           problems: [{ code: "ARGS", severity: "error",
-            message: "fark <once.json> <sonra.json> gerekli", check: "Iki nvram JSON dosyasi ver." }] };
+            message: "diff <before.json> <after.json> is required",
+            check: "Give two nvram JSON files." }] };
       }
       return computeNvramDiff(nvramFromFile(before), nvramFromFile(after));
     }
-    case "uygula": {
-      const profileName = flag("--profil") || "saha";
+    case "apply": {
+      const profileName = flags.profile || "field";
       const profile = PROFILES[profileName];
       if (!profile) {
-        return { timestamp: new Date().toISOString(), command: "uygula", ok: false,
+        return { timestamp: new Date().toISOString(), command: "apply", ok: false,
           problems: [{ code: "ARGS", severity: "error",
-            message: `Bilinmeyen profil: ${profileName}`,
-            check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
+            message: `Unknown profile: ${profileName}`,
+            check: `Valid: ${Object.keys(PROFILES).join(", ")}` }] };
       }
       return applyProvisioning({
         ...opts,
-        apply: argv.includes("--uygula"),   // yoksa DRY-RUN (kuru)
-        reboot: !argv.includes("--reboot-yok"),
-        newHost: flag("--yeni-host"),
-        newSourceIp: flag("--yeni-kaynak"),
+        apply: flags.apply === true,   // yoksa DRY-RUN (kuru)
+        reboot: flags.noReboot !== true,
+        newHost: flags.newHost,
+        newSourceIp: flags.newSourceIp,
         event: streamWatcher(),
       }, profile);
     }
-    case "olcum-elle": {
+    case "metrics-manual": {
       // ELLE surecin kronometre sonucunu kaydeder — otomatik olcumlerle AYNI
       // dosyaya, tur:"elle" ile. Karsilastirma tabani boylece kayitli bir
       // olcum olur; komut satirinda tasinan bir sayi degil.
-      const dk = Number(flag("--dk"));
-      const secFlag = Number(flag("--sn"));
+      const dk = Number(flags.minutes);
+      const secFlag = Number(flags.seconds);
       const totalSeconds = Number.isFinite(secFlag) && secFlag > 0
         ? secFlag
         : (Number.isFinite(dk) && dk > 0 ? Math.round(dk * 60) : null);
       if (!totalSeconds) {
-        return { timestamp: new Date().toISOString(), command: "olcum-elle", ok: false,
+        return { timestamp: new Date().toISOString(), command: "metrics-manual", ok: false,
           problems: [{ code: "ARGS", severity: "error",
             message: "Manual duration is required.",
             check: "Give it as --dk 15.5 (minutes) or --sn 930 (seconds)." }] };
@@ -431,49 +467,47 @@ async function runCommand() {
         status: "manual_run",
         ok: true,
         totalSec: totalSeconds,
-        who: flag("--kim") || null,
-        note: flag("--not") || null,
+        who: flags.who || null,
+        note: flags.note || null,
         // --beyan: bu sayi OLCULMEDI, soylendi. Rapor bunu BEYAN diye
         // etiketler; olculmus bir medyan gibi sunulmaz.
-        declared: argv.includes("--beyan"),
+        declared: flags.declared === true,
       };
-      lineWriter(flag("--kayit") || METRICS_FILE, "olcum-elle")(line);
-      return { ...line, command: "olcum-elle", problems: [] };
+      lineWriter(flags.record || METRICS_FILE, "metrics-manual")(line);
+      return { ...line, command: "metrics-manual", problems: [] };
     }
-    case "olcum": {
+    case "metrics": {
       // Kaydedilmis calistirmalardan savunulabilir sayi uretir. Cihaza GITMEZ.
       // --elle-dk: elle surecin suresi (KARSILASTIRMA TABANI). Bu bir olcum ya
       // da beyandir; hangisi oldugunu --elle-kaynak ile ACIKCA soyle.
-      const file = flag("--kayit") || METRICS_FILE;
+      const file = flags.record || METRICS_FILE;
       let lines = [];
       try {
-        lines = readFileSync(file, "utf8").split("\n")
-          .filter((s) => s.trim())
-          .map((s) => JSON.parse(s));
+        lines = readJsonl(file);
       } catch {
-        return { timestamp: new Date().toISOString(), command: "olcum", ok: false,
+        return { timestamp: new Date().toISOString(), command: "metrics", ok: false,
           problems: [{ code: "METRICS_FILE_MISSING", severity: "error",
             message: `Metric file not found or unreadable: ${file}`,
-            check: "Run `npm start` (or `ricon.js hazirla`) a few times first;"
+            check: "Run `npm start` (or `ricon provision`) a few times first;"
               + " each finished run appends one line." }] };
       }
-      const manualMin = Number(flag("--elle-dk"));
+      const manualMin = Number(flags.manualMinutes);
       return summarizeMetrics(lines, {
         manualSec: Number.isFinite(manualMin) && manualMin > 0 ? manualMin * 60 : undefined,
-        manualSource: flag("--elle-kaynak"),
-        manualN: Number(flag("--elle-n")) || undefined,
-        modemCount: Number(flag("--modem-sayisi")) || undefined,
+        manualSource: flags.manualSource,
+        manualN: Number(flags.manualN) || undefined,
+        modemCount: Number(flags.modemCount) || undefined,
       });
     }
     // Cekirdegin HERHANGI bir export'unu adiyla cagirir. Yeni bir yetenek
     // eklendiginde buraya `case` yazmak GEREKMEZ — src/index.js'e eklenen her
     // sey aninda terminalden erisilebilir olur. Karar/ayristirma saf ve
     // test edilebilir: src/cli/cagirici.js.
-    case "calistir": {
-      const name = argv[1] && !argv[1].startsWith("-") ? argv[1] : null;
-      const { flags, positionals } = parseArgv(argv.slice(name ? 2 : 1));
+    case "call": {
+      const name = bare[0] ?? null;
       // opts'a karismayan CLI bayraklari: fonksiyona gitmemeli.
-      const { pure, json, kaynak, ...fnFlags } = flags;
+      const { pure, json, fromFile, ...fnFlags } = flags;
+      delete fnFlags.host; delete fnFlags.sourceIp;
       return callByName(core, name, {
         opts: { host: opts.host, sourceIp: opts.sourceIp, credentials: opts.credentials,
           progress },
@@ -482,108 +516,140 @@ async function runCommand() {
         pure: pure === true,
       });
     }
-    case "hazirla": {
-      const profileName = flag("--profil") || "saha";
+    case "provision": {
+      const profileName = flags.profile || "field";
       const profile = PROFILES[profileName];
       if (!profile) {
-        return { timestamp: new Date().toISOString(), command: "hazirla", ok: false,
+        return { timestamp: new Date().toISOString(), command: "provision", ok: false,
           problems: [{ code: "ARGS", severity: "error",
-            message: `Bilinmeyen profil: ${profileName}`, check: `Gecerli: ${Object.keys(PROFILES).join(", ")}` }] };
+            message: `Unknown profile: ${profileName}`, check: `Valid: ${Object.keys(PROFILES).join(", ")}` }] };
       }
-      const fieldHost = flag("--saha-host") || profile.nvram.lan_ipaddr || "5.5.5.1";
+      const fieldHost = flags.fieldHost || profile.nvram.lan_ipaddr || "5.5.5.1";
       const prefix = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
       // Fabrika oneki .env'deki MODEM_HOST'tan turer (varsayilan 192.168.1.1);
       // boylece host degistirilince on-kontrol de dogru alt agi arar.
       const on = pcPreflight(prefix(opts.host), prefix(fieldHost));
       if (!on.ready) {
-        return { timestamp: new Date().toISOString(), command: "hazirla", ok: false,
+        return { timestamp: new Date().toISOString(), command: "provision", ok: false,
           status: "pc_not_ready", problems: on.problems };
       }
       const provisionOptions = {
         factoryHost: opts.host, factorySource: on.factorySource,
         fieldHost, fieldSource: on.fieldSource,
         credentials: opts.credentials, profile,
-        attempts: Number(flag("--deneme")) || 3,
+        attempts: Number(flags.attempts) || 3,
         // Internet dogrulamasi (SIM calisiyor mu). 0 = kapat.
-        internetWaitSec: flag("--internet-bekle") !== undefined
-          ? Number(flag("--internet-bekle")) : 150,
-        record: lineWriter(flag("--kayit") || LEDGER_FILE),
+        internetWaitSec: flags.internetWaitSec !== undefined
+          ? Number(flags.internetWaitSec) : 150,
+        record: lineWriter(flags.record || LEDGER_FILE),
         askPhone,          // dongu: her modem icin sorar
         askPin,            // SIM kilitliyse PIN sorar, cekirdek kaldirir
         progress,
         event: streamWatcher(),   // plan tablosu + adim sureleri
       };
-      const writeMetrics = lineWriter(flag("--olcum") || METRICS_FILE, "olcum");
-      const cycle = argv.includes("--dongu");
+      const writeMetrics = lineWriter(flags.metrics || METRICS_FILE, "metrics");
+      const cycle = flags.loop === true;
       if (cycle) {
         // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli);
         // numara her modemde o modemin SIM'inden okunuyor.
         return provisionLoop({
           ...provisionOptions,
           metricsRecord: (r) => writeMetrics(metricsRow(r, provisionOptions.event.steps())),
-          maxModems: Number(flag("--max")) || Infinity,
+          maxModems: Number(flags.maxModems) || Infinity,
         });
       }
       // Tek modem: --telefon VERMEK ARTIK ZORUNLU DEGIL. Cekirdek numarayi
       // SIM'den okuyor (AT+CNUM); okuyamazsa askPhone ile burayi cagirip
       // operatore soruyor. Verilirse operator bilerek eziyor; gecersizse
       // cekirdek MSISDN_INVALID der (sessizce yeniden sormaz).
-      return provisionAndMeasure(provisionOptions, { phone: flag("--telefon") }, writeMetrics);
+      return provisionAndMeasure(provisionOptions, { phone: flags.phone }, writeMetrics);
     }
     default: return null;
   }
 }
 
-const COMMANDS = new Set(["dogrula", "oku", "konsol", "sim",
-  "degerlendir", "numara", "sim-kilit", "sim-pin-kaldir", "sim-pin-kilitle",
-  "fark", "uygula", "hazirla", "calistir", "olcum", "olcum-elle"]);
+const COMMANDS = new Set(["verify", "read", "console", "sim",
+  "assess", "msisdn", "sim-lock", "sim-pin-disable", "sim-pin-enable",
+  "diff", "apply", "provision", "call", "metrics", "metrics-manual"]);
+
+// v0.2.0'da yeniden adlandirilan komutlar. Takma ad DEGIL: eski adi yazana
+// dogrusunu soyleyip 1 ile cikiyoruz. Sessizce calistirmak, tezgahtaki
+// ezberin yanlis kalmasini uzatirdi.
+const RENAMED_IN_0_2_0 = Object.freeze({
+  dogrula: "verify", oku: "read", konsol: "console", degerlendir: "assess",
+  numara: "msisdn", "sim-kilit": "sim-lock",
+  "sim-pin-kaldir": "sim-pin-disable", "sim-pin-kilitle": "sim-pin-enable",
+  fark: "diff", uygula: "apply", hazirla: "provision", calistir: "call",
+  olcum: "metrics", "olcum-elle": "metrics-manual",
+});
+
+const HELP = "Usage: node --env-file=.env bin/ricon.js <command>   (or: npm start / npm run <script>) [flags]\n\n"
+  + "  verify                       environment / reachability diagnosis\n"
+  + "  read                         pull EVERYTHING (system + SIM + settings + nvram)\n"
+  + "  console [--nvram]            telnet root shell / full nvram\n"
+  + "  sim [--phone 05xxxxxxxxx]    SIM / cellular summary (+MSISDN input)\n"
+  + "  assess                       device state + WHAT IS MISSING (phone included, ~5 s)\n"
+  + "         [--watch] [--rounds N]  keep re-checking BY ITSELF until nothing is missing\n"
+  + "  msisdn                       the SIM phone number ONLY (AT+CNUM)\n"
+  + "  sim-lock                     lock state + ATTEMPTS LEFT only (burns nothing)\n"
+  + "  sim-pin-disable --pin 1234   remove the SIM PIN lock PERMANENTLY\n"
+  + "         [--apply]             without it DRY: reports the state only\n"
+  + "         [--force]             try even on a SIM with a burnt attempt (if sure)\n"
+  + "  sim-pin-enable --pin 1234    TEST ONLY: turn the PIN lock ON (make a locked SIM)\n"
+  + "         [--apply]             without it DRY; takes effect on next power-up\n"
+  + "  diff <A.json> <B.json>       diff two nvram snapshots\n"
+  + "  apply [--apply]              provisioning (DRY/dry-run without the flag)\n"
+  + "         [--profile field|factory] [--new-host ip] [--new-source-ip ip]\n"
+  + "         [--no-reboot]\n"
+  + "  provision                    plug-and-go: detect -> provision -> verify\n"
+  + "         [--phone 05xx]        number is read from the SIM; this flag OVERRIDES\n"
+  + "         [--loop]              many modems: plug -> ready -> unplug -> next\n"
+  + "         [--profile name] [--field-host ip] [--attempts N] [--max N]\n"
+  + "         [--internet-wait N]   internet check seconds (0 = off, default 150)\n"
+  + "         [--record <file>]     provisioning ledger (data/provisioned.jsonl)\n"
+  + "         [--metrics <file>]    timing ledger (data/metrics.jsonl)\n"
+  + "  call [<function>]            call ANY function of the core by name\n"
+  + "         (no name)             lists the whole callable surface\n"
+  + "         [-- arg1 arg2]        positional arguments after `--`\n"
+  + "         [--pure]              turn off opts injection\n"
+  + "  metrics-manual --minutes 15.5  record a stopwatch reading of the MANUAL process\n"
+  + "         [--seconds 930] [--who \"technician A\"] [--note \"...\"]\n"
+  + "         [--declared]          this number was STATED, not measured\n"
+  + "  metrics                      summary from recorded durations (no device)\n"
+  + "         [--modem-count 400] [--record data/metrics.jsonl]\n"
+  + "         [--manual-minutes 15] only if no manual measurement is recorded\n"
+  + "         [--manual-source \"...\"] [--manual-n N]\n\n"
+  + "Common: --json <file> (save output) · --from-file <file> (replay a saved report)\n"
+  + "        --host <ip> · --source-ip <ip>  (overrides .env; wherever the modem is now)\n"
+  + "Env:    MODEM_HOST, MODEM_USER, MODEM_PASSWORD, MODEM_SOURCE_IP\n"
+  + "Contract: stdout is ALWAYS pure JSON; progress/summary go to stderr; exit code from ok.\n";
 
 async function main() {
-  if (!command || command === "-h" || command === "--help" || !COMMANDS.has(command)) {
-    process.stderr.write(
-      "Kullanim: node --env-file=.env bin/ricon.js <komut>   (ya da: npm start / npm run <komut>) [bayraklar]\n\n"
-      + "  dogrula                      ortam/erisim teshisi\n"
-      + "  oku                          HER SEYI cek (sistem+SIM+ayar+nvram)\n"
-      + "  konsol [--nvram]             telnet root shell / tam nvram\n"
-      + "  sim [--telefon 05xxxxxxxxx]  SIM/hucresel ozet (+MSISDN girisi)\n"
-      + "  degerlendir                  cihaz durumu + NE EKSIK (numara dahil, ~5 sn)\n"
-      + "         [--izle] [--tur N]    eksik giderilene kadar KENDI KENDINE tekrar bak\n"
-      + "  numara                       SADECE SIM telefon numarasi (AT+CNUM)\n"
-      + "  sim-kilit                    SADECE kilit durumu + KALAN HAK (hak harcamaz)\n"
-      + "  sim-pin-kaldir --pin 1234    SIM PIN kilidini KALICI kaldir\n"
-      + "         [--uygula]            bayraksiz KURU: yalniz durumu bildirir\n"
-      + "         [--zorla]             hak yanmis SIM'de yine dene (PIN'den eminsen)\n"
-      + "  sim-pin-kilitle --pin 1234   SADECE TEST: PIN kilidini AC (kilitli SIM uret)\n"
-      + "         [--uygula]            bayraksiz KURU; etkisi sonraki acilista\n"
-      + "  fark <A.json> <B.json>       iki nvram anlik goruntusu diff\n"
-      + "  uygula [--uygula]            provizyon (bayraksiz KURU/dry-run)\n"
-      + "         [--profil saha|fabrika] [--yeni-host ip] [--yeni-kaynak ip]\n"
-      + "         [--reboot-yok]\n"
-      + "  hazirla                      tak-calistir: algila->provizyon->dogrula\n"
-      + "         [--telefon 05xx]      numara SIM'den okunur; bu bayrak EZER\n"
-      + "         [--dongu]             cok modem: tak -> hazir -> cikar -> sonraki\n"
-      + "         [--profil ad] [--saha-host ip] [--deneme N] [--max N]\n"
-      + "         [--kayit <dosya>]     hazirlama defteri (data/hazirlanan.jsonl)\n"
-      + "  calistir [<fonksiyon>]       cekirdegin HERHANGI bir fonksiyonunu cagir\n"
-      + "         (adsiz)               cagrilabilir tum yuzeyi listeler\n"
-      + "         [-- arg1 arg2]        `--` sonrasi konumsal arguman\n"
-      + "         [--saf]               opts enjeksiyonunu kapat\n"
-      + "  olcum-elle --dk 15.5         ELLE surecin kronometresini kaydet\n"
-      + "         [--kim \"teknisyen A\"] [--not \"...\"]\n"
-      + "  olcum                        kaydedilmis surelerden metrik ozeti (cihazsiz)\n"
-      + "         [--modem-sayisi 400] [--kayit data/olcumler.jsonl]\n"
-      + "         [--elle-dk 15] sadece kayitli elle olcum YOKSA (beyan tabani)\n\n"
-      + "Ortak: --json <dosya> (ciktiyi kaydet) · --kaynak <dosya> (cihazsiz tekrar oynat)\n"
-      + "       --host <ip> · --kaynak-ip <ip>  (.env'i ezer; modem o an neredeyse)\n",
-    );
-    // Yardim ISTEMEK hata degil -> 0. BILINMEYEN komut hatadir -> 1.
-    // Eskiden `--help` de 1 donuyordu: betikte `ricon.js --help && ...`
-    // zinciri sessizce kiriliyordu.
-    const helpAsked = !command || command === "-h" || command === "--help";
-    return helpAsked ? 0 : 1;
+  const helpAsked = !command || command === "-h" || command === "--help";
+  if (helpAsked) { process.stderr.write(HELP); return 0; }
+  if (!COMMANDS.has(command)) {
+    // Eski Turkce adi yazdiysa DOGRUSUNU soyle. Sessiz bir "unknown command"
+    // teknisyeni yazim hatasi aramaya gonderirdi; sorun yazim degil, surum.
+    const renamed = RENAMED_IN_0_2_0[command];
+    process.stderr.write(`unknown command: ${command}\n`);
+    if (renamed) {
+      process.stderr.write(`  did you mean: ${renamed}\n\n`
+        + "renamed in v0.2.0:\n"
+        + Object.entries(RENAMED_IN_0_2_0)
+          .map(([o, n]) => `  ${o.padEnd(16)} -> ${n}\n`).join("")
+        + "  --dongu          -> --loop\n"
+        + "  --profil         -> --profile\n"
+        + "  --telefon        -> --phone\n"
+        + "  --uygula         -> --apply\n"
+        + "  --zorla          -> --force\n"
+        + "  --kaynak-ip      -> --source-ip\n"
+        + "  --kaynak         -> --from-file\n\n");
+    }
+    process.stderr.write(HELP);
+    return 1;
   }
 
-  const source = flag("--kaynak");
+  const source = flags.fromFile;
   const report = source
     ? JSON.parse(readFileSync(source, "utf8"))
     : await runCommand();
@@ -592,15 +658,15 @@ async function main() {
   process.stdout.write(jsonText + "\n");
   process.stderr.write("\n" + summaryText(report) + "\n");
 
-  const out = flag("--json");
+  const out = flags.json;
   if (out) {
     writeFileSync(out, jsonText, "utf8");
-    process.stderr.write(`\nJSON yazildi: ${out}\n`);
+    process.stderr.write(`\nJSON written: ${out}\n`);
   }
   return report.ok ? 0 : 1;
 }
 
 main().then((code) => { if (code !== null) process.exit(code); }).catch((e) => {
-  process.stderr.write(`Beklenmeyen hata: ${e?.stack || e}\n`);
+  process.stderr.write(`Unexpected error: ${e?.stack || e}\n`);
   process.exit(1);
 });

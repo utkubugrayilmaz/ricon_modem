@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PROBLEM_CODES } from "../src/problems.js";
-import { PROBLEM_TEXT_TR } from "../src/problems.js";
+import { OPERATOR_TEXT } from "../src/problems.js";
 
 const SRC = new URL("../src/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 
@@ -60,6 +60,6 @@ test("taramanin kendisi CALISIYOR (bos regex yanlis yesil vermesin)", () => {
 });
 
 test("katalogdaki her kodun TURKCE karsiligi var (ters yon)", () => {
-  const missing = PROBLEM_CODES.filter((k) => !PROBLEM_TEXT_TR[k]);
+  const missing = PROBLEM_CODES.filter((k) => !OPERATOR_TEXT[k]);
   assert.deepEqual(missing, []);
 });

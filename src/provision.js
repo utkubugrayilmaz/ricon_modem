@@ -83,7 +83,7 @@ const changesManagementAddress = (pairs) =>
 // uygula=false (varsayılan): DRY-RUN — sadece plan döner, cihaza YAZMAZ.
 export async function applyProvisioning(opts, profile) {
   const { host, sourceIp, credentials, apply = false, reboot = true } = opts;
-  const report = { timestamp: now(), command: "uygula", modemIp: host, profile: profile.name,
+  const report = { timestamp: now(), command: "apply", modemIp: host, profile: profile.name,
     apply, problems: [] };
 
   if (!credentials) {
@@ -94,7 +94,7 @@ export async function applyProvisioning(opts, profile) {
   const consoleOptions = { host, sourceIp, user: credentials.user, password: credentials.password };
 
   // 1) Oku
-  notify(opts, "nvram okunuyor");
+  notify(opts, "reading nvram");
   const { values, count, problems: readProblem } = await consoleNvram(consoleOptions);
   report.problems.push(...readProblem);
   if (count === 0) { report.ok = false; return report; }
@@ -129,7 +129,7 @@ export async function applyProvisioning(opts, profile) {
   // 3) DRY-RUN ise burada dur.
   if (!apply) {
     report.status = "dry_run";
-    report.note = "Hicbir sey yazilmadi. Gercek uygulama icin uygula:true (CLI: --uygula).";
+    report.note = "Nothing was written. For a real run pass apply:true (CLI: --apply).";
     report.ok = isOk(report.problems);
     return report;
   }
@@ -138,7 +138,7 @@ export async function applyProvisioning(opts, profile) {
   report.written = {};
   for (const group of groups) {
     const keys = Object.keys(group.pairs);
-    notify(opts, `${group.name}: ${keys.length} ayar yaziliyor`);
+    notify(opts, `${group.name}: writing ${keys.length} settings`);
     emitEvent(opts, { kind: "writing", group: group.name, keys });
     const y = await consoleWrite(consoleOptions, match(group.pairs));
     report.problems.push(...y.problems);
@@ -159,7 +159,7 @@ export async function applyProvisioning(opts, profile) {
   // 6) Reboot (config'i temiz uygula). Fire-and-forget: reboot bağlantıyı
   // koparır, cevap beklemeyiz.
   if (reboot) {
-    notify(opts, "reboot (config uygulaniyor)");
+    notify(opts, "reboot (applying config)");
     emitEvent(opts, { kind: "reboot" });
     await rebootFireForget(consoleOptions);
     report.rebootSent = true;
@@ -170,7 +170,7 @@ export async function applyProvisioning(opts, profile) {
   const verifyHost = opts.newHost || (lanChanging ? profile.nvram.lan_ipaddr : host);
   const verifySource = opts.newSourceIp || sourceIp;
   if (opts.newHost || !lanChanging) {
-    notify(opts, `dogrulama: ${verifyHost} bekleniyor`);
+    notify(opts, `verifying: waiting for ${verifyHost}`);
     const verify = await verifyPlanSettled(
       { host: verifyHost, sourceIp: verifySource, credentials }, profile, opts,
       report.rebootSent === true,
@@ -182,8 +182,8 @@ export async function applyProvisioning(opts, profile) {
   } else {
     // LAN IP değişti ama yeni adres verilmedi -> PC'yi 5.5.5.x'e alıp doğrula.
     report.status = "verify_after_reboot";
-    report.note = `LAN IP ${profile.nvram.lan_ipaddr} yapildi + reboot edildi. `
-      + `Dogrulama icin PC'ye 5.5.5.x ekleyip: uygula --yeni-host ${profile.nvram.lan_ipaddr} --kuru`;
+    report.note = `LAN IP set to ${profile.nvram.lan_ipaddr} + rebooted. `
+      + `To verify, add 5.5.5.x on the PC then: apply --new-host ${profile.nvram.lan_ipaddr}`;
     report.ok = isOk(report.problems);
   }
   return report;
@@ -229,10 +229,10 @@ export async function applyPin(opts, pin) {
   const consoleOptions = { host, sourceIp, user: credentials.user, password: credentials.password };
 
   // (3) Aynı PIN zaten yazılı mı? Yazılıysa denenmiş; tekrarlamak deneme yakar.
-  notify(opts, "PIN kontrolu (ayni PIN daha once denenmis mi)");
+  notify(opts, "PIN check (was this same PIN already tried)");
   const { values, count } = await consoleNvram(consoleOptions);
   if (count === 0) {
-    report.problems.push(problem("REQUEST_FAILED", "nvram", "PIN oncesi okuma basarisiz"));
+    report.problems.push(problem("REQUEST_FAILED", "nvram", "read before PIN failed"));
     report.skipped = "nvram_unreadable";
     return report;
   }
@@ -243,7 +243,7 @@ export async function applyPin(opts, pin) {
   }
 
   // (4) Tek deneme.
-  notify(opts, "SIM PIN yaziliyor (TEK deneme)");
+  notify(opts, "writing the SIM PIN (SINGLE attempt)");
   emitEvent(opts, { kind: "pin_attempt" });
   const y = await consoleWrite(consoleOptions, { [SIM_PIN_KEY]: String(pin) });
   report.problems.push(...y.problems);
@@ -251,7 +251,7 @@ export async function applyPin(opts, pin) {
   report.attempted = true;
 
   if (reboot) {
-    notify(opts, "reboot (PIN ile SIM yeniden baslatiliyor)");
+    notify(opts, "reboot (restarting the SIM with the PIN)");
     emitEvent(opts, { kind: "reboot" });
     await rebootFireForget(consoleOptions);
   }
@@ -322,7 +322,7 @@ async function verifyPlanSettled(opts, profile, mainOptions, rebootWasSent = fal
       continue;
     }
     attempt += 1;
-    notify(mainOptions, `dogrulama denemesi ${attempt} (${elapsedSec()} sn)`);
+    notify(mainOptions, `verify attempt ${attempt} (${elapsedSec()} s)`);
     const { values, count } = await consoleNvram(consoleOptions);
     if (count === 0) {                       // TCP acik ama konsol henuz hazir degil
       emitEvent(mainOptions, { kind: "verifying", attempt, status: "waiting_device" });
@@ -341,17 +341,17 @@ async function verifyPlanSettled(opts, profile, mainOptions, rebootWasSent = fal
     const signature = remaining.slice().sort().join(",");
     if (signature === previousSignature) { sameCount += 1; } else { sameCount = 0; signatureStart = Date.now(); }
     previousSignature = signature;
-    notify(mainOptions, `dogrulama: ${remaining.length} anahtar henuz oturmadi (${remaining.join(", ")})`);
+    notify(mainOptions, `verifying: ${remaining.length} keys have not settled yet (${remaining.join(", ")})`);
     if (sameCount + 1 >= STABLE_ROUNDS && Date.now() - signatureStart >= STABLE_WINDOW_MS) {
       return { done: false, stillChanging: remaining, waitedSec: elapsedSec(),
-        reason: `ayni eksik ${STABLE_ROUNDS} kez ust uste: cihaz bu degeri kabul etmiyor` };
+        reason: `the same key missed ${STABLE_ROUNDS} times in a row: the device rejects this value` };
     }
     await wait(POLL_GAP_MS);   // deger boot sirasinda oturabilir; kisa nefes
   }
   return {
     done: false,
-    stillChanging: lastRemaining ?? ["(cihaz reboot sonrasi gelmedi)"],
+    stillChanging: lastRemaining ?? ["(device never came back after reboot)"],
     waitedSec: elapsedSec(),
-    reason: lastRemaining ? "sure doldu, eksikler oturmadi" : "cihaz reboot sonrasi gelmedi",
+    reason: lastRemaining ? "timed out, the remaining keys never settled" : "device never came back after reboot",
   };
 }

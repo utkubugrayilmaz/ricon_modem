@@ -122,7 +122,7 @@ export async function runConsole(opts, commands) {
     const writer = commands.find((k) => WRITE_PATTERN.test(k));
     if (writer) {
       return { ok: false, outs: {},
-        problems: [problem("WRITE_BLOCKED_READONLY", `konsol: "${writer}"`)] };
+        problems: [problem("WRITE_BLOCKED_READONLY", `console: "${writer}"`)] };
     }
   }
   // KIMLIKSIZ DENEME YOK. Kimlik yoksa login'in tek olasi sonucu zaman
@@ -173,7 +173,7 @@ function _trySession(opts, commands) {
 
     const timestamp = setTimeout(() => finish({
       ok: false, outs: {},
-      problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `login/komut zaman asimi (asama ${stage})`)],
+      problems: [problem("REQUEST_FAILED", `console ${host}:${port}`, `login/command timeout (stage ${stage})`)],
     }), top);
 
     s.setTimeout(top);
@@ -205,15 +205,15 @@ function _trySession(opts, commands) {
     });
     s.on("timeout", () => finish({
       ok: false, outs: {},
-      problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, "soket zaman asimi")],
+      problems: [problem("REQUEST_FAILED", `console ${host}:${port}`, "socket timeout")],
     }));
     s.on("error", (e) => { clearTimeout(timestamp); finish({
       ok: false, outs: {},
-      problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `${e.code || e.name}: ${e.message}`)],
+      problems: [problem("REQUEST_FAILED", `console ${host}:${port}`, `${e.code || e.name}: ${e.message}`)],
     }); });
     s.on("close", () => {
       if (stage >= 3) finish(resolveResult());
-      else finish({ ok: false, outs: {}, problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `baglanti kapandi (asama ${stage})`)] });
+      else finish({ ok: false, outs: {}, problems: [problem("REQUEST_FAILED", `console ${host}:${port}`, `connection closed (stage ${stage})`)] });
     });
 
     // Toplu ciktidan her komutun ciktisini sirayla ayiklar.

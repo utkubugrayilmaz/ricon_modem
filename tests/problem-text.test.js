@@ -9,10 +9,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PROBLEM_CODES, problem } from "../src/problems.js";
-import { problemText, localizeProblems, PROBLEM_TEXT_TR } from "../src/problems.js";
+import { problemText, localizeProblems, OPERATOR_TEXT } from "../src/problems.js";
 
 test("her sorun kodunun TURKCE karsiligi var", () => {
-  const missing = PROBLEM_CODES.filter((k) => !PROBLEM_TEXT_TR[k]);
+  const missing = PROBLEM_CODES.filter((k) => !OPERATOR_TEXT[k]);
   assert.deepEqual(missing, [], `cevirisi olmayan kodlar: ${missing.join(", ")}`);
 });
 
@@ -22,7 +22,7 @@ test("her sorun kodunun TURKCE karsiligi var", () => {
 const BASLIK_UST = 40;
 const NEYAP_UST = 90;
 
-test("Turkce metinler KISA: baslik <= 40, neYap <= 90 karakter", () => {
+test("operator metinleri KISA: baslik <= 40, neYap <= 90 karakter", () => {
   for (const code of PROBLEM_CODES) {
     const t = problemText(code);
     assert.ok(t.title?.length > 3, `${code}: baslik yok`);
@@ -35,7 +35,7 @@ test("Turkce metinler KISA: baslik <= 40, neYap <= 90 karakter", () => {
   }
 });
 
-test("Turkce metinler TEKNIK KOMUT icermez (asil kusur buydu)", () => {
+test("operator metinleri TEKNIK KOMUT icermez (asil kusur buydu)", () => {
   // Ekrana PowerShell/AT/nvram komutu, dosya yolu ya da Ingilizce yonerge
   // basmak yardim degil gurultu. Tek istisna: 05xxxxxxxxx gibi ORNEK deger.
   const yasakli = /New-NetIPAddress|PowerShell|nvram |AT\+|\/dev\/|--env-file|http:\/\//i;
@@ -46,7 +46,7 @@ test("Turkce metinler TEKNIK KOMUT icermez (asil kusur buydu)", () => {
   }
 });
 
-test("bilinmeyen kod PATLAMAZ ve ham Ingilizce SIZDIRMAZ", () => {
+test("bilinmeyen kod PATLAMAZ ve ham gelistirici metnini SIZDIRMAZ", () => {
   const t = problemText("BOYLE_BIR_KOD_YOK");
   assert.ok(t.title.length > 3);
   assert.match(t.whatToDo, /BOYLE_BIR_KOD_YOK/, "kodu bildirmeli ki takip edilebilsin");
@@ -54,13 +54,13 @@ test("bilinmeyen kod PATLAMAZ ve ham Ingilizce SIZDIRMAZ", () => {
   assert.ok(bos.title.length > 3, "kodsuz cagri da anlamli metin dondurmeli");
 });
 
-test("problemleriTurkcelestir: tr EKLER, gelistirici metnini KORUR", () => {
+test("localizeProblems: operator metnini EKLER, gelistirici metnini KORUR", () => {
   const p = [problem("NO_SOURCE_IP", "192.168.1.50"), problem("SIM_PIN_LOCKED", 3)];
   const c = localizeProblems(p);
   assert.equal(c.length, 2);
-  assert.equal(c[0].tr.code, "NO_SOURCE_IP");
-  assert.match(c[0].tr.title, /ağ/i);
+  assert.equal(c[0].operator.code, "NO_SOURCE_IP");
+  assert.match(c[0].operator.title, /network/i);
   assert.ok(c[0].message.length > 0, "message korunur (gunluk/gelistirici tarafi)");
-  assert.equal(c[1].tr.title, "SIM PIN kilitli");
+  assert.equal(c[1].operator.title, "SIM is PIN locked");
   assert.deepEqual(localizeProblems(), [], "bos girdi patlamaz");
 });

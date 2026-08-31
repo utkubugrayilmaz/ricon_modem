@@ -104,7 +104,7 @@ export async function waitForInternet({ host, sourceIp, credentials }, maxSec = 
         simStatus: k?.simStatus ?? null });
       return { up: false, durationSec: elapsed(), wan_ip: null, simStatus: k?.simStatus ?? null };
     }
-    notify(opts, `internet bekleniyor (${elapsed()} sn / ${maxSec} sn)`);
+    notify(opts, `waiting for internet (${elapsed()} s / ${maxSec} s)`);
     emitEvent(opts, { kind: "waiting_internet", elapsedSec: elapsed(), maxSec: maxSec });
     // Yoklama araligi. Olculdu (2026-08-31, enstrumanli reboot): tek readSim
     // 0.10-0.19 sn suruyor, yani yoklamanin MALIYETI yok — kayip tamamen
@@ -214,8 +214,8 @@ export async function readSim(opts) {
   report.msisdn = normalized;
   report.msisdnSource = normalized ? "operator_input" : null;
   if (!normalized) {
-    report.msisdnNote = "Telefon no cihazdan alinamaz; operator/UI girisi gerekir "
-      + "(--telefon 05xxxxxxxxx) ya da operatorden ICCID->numara listesi.";
+    report.msisdnNote = "The phone number cannot be read from the device; operator input is required "
+      + "(--phone 05xxxxxxxxx), or an ICCID->number list from the carrier.";
   }
   report.ok = isOk(report.problems);
   return report;

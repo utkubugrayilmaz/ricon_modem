@@ -23,7 +23,7 @@ const notify = (opts, msg) => { if (typeof opts.progress === "function") opts.pr
 // --- dogrula: ortam/erisim teshisi ---
 export async function checkDevice(opts) {
   const { host, sourceIp, credentials } = opts;
-  const report = { timestamp: now(), command: "dogrula", modemIp: host, problems: [] };
+  const report = { timestamp: now(), command: "verify", modemIp: host, problems: [] };
   report.localInterfaces = localInterfaces();
   report.sourceIp = sourceIp || null;
   if (!sourceIp) report.problems.push(problem("NO_SOURCE_IP", `${prefixOf(host)}50`));
@@ -48,18 +48,18 @@ export async function checkDevice(opts) {
 export async function readDevice(opts) {
   const { host, sourceIp, credentials } = opts;
   if (isHostBusy(host)) {
-    return { timestamp: now(), command: "oku", modemIp: host, ok: false,
+    return { timestamp: now(), command: "read", modemIp: host, ok: false,
       problems: [problem("DEVICE_BUSY", host)] };
   }
   lockHost(host);
   try {
     const c = new Client({ host, sourceIp, credentials });
     const report = {
-      timestamp: now(), command: "oku", modemIp: host, credentialsReady: Boolean(credentials),
+      timestamp: now(), command: "read", modemIp: host, credentialsReady: Boolean(credentials),
       endpoints: {}, rawFields: {}, problems: [],
     };
     for (const uc of ENDPOINTS) {
-      notify(opts, `oku ${uc.path}`);
+      notify(opts, `read ${uc.path}`);
       const r = await c.get(uc.path);
       report.endpoints[uc.name] = { path: uc.path, code: r.code, size: r.body?.length ?? 0, kind: uc.kind };
       report.problems.push(...r.problems.filter((p) => p.severity === "error" || p.code === "AUTH_REQUIRED"));
@@ -107,19 +107,19 @@ export function systemView(raw) {
 export async function readConsole(opts) {
   const { host, sourceIp, credentials, nvram = false } = opts;
   if (!credentials) {
-    return { timestamp: now(), command: "konsol", modemIp: host, ok: false,
+    return { timestamp: now(), command: "console", modemIp: host, ok: false,
       problems: [problem("AUTH_REQUIRED", "telnet 5123")] };
   }
   const consoleOptions = { host, sourceIp, user: credentials.user, password: credentials.password };
-  const report = { timestamp: now(), command: "konsol", modemIp: host, problems: [] };
+  const report = { timestamp: now(), command: "console", modemIp: host, problems: [] };
   if (nvram) {
-    notify(opts, "nvram tam dokumu (CLI)");
+    notify(opts, "full nvram dump (CLI)");
     const { values, count, problems } = await consoleNvram(consoleOptions);
     report.nvram = values;
     report.nvramKeyCount = count;
     report.problems.push(...problems);
   } else {
-    notify(opts, "sistem kesfi");
+    notify(opts, "system discovery");
     const { outs, problems } = await consoleSystem(consoleOptions);
     report.commands = outs;
     report.problems.push(...problems);

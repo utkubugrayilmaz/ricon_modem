@@ -63,8 +63,8 @@ test("summarizeMetrics: karsilastirma iki AYRI iddia uretir", () => {
 
 test("summarizeMetrics: az ornek ve beyan tabani UYARI uretir", () => {
   const o = summarizeMetrics([line(), line()], { manualSec: 900, manualN: 1 });
-  assert.match(o.comparison.warning, /en az 5/);
-  assert.match(o.comparison.manualWarning, /BEYAN/);
+  assert.match(o.comparison.warning, /below 5 runs/);
+  assert.match(o.comparison.manualWarning, /measurements are recommended/);
 });
 
 test("summarizeMetrics: hic basarili kayit yoksa ok:false + OLCUM_YOK", () => {
@@ -84,13 +84,13 @@ test("summarizeMetrics: KAYITLI elle olcum, komut satiri beyanini EZER", () => {
   assert.equal(o.manualSec.n, 3);
   assert.equal(o.manualSec.median, 840);
   assert.equal(o.comparison.manualSec, 840, "kayitli medyan kullanilir, 60 degil");
-  assert.match(o.comparison.manualSource, /3 olcum/);
+  assert.match(o.comparison.manualSource, /3 measured/);
   assert.equal(o.comparison.manualWarning, undefined, "n=3 yeterli, uyari yok");
 });
 
 test("summarizeMetrics: kayitli elle olcum yoksa beyan tabani BEYAN diye etiketlenir", () => {
   const o = summarizeMetrics([line(), line()], { manualSec: 900 });
-  assert.match(o.comparison.manualSource, /BEYAN/);
+  assert.match(o.comparison.manualSource, /DECLARED/);
 });
 
 test("summarizeMetrics: elle olcumler kurulum sayilmaz", () => {
@@ -105,7 +105,7 @@ test("summarizeMetrics: BEYAN satiri olculmus gibi sunulmaz", () => {
   ];
   const o = summarizeMetrics(rows);
   assert.equal(o.comparison.manualSec, 720, "taban yine kayitli satirdan gelir");
-  assert.match(o.comparison.manualSource, /BEYAN/, "kaynak BEYAN diye etiketli");
+  assert.match(o.comparison.manualSource, /declared/, "kaynak BEYAN diye etiketli");
   assert.match(o.comparison.manualSource, /operasyon beyani/, "kim bilgisi tasinir");
   assert.ok(o.comparison.manualWarning, "beyan -> uyari uretir (olculmus sayilmaz)");
 });
@@ -118,7 +118,7 @@ test("summarizeMetrics: gercek OLCUM satirlari beyan diye etiketlenmez", () => {
     { kind: "elle", ok: true, totalSec: 840, who: "teknisyen A" },
   ];
   const o = summarizeMetrics(rows);
-  assert.match(o.comparison.manualSource, /3 olcum/);
+  assert.match(o.comparison.manualSource, /3 measured/);
   assert.equal(o.comparison.manualWarning, undefined);
 });
 

@@ -128,7 +128,7 @@ async function tryPin({ location, credentials, pin, report, opts, simState }) {
     return;
   }
   report.problems.push(...k.problems);   // izin verildi; varsa UYARI tasinir
-  notify(opts, `SIM PIN denenecek (kalan hak: ${remaining ?? "?"})`);
+  notify(opts, `will try the SIM PIN (attempts left: ${remaining ?? "?"})`);
   const p = await applyPin(
     { ...location, credentials, progress: opts.progress, event: opts.event }, pin,
   );
@@ -150,7 +150,7 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
   // diyorsa interneti beklemenin ANLAMI YOK: cevabı zaten biliyoruz. 150 sn
   // yerine 0 sn. (2026-08-27 canlı: bu metin PIN kilitli SIM'de görüldü.)
   if (simState?.lock) {
-    notify(opts, `SIM ${simState.lock.toUpperCase()} kilitli — internet beklenmiyor`);
+    notify(opts, `SIM is ${simState.lock.toUpperCase()} locked — not waiting for internet`);
     emitEvent(opts, { kind: "sim_lock", lock: simState.lock,
       pinRemaining: simState.pinRemaining, pukRemaining: simState.pukRemaining, raw: simState.raw });
     report.simLock = simState;
@@ -167,7 +167,7 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
     // yakmak olurdu. Kilit metni provizyon ÖNCESİNDEN kalma; reboot sonrası
     // gerçek durumu internet kontrolü söyleyecek.
     if (pinPlanned) {
-      notify(opts, "PIN ana yazma pasinda gonderildi — internet kontrol ediliyor");
+      notify(opts, "PIN was sent in the main write pass — checking internet");
       const next = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
       report.internet = next;
       if (!next.up) report.problems.push(problem("INTERNET_DOWN", internetWaitSec, next.simStatus));
@@ -190,7 +190,7 @@ async function internetAndPin({ location, credentials, pin, internetWaitSec, rep
     return result;
   }
 
-  notify(opts, "internet dogrulamasi (SIM calisiyor mu)");
+  notify(opts, "internet check (is the SIM working)");
   let result = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
 
   if (!result.up) {
@@ -218,7 +218,7 @@ async function finishRecord({ report, location, readyIdentity, credentials, phon
   let identity = readyIdentity || {};
   if (!readyIdentity && location && credentials) {
     try {
-      notify(opts, "cihaz kimligi okunuyor (kayit icin)");
+      notify(opts, "reading device identity (for the ledger)");
       identity = await readIdentity({ ...location, credentials });
     } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
   }
@@ -270,7 +270,7 @@ export async function provisionModem(opts) {
     // — tek baglantili cihazda gereksiz ~4 sn demek.
     identity: readyIdentityInfo = null,
   } = opts;
-  const report = { timestamp: now(), command: "hazirla", startedMs: Date.now(), problems: [] };
+  const report = { timestamp: now(), command: "provision", startedMs: Date.now(), problems: [] };
   // Numara CAGRIDAN gelebilir ya da CIHAZDAN okunur (asagida, SIM hazirsa).
   // `let` cunku cozum algilamadan sonra olusuyor; finish()/buildActiveProfile()
   // cagri aninda gecerli degeri goruyor.
@@ -365,7 +365,7 @@ export async function provisionModem(opts) {
   }
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    notify(opts, `deneme ${attempt}/${attempts}: modem algilaniyor`);
+    notify(opts, `attempt ${attempt}/${attempts}: detecting modem`);
     const factoryUp = factorySrc ? await isReachable(factoryHost, factorySrc) : false;
     const fieldUp = factoryUp || !fieldSrc ? false : await isReachable(fieldHost, fieldSrc);
     const location = factoryUp
@@ -377,7 +377,7 @@ export async function provisionModem(opts) {
     // kaydolamaz; defterde ICCID'siz satir kalir. 45 sn harcayip sonunda
     // anlamak yerine ilk saniyede soyluyoruz (2026-08-27 canli gozlem).
     if (location && !identityBefore) {
-      notify(opts, `kimlik/SIM kontrolu (${location.host})`);
+      notify(opts, `identity / SIM check (${location.host})`);
       try {
         identityBefore = await readIdentity({ ...location, credentials });
       } catch { identityBefore = null; }
@@ -413,12 +413,12 @@ export async function provisionModem(opts) {
         // birakmiyoruz (arayuzde de dugme hic gorunmuyordu).
         report.problems.push(...(gate.problems ?? []));
       } else {
-        notify(opts, `SIM PIN kilitli — kalan hak ${lock.pinRemaining ?? "?"}`);
+        notify(opts, `SIM is PIN locked — ${lock.pinRemaining ?? "?"} attempts left`);
         const pinEntry = await opts.askPin({
           attempt, pinRemaining: lock.pinRemaining, pinTotal: lock.pinTotal,
         });
         if (pinEntry) {
-          notify(opts, "PIN kilidi kaldiriliyor (TEK deneme)");
+          notify(opts, "removing the PIN lock (SINGLE attempt)");
           const u = await disableSimPin(
             { ...location, credentials, progress: opts.progress, event: opts.event },
             pinEntry, { manualConsent: true },
@@ -431,7 +431,7 @@ export async function provisionModem(opts) {
             // Kilit kalkti: kimligi YENIDEN oku. Eski `identityBefore` hala
             // "kilitli" diyor; onunla devam etmek numarayi bir daha
             // okutmazdi.
-            notify(opts, "kilit kalkti — kimlik yeniden okunuyor");
+            notify(opts, "lock cleared — re-reading identity");
             try {
               identityBefore = await readIdentity({ ...location, credentials });
             } catch { /* kismi sonuc gecerli */ }
@@ -447,7 +447,7 @@ export async function provisionModem(opts) {
     // Bu adim provisionModem'in ICINDE, arayuzde degil: CLI, HTTP ucu ve
     // baska bir Node projesi de otomatik numara aliyor.
     if (location && !phoneNormalized && identityBefore?.sim?.ready) {
-      notify(opts, "telefon numarasi SIM'den okunuyor (AT+CNUM)");
+      notify(opts, "reading the phone number from the SIM (AT+CNUM)");
       const n = await readMsisdn({ ...location, credentials });
       if (n.phone) {
         phoneNormalized = n.phone;
@@ -468,7 +468,7 @@ export async function provisionModem(opts) {
     // isletmiyordu.
     if (location && !phoneNormalized) {
       if (attempt < attempts) {
-        notify(opts, "numara okunamadi, yeniden denenecek");
+        notify(opts, "number unreadable, will retry");
         await wait(2000);
         continue;
       }
@@ -547,7 +547,7 @@ export async function provisionModem(opts) {
       return finish(fieldPlace, identityBefore, net);
     }
     report.problems.push(...r.problems);
-    notify(opts, `deneme ${attempt} basarisiz (${r.status}); tekrar denenecek`);
+    notify(opts, `attempt ${attempt} failed (${r.status}); retrying`);
     if (attempt < attempts) await wait(5000);
   }
   report.status = "failed"; report.ok = false;
@@ -569,7 +569,7 @@ export async function provisionLoop(opts) {
     (opts.factoryHost || "192.168.1.1").split(".").slice(0, 3).join(".") + ".",
     (opts.fieldHost || "5.5.5.1").split(".").slice(0, 3).join(".") + ".",
   );
-  const result = { timestamp: now(), command: "hazirla-dongu", provisioned: [], problems: [] };
+  const result = { timestamp: now(), command: "provision-loop", provisioned: [], problems: [] };
   if (!on.ready) {
     result.problems.push(...on.problems);
     result.ok = false;
@@ -580,9 +580,9 @@ export async function provisionLoop(opts) {
 
   let counter = 0;
   while (counter < maxModems) {
-    notify(opts, "modem takilmasi bekleniyor...");
+    notify(opts, "waiting for a modem to be plugged in...");
     await waitForModem(modemOptions);
-    notify(opts, "modem algilandi, hazirlaniyor");
+    notify(opts, "modem detected, provisioning");
     // Numarayi SORMUYORUZ: provisionModem onu SIM'den okuyor. Okuyamazsa
     // yine opts.askPhone'a dusuyor — yani yedek yol duruyor, ama artik
     // her modemde operatoru bekletmiyor. Dongunun amaci tam bu: tak, cikar.
@@ -598,7 +598,7 @@ export async function provisionLoop(opts) {
       try { opts.metricsRecord(r); } catch { /* olcum yazimi akisi bozmaz */ }
     }
     counter += 1;
-    notify(opts, r.ok ? `HAZIR (${r.status}) — cihazi cikarabilirsin` : `BASARISIZ (${r.status})`);
+    notify(opts, r.ok ? `READY (${r.status}) — you can unplug the device` : `FAILED (${r.status})`);
     if (opts.waitForRemoval !== false) await waitForModemRemoval(modemOptions);
   }
   result.ok = result.provisioned.every((h) => h.ok);

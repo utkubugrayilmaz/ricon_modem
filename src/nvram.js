@@ -96,7 +96,7 @@ const now = () => new Date().toISOString();
 export function computeNvramDiff(before, after) {
   const f = diffNvram(before, after);
   return {
-    timestamp: now(), command: "fark",
+    timestamp: now(), command: "diff",
     changed: f.changed, added: f.added, removed: f.removed,
     summary: {
       changed: Object.keys(f.changed).length,

@@ -16,14 +16,14 @@ test("settingLabel: ham deger okunabilir etikete cevrilir", () => {
   assert.equal(r.raw, "m13g", "ham deger korunur (gecirgenlik)");
 });
 
-test("settingLabel: birim eklenir, bos deger '(bos)' olur", () => {
-  assert.equal(settingLabel("mullinkfail", "0").display, "0 dk");
-  assert.equal(settingLabel("m1s1pppuser", "").display, "(bos)");
+test("settingLabel: birim eklenir, bos deger '(empty)' olur", () => {
+  assert.equal(settingLabel("mullinkfail", "0").display, "0 min");
+  assert.equal(settingLabel("m1s1pppuser", "").display, "(empty)");
 });
 
 test("settingLabel: parola alani MASKELENIR (ekrana sizmaz)", () => {
   assert.equal(settingLabel("m1s1ppppwd", "card").display, "••••");
-  assert.equal(settingLabel("m1s1ppppwd", "").display, "(bos)");
+  assert.equal(settingLabel("m1s1ppppwd", "").display, "(empty)");
 });
 
 test("settingLabel: sozlukte olmayan anahtar patlamaz, kendini gosterir", () => {

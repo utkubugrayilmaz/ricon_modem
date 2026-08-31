@@ -67,8 +67,8 @@ test("liste sabitleri fonksiyonlardan ayirir", () => {
   assert.equal(sabit.kind, "constant");
   assert.equal(list.find((x) => x.name === "checkDevice").kind, "function");
   const text = surfaceText(list);
-  assert.match(text, /CIHAZA GIDEN/);
-  assert.match(text, /SABITLER/);
+  assert.match(text, /TOUCHES THE DEVICE/);
+  assert.match(text, /CONSTANTS/);
 });
 
 // --- argv ayristirma ---
@@ -80,12 +80,12 @@ test("argvAyikla: `--` ayraci bayrakla konumsali ayirir", () => {
 });
 
 test("argvAyikla: tireli bayrak adi camelCase olur", () => {
-  assert.deepEqual(parseArgv(["--kaynak-ip", "5.5.5.100"]).flags,
+  assert.deepEqual(parseArgv(["--source-ip", "5.5.5.100"]).flags,
     { sourceIp: "5.5.5.100" });
 });
 
 test("argvAyikla: degersiz bayrak true, ayrac yoksa konumsal yok", () => {
-  const r = parseArgv(["--zorla", "--pin", "1234"]);
+  const r = parseArgv(["--force", "--pin", "1234"]);
   assert.deepEqual(r.flags, { manualConsent: true, pin: "1234" });
   assert.deepEqual(r.positionals, []);
 });
@@ -104,7 +104,7 @@ test("cagir: adsiz cagri tum yuzeyi listeler", async () => {
   const r = await callByName(core, null);
   assert.equal(r.ok, true);
   assert.ok(r.list.length > 50);
-  assert.match(r.surfaceText, /CAGRILABILIR|CIHAZA GIDEN/);
+  assert.match(r.surfaceText, /CALLABLE SURFACE|TOUCHES THE DEVICE/);
 });
 
 test("cagir: saf fonksiyona konumsallar gecer, opts GECMEZ", async () => {

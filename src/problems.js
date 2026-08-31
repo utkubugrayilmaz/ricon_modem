@@ -49,7 +49,7 @@ const CATALOG = {
     check: "By design the tool spends a PIN attempt AT MOST ONCE. A second"
       + " automatic try would only push the SIM closer to a PUK lock. Confirm"
       + " the PIN from the carrier's paperwork, then override with"
-      + " zorla/--zorla. The last attempt is never burned, override or not.",
+      + " manualConsent/--force. The last attempt is never burned, override or not.",
   }),
   PIN_REMAINING_UNKNOWN: () => ({
     message: "The module did not report the remaining PIN attempt counter,"
@@ -106,11 +106,11 @@ const CATALOG = {
       + " whether the PIN prompt is on or off; no PIN was sent.",
     check: "Sending a PIN blind risks one of the SIM's attempts. Retry — the"
       + " read is usually transient. If it persists, power-cycle the modem."
-      + " Override with zorla/--zorla only if you are sure of the PIN.",
+      + " Override with manualConsent/--force only if you are sure of the PIN.",
   }),
   PROFILE_MISSING: (name) => ({
     message: `No profile named "${name}" is configured, so there is nothing to apply.`,
-    check: "Pass --profil with a known name (see settings.js PROFILES), or start"
+    check: "Pass --profile with a known name (see settings.js PROFILES), or start"
       + " the server with a sifirlamaProfil so the reset button has a target.",
   }),
   NVRAM_BAD_HEADER: () => ({
@@ -218,7 +218,7 @@ const CATALOG = {
   MSISDN_REQUIRED: () => ({
     message: "Provisioning needs the SIM's phone number (MSISDN) and none was"
       + " supplied, so the device would go to the field with no record of its line.",
-    check: "Pass it as 05xxxxxxxxx (CLI: --telefon, or answer the prompt). It"
+    check: "Pass it as 05xxxxxxxxx (CLI: --phone, or answer the prompt). It"
       + " cannot be read from the device — it is known at install time only.",
   }),
   MSISDN_INVALID: (v) => ({
@@ -230,7 +230,7 @@ const CATALOG = {
   // --- Yazma (Faz 3) ---
   WRITE_BLOCKED_READONLY: (path) => ({
     message: `A write to ${path} was blocked: this command is read-only.`,
-    check: "Writing is only allowed in the 'uygula' command with --uygula."
+    check: "Writing is only allowed in the 'apply' command with --apply."
       + " Discovery and read commands never modify the device.",
   }),
 };
@@ -274,78 +274,84 @@ export function isOk(problems) {
 }
 
 // ======================================================================
-// Problem kodu -> operatore gosterilecek TURKCE metin
+// Problem kodu -> OPERATORE gosterilecek kisa metin
 // ======================================================================
-
-const PROBLEM_TEXT_TR = {
-  // --- Ag / erisim ---
-  NO_SOURCE_IP: { title: "Modeme giden ağ yok",
-    whatToDo: "LAN kablosunu tak, modemi aç. Kablo takılıysa ikincil IP tanımlı değil." },
-  DEVICE_UNREACHABLE: { title: "Modem cevap vermiyor",
-    whatToDo: "Kablo LAN portunda mı, modem açık mı?" },
-  DEVICE_BUSY: { title: "Modem meşgul",
-    whatToDo: "Süren okuma bitene kadar bekle." },
-  REQUEST_FAILED: { title: "Bağlantı yarıda kaldı",
-    whatToDo: "Araç tekrar deniyor. Sürerse kabloyu kontrol et." },
-  // --- Kimlik ---
-  AUTH_REQUIRED: { title: "Modem parolası gerekiyor", whatToDo: "Bilgi işleme haber ver." },
-  AUTH_REJECTED: { title: "Modem parolası kabul edilmedi", whatToDo: "Bilgi işleme haber ver." },
-  CONSOLE_AUTH_REQUIRED: { title: "Modem parolası tanımlı değil", whatToDo: "Bilgi işleme haber ver." },
-  HTTP_ERROR: { title: "Modem beklenmeyen cevap verdi", whatToDo: "Kapat-aç ve tekrar dene." },
-  EMPTY_BODY: { title: "Modem boş cevap verdi", whatToDo: "Bilgi amaçlı, akışı durdurmaz." },
-  LOCK_STATE_UNKNOWN: { title: "SIM kilidi okunamadı",
-    whatToDo: "PIN gönderilmedi. Tekrar dene; sürerse modemi kapat-aç." },
-  PROFILE_MISSING: { title: "Profil tanımlı değil", whatToDo: "Bilgi işleme haber ver." },
-  NVRAM_BAD_HEADER: { title: "Yedek dosyası tanınmadı", whatToDo: "Bilgi işleme haber ver." },
-  WRITE_BLOCKED_READONLY: { title: "Yazma izni yok", whatToDo: "Modemde hiçbir şey değişmedi." },
+//
+// CATALOG'dan AYRI durmasinin sebebi dil degil, MUHATAP:
+//   CATALOG.message/check -> gelistiriciye; teknik, uzun, gunluge yazilir
+//   OPERATOR_TEXT         -> tezgahtaki teknisyene; iki satir, tek eylem
+// Ayni metni iki isin de tasimasi ikisini de bozar. Uzunluk sinirlari
+// (baslik 40, eylem 90 karakter) testle korunuyor — ekran dar.
+const OPERATOR_TEXT = {
+  // --- Network / access ---
+  NO_SOURCE_IP: { title: "No network path to the modem",
+    whatToDo: "Plug the LAN cable in and power the modem. If cabled, no secondary IP is set." },
+  DEVICE_UNREACHABLE: { title: "Modem is not answering",
+    whatToDo: "Is the cable in the LAN port, is the modem powered?" },
+  DEVICE_BUSY: { title: "Modem is busy",
+    whatToDo: "Wait for the running read to finish." },
+  REQUEST_FAILED: { title: "Connection broke off",
+    whatToDo: "The tool is retrying. If it persists, check the cable." },
+  // --- Credentials ---
+  AUTH_REQUIRED: { title: "Modem password is required", whatToDo: "Tell IT." },
+  AUTH_REJECTED: { title: "Modem password was rejected", whatToDo: "Tell IT." },
+  CONSOLE_AUTH_REQUIRED: { title: "Modem password is not set", whatToDo: "Tell IT." },
+  HTTP_ERROR: { title: "Modem gave an unexpected answer", whatToDo: "Power cycle it and retry." },
+  EMPTY_BODY: { title: "Modem answered empty", whatToDo: "Informational; does not stop the flow." },
+  LOCK_STATE_UNKNOWN: { title: "SIM lock state unreadable",
+    whatToDo: "No PIN was sent. Retry; if it persists, power cycle the modem." },
+  PROFILE_MISSING: { title: "Profile is not defined", whatToDo: "Tell IT." },
+  NVRAM_BAD_HEADER: { title: "Backup file not recognised", whatToDo: "Tell IT." },
+  WRITE_BLOCKED_READONLY: { title: "No write permission", whatToDo: "Nothing changed on the modem." },
   // --- SIM ---
-  SIM_MISSING: { title: "SIM takılı değil", whatToDo: "Modemi kapat, SIM'i tak, aç." },
-  SIM_PIN_LOCKED: { title: "SIM PIN kilitli", whatToDo: "PIN'i yaz ve kilidi kaldır." },
-  SIM_PUK_LOCKED: { title: "SIM PUK kilitli", whatToDo: "Telefondan PUK ile aç." },
-  INTERNET_DOWN: { title: "İnternet gelmedi", whatToDo: "Hattın açık ve kotalı olduğunu kontrol et." },
-  AT_PORT_NOT_FOUND: { title: "SIM birimine ulaşılamadı", whatToDo: "Kapat-aç ve tekrar dene." },
-  // --- Telefon numarasi ---
-  MSISDN_REQUIRED: { title: "Telefon numarası gerekiyor", whatToDo: "11 hane olarak elle gir." },
-  MSISDN_INVALID: { title: "Numara geçersiz", whatToDo: "11 hane, 05 ile başlamalı." },
-  MSISDN_NOT_ON_SIM: { title: "Numara SIM'de yok", whatToDo: "Elle gir." },
-  MSISDN_MISMATCH: { title: "Girilen numara SIM'dekinden farklı",
-    whatToDo: "SIM'in numarası daha güvenilir. Hattı kontrol et." },
-  // --- PIN kararlari ---
-  PIN_INVALID: { title: "PIN biçimi hatalı", whatToDo: "4-8 hane, sadece rakam." },
-  PIN_REQUIRED: { title: "SIM PIN istiyor", whatToDo: "PIN'i gir." },
-  PIN_REJECTED: { title: "PIN kabul edilmedi",
-    whatToDo: "Bir hak yandı, tekrar denenmeyecek. PIN'i doğrula." },
-  PIN_LAST_ATTEMPT: { title: "Son hak — denenmedi",
-    whatToDo: "Yanlış PIN SIM'i PUK'a kilitler. Telefonda aç." },
-  PIN_ATTEMPT_BURNED: { title: "Daha önce bir hak yanmış",
-    whatToDo: "PIN'den emin olmadan deneme. Operatör kaydından doğrula." },
-  PIN_REMAINING_UNKNOWN: { title: "Kalan hak okunamadı", whatToDo: "PIN'den emin ol." },
-  PIN_STORED_WRONG: { title: "Saklı PIN bu SIM'e uymuyor",
-    whatToDo: "Saklı PIN temizlendi. Doğru PIN'i gir." },
-  PIN_STALE_CLEARED: { title: "Eski PIN silindi", whatToDo: "Bilgi amaçlı." },
-  PIN_LOCK_NOT_ENABLED: { title: "PIN kilidi açılamadı", whatToDo: "Tekrar dene ya da telefondan aç." },
-  PIN_LOCK_NOT_DISABLED: { title: "Kilit kalıcı kaldırılamadı",
-    whatToDo: "SIM açık, kurulum devam edebilir." },
+  SIM_MISSING: { title: "No SIM inserted", whatToDo: "Power off the modem, insert the SIM, power on." },
+  SIM_PIN_LOCKED: { title: "SIM is PIN locked", whatToDo: "Type the PIN and remove the lock." },
+  SIM_PUK_LOCKED: { title: "SIM is PUK locked", whatToDo: "Unlock it with the PUK from a phone." },
+  INTERNET_DOWN: { title: "No internet came up",
+    whatToDo: "Check that the line is active and has quota." },
+  AT_PORT_NOT_FOUND: { title: "SIM unit unreachable", whatToDo: "Power cycle it and retry." },
+  // --- Phone number ---
+  MSISDN_REQUIRED: { title: "Phone number is required", whatToDo: "Type it by hand, 11 digits." },
+  MSISDN_INVALID: { title: "Number is invalid", whatToDo: "11 digits, must start with 05." },
+  MSISDN_NOT_ON_SIM: { title: "Number is not on the SIM", whatToDo: "Type it by hand." },
+  MSISDN_MISMATCH: { title: "Typed number differs from the SIM",
+    whatToDo: "The SIM number is more reliable. Check the line." },
+  // --- PIN decisions ---
+  PIN_INVALID: { title: "PIN format is wrong", whatToDo: "4-8 digits, numbers only." },
+  PIN_REQUIRED: { title: "SIM is asking for a PIN", whatToDo: "Enter the PIN." },
+  PIN_REJECTED: { title: "PIN was rejected",
+    whatToDo: "One attempt is gone; it will not retry. Verify the PIN." },
+  PIN_LAST_ATTEMPT: { title: "Last attempt — not tried",
+    whatToDo: "A wrong PIN locks the SIM to PUK. Unlock it on a phone." },
+  PIN_ATTEMPT_BURNED: { title: "An attempt was burnt earlier",
+    whatToDo: "Do not try unless sure. Verify against the operator record." },
+  PIN_REMAINING_UNKNOWN: { title: "Attempts left unreadable", whatToDo: "Be sure of the PIN." },
+  PIN_STORED_WRONG: { title: "Stored PIN does not fit this SIM",
+    whatToDo: "The stored PIN was cleared. Enter the right one." },
+  PIN_STALE_CLEARED: { title: "Old PIN was cleared", whatToDo: "Informational." },
+  PIN_LOCK_NOT_ENABLED: { title: "PIN lock could not be turned on",
+    whatToDo: "Retry, or turn it on from a phone." },
+  PIN_LOCK_NOT_DISABLED: { title: "Lock could not be removed permanently",
+    whatToDo: "The SIM is open; provisioning can continue." },
 };
 
-// Bir sorunun OPERATORE gosterilecek Turkce halini verir.
+// Bir sorunun OPERATORE gosterilecek halini verir.
 //
-// Bilinmeyen kod PATLAMAZ ve ham Ingilizce metni SIZDIRMAZ: kodu gosterip
-// ne yapilacagini soyler. Yeni bir kod ceviri almadan eklenirse test yakalar
-// (bkz. tests/sorun-metni.test.js) — ama uretimde ekran yine anlamli kalir.
+// Bilinmeyen kod PATLAMAZ ve ham gelistirici metnini SIZDIRMAZ: kodu gosterip
+// ne yapilacagini soyler. Yeni bir kod metin almadan eklenirse test yakalar
+// (bkz. tests/problem-text.test.js) — ama uretimde ekran yine anlamli kalir.
 export function problemText(code) {
-  const t = PROBLEM_TEXT_TR[code];
+  const t = OPERATOR_TEXT[code];
   if (t) return { code, ...t };
   return { code,
-    title: "Beklenmeyen bir sorun oluştu",
-    whatToDo: `Bilgi işleme şu kodu bildir: ${code ?? "bilinmiyor"}` };
+    title: "Something unexpected happened",
+    whatToDo: `Report this code to IT: ${code ?? "unknown"}` };
 }
 
-// problems[] dizisine Turkce karsiligini EKLER (message/check korunur — onlar
-// gelistirici/günlük tarafi). Tuketiciye giden tek yer burasi olsun diye var:
-// sunucu bunu cagirir, arayuz `tr` alanini basar, ham metne hic dokunmaz.
+// problems[] dizisine operator metnini EKLER (message/check korunur — onlar
+// gelistirici/gunluk tarafi). Tuketiciye giden tek yer burasi olsun diye var.
 export function localizeProblems(problems = []) {
-  return problems.map((p) => ({ ...p, tr: problemText(p.code) }));
+  return problems.map((p) => ({ ...p, operator: problemText(p.code) }));
 }
 
-export { PROBLEM_TEXT_TR };
+export { OPERATOR_TEXT };

@@ -52,7 +52,7 @@ export {
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
 export { settingLabel } from "./report.js";
 // Sorun metinleri — kod -> operatore gosterilecek TURKCE. TEK sozluk.
-export { problemText, localizeProblems, PROBLEM_TEXT_TR } from "./problems.js";
+export { problemText, localizeProblems, OPERATOR_TEXT } from "./problems.js";
 export { PROBLEM_CODES } from "./problems.js";
 // Cihaz OKUMA islemleri (dogrula/oku/konsol). Govdeleri ayri modullerde:
 // bu dosya KAPI, uygulama degil.

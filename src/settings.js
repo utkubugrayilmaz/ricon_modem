@@ -19,7 +19,7 @@ export const ENDPOINTS = Object.freeze([
   { name: "internet_live", path: "/asp/status/Status_Internet.live.asp", kind: "identity", format: "ddwrt" },
   { name: "wireless_live", path: "/asp/status/Status_Wireless.live.asp", kind: "identity", format: "ddwrt" },
   { name: "setup_index", path: "/asp/setup/index.asp", kind: "identity", format: "html" },
-  { name: "nvram_yedek", path: "/nvrambak.bin", kind: "config", format: "nvram" },
+  { name: "nvram_backup", path: "/nvrambak.bin", kind: "config", format: "nvram" },
 ]);
 
 // DD-WRT canli sayfa alan adi -> bizim okunabilir adimiz. m1 = birincil modul,
@@ -76,7 +76,7 @@ export const OPERATORS = Object.freeze({
 //   gizli   : degeri ekranda maskele (parola alani)
 export const SETTING_LABELS = Object.freeze({
   // Cihaz adi = SIM'in telefon numarasi (arayuzde Device Name).
-  router_name: { name: "Device Name (telefon no)", page: "Device" },
+  router_name: { name: "Device Name (phone number)", page: "Device" },
   // SIM PIN — degeri EKRANDA MASKELENIR, log/deftere hic yazilmaz.
   m1s1simpin: { name: "SIM1 PIN", page: "Modem/WAN → Main Link", secret: true },
 
@@ -84,7 +84,7 @@ export const SETTING_LABELS = Object.freeze({
     values: { m13gdhcp: "M1-DHCP", m13g: "M1-PPP" } },
   m1simswtch: { name: "SIM Backup", page: "Modem/WAN → Main Link",
     values: { 0: "Disable", 1: "Enable" } },
-  mullinkfail: { name: "Link Fail to Restart", page: "Modem/WAN → Main Link", unit: "dk" },
+  mullinkfail: { name: "Link Fail to Restart", page: "Modem/WAN → Main Link", unit: "min" },
   m1s1wanapn: { name: "APN (SIM1)", page: "Modem/WAN → Main Link" },
   m1s1pppuser: { name: "SIM1 User Name", page: "Modem/WAN → Main Link" },
   m1s1ppppwd: { name: "SIM1 Password", page: "Modem/WAN → Main Link", secret: true },
@@ -95,21 +95,21 @@ export const SETTING_LABELS = Object.freeze({
   w1_kponm: { name: "Keep Alive", page: "Modem/WAN → Others",
     values: { 1: "None", 7: "ICMP+" } },
   m1_pap_allowed: { name: "Authentication · PAP", page: "Modem/WAN → Others",
-    values: { 0: "kapali", 1: "acik" } },
+    values: { 0: "off", 1: "on" } },
   m1_chap_allowed: { name: "Authentication · CHAP", page: "Modem/WAN → Others",
-    values: { 0: "kapali", 1: "acik" } },
+    values: { 0: "off", 1: "on" } },
   m1_chapms_allowed: { name: "Authentication · MS-CHAP", page: "Modem/WAN → Others",
-    values: { 0: "kapali", 1: "acik" } },
+    values: { 0: "off", 1: "on" } },
   m1_chapms_v2_allowed: { name: "Authentication · MS-CHAPv2", page: "Modem/WAN → Others",
-    values: { 0: "kapali", 1: "acik" } },
+    values: { 0: "off", 1: "on" } },
 
   w2_wan_proto: { name: "Connection Type", page: "Modem/WAN → Backup Link",
     values: { disabled: "Disabled", dhcp: "Automatic Configuration - DHCP" } },
 
-  wl0_net_mode: { name: "WLAN radyo", page: "Wireless",
-    values: { disabled: "kapali" } },
-  wl_net_mode: { name: "WLAN radyo (genel)", page: "Wireless",
-    values: { disabled: "kapali" } },
+  wl0_net_mode: { name: "WLAN radio", page: "Wireless",
+    values: { disabled: "off" } },
+  wl_net_mode: { name: "WLAN radio (global)", page: "Wireless",
+    values: { disabled: "off" } },
 
   // DHCP sunucusu. Bonus: bu anahtar KIMLIKSIZ sayfada da (Info.live.htm)
   // goruldugu icin parolasiz dogrulanabiliyor.
@@ -118,17 +118,17 @@ export const SETTING_LABELS = Object.freeze({
 
   lan_ipaddr: { name: "Local IP", page: "LAN" },
   lan_ipaddr_ex1: { name: "Local IP Address1", page: "LAN",
-    values: { "0.0.0.0": "yok (silinmis)" } },
+    values: { "0.0.0.0": "none (cleared)" } },
   lan_netmask_ex1: { name: "Subnet Mask1", page: "LAN",
-    values: { "0.0.0.0": "yok (silinmis)" } },
+    values: { "0.0.0.0": "none (cleared)" } },
   lan_ipaddr_ex2: { name: "Local IP Address2", page: "LAN",
-    values: { "0.0.0.0": "yok (silinmis)" } },
+    values: { "0.0.0.0": "none (cleared)" } },
   lan_netmask_ex2: { name: "Subnet Mask2", page: "LAN",
-    values: { "0.0.0.0": "yok (silinmis)" } },
+    values: { "0.0.0.0": "none (cleared)" } },
   lan_ipaddr_ex3: { name: "Local IP Address3", page: "LAN",
-    values: { "0.0.0.0": "yok (silinmis)" } },
+    values: { "0.0.0.0": "none (cleared)" } },
   lan_netmask_ex3: { name: "Subnet Mask3", page: "LAN",
-    values: { "0.0.0.0": "yok (silinmis)" } },
+    values: { "0.0.0.0": "none (cleared)" } },
 });
 
 // MAC uretici onekleri (OUI). Cihazi adresini bilmeden komsu tablosunda
@@ -220,8 +220,8 @@ export const WRITE_GROUPS = [
 ];
 
 export const FIELD_PROFILE = {
-  name: "saha",
-  description: "ACO RVM saha profili — Ricon S9922M44",
+  name: "field",
+  description: "ACO RVM field profile — Ricon S9922M44",
 
   // nvram anahtar -> hedef değer (hepsi string; nvram string tutar).
   nvram: {
@@ -288,7 +288,7 @@ export const FIELD_PROFILE = {
 // da bir kez pristine /nvrambak.bin yedegi alip `nvram restore` etmek
 // (golden-backup yaklasimi — ileride, pristine yedek gerektirir).
 export const FACTORY_PROFILE = {
-  name: "fabrika",
+  name: "factory",
   description: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
   nvram: {
     // Modem/WAN Main Link defaults
@@ -324,11 +324,14 @@ export const FACTORY_PROFILE = {
   },
 };
 
-// Ad -> profil. CLI `--profil <ad>` ile secilir.
-// DIKKAT: anahtarlar TIRNAKLI ve TURKCE. Bunlar CLI SOZLESMESI
-// (`--profil saha`) ve defterdeki gecmis satirlarda da "saha" yaziyor.
-// Ciplak birakildiginda bir yeniden adlandirma turunda koda benzeyip
-// `field`/`factory` oldular; PROFILES["saha"] undefined donunce `hazirla`
-// "Bilinmeyen profil: saha" deyip hic calismadi. Ayni kusur 2026-08-28'de de
-// yasanmisti (bkz. af9ccf8) — o zaman sunucuyu tamamen olduruyordu.
-export const PROFILES = { "saha": FIELD_PROFILE, "fabrika": FACTORY_PROFILE };
+// Ad -> profil. CLI `--profile <ad>` ile secilir.
+//
+// DIKKAT: anahtarlar TIRNAKLI. Bunlar JS tanimlayicisi degil, CLI SOZLESMESI.
+// Iki kez ciplak birakildilar ve iki kez bir yeniden adlandirma turunda koda
+// benzeyip cevrildiler; PROFILES[varsayilan] undefined donunce arac hicbir
+// sey yazmadan cikti (2026-08-28 af9ccf8, 2026-08-31). Tirnak onu engelliyor.
+//
+// Defterdeki gecmis satirlarda hala "saha"/"fabrika" yaziyor — o degerler
+// src/legacy.js'te (LEGACY_PROFILE) okuma aninda esleniyor. Yani veri
+// sozlesmesi burada DEGIL, orada tutuluyor; burasi yalnizca bugunku CLI.
+export const PROFILES = { "field": FIELD_PROFILE, "factory": FACTORY_PROFILE };

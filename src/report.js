@@ -23,7 +23,7 @@ export function stripSecrets(value) {
     }
     return out;
   }
-  if (typeof value === "string") return value.replace(SECRET_PATTERN, "Basic <gizli>");
+  if (typeof value === "string") return value.replace(SECRET_PATTERN, "Basic <redacted>");
   return value;
 }
 
@@ -42,9 +42,9 @@ export function settingLabel(key, value) {
   const raw = value == null ? null : String(value);
   let display;
   if (raw === null) display = "—";
-  else if (t?.secret) display = raw === "" ? "(bos)" : "••••";
+  else if (t?.secret) display = raw === "" ? "(empty)" : "••••";
   else if (t?.values && raw in t.values) display = t.values[raw];
-  else if (raw === "") display = "(bos)";
+  else if (raw === "") display = "(empty)";
   else display = t?.unit ? `${raw} ${t.unit}` : raw;
   return { key, name: t?.name || key, page: t?.page || null, display, raw };
 }
@@ -85,7 +85,7 @@ export function planText(lines) {
   const s = [];
   let lastPage = null;
   for (const r of lines) {
-    if (r.page !== lastPage) { s.push(`  ${r.page || "(sayfasiz)"}`); lastPage = r.page; }
+    if (r.page !== lastPage) { s.push(`  ${r.page || "(no page)"}`); lastPage = r.page; }
     s.push(`    ${String(r.name).padEnd(24)}${String(r.before).padEnd(16)}`
       + ` -> ${String(r.after).padEnd(16)}${r.changing ? " *" : ""}`);
   }
@@ -97,50 +97,50 @@ export function planText(lines) {
 function metricsText(r) {
   const s = [];
   const d = (x) => (x.median == null ? "—"
-    : `${x.median} sn  (n=${x.n}, ${x.min}–${x.max}, ort ${x.mean})`);
-  s.push("\n  OLCUM OZETI");
-  s.push(`    kayit                 : ${r.rowCount} satir`);
-  s.push(`    kurulum               : ${r.run.successful}/${r.run.attemptedCount} basarili`
-    + `${r.run.successRate != null ? ` (%${r.run.successRate})` : ""}`
-    + ` · ilk denemede ${r.run.firstTry}`
-    + ` · ${r.run.distinctDevices} farkli cihaz`);
+    : `${x.median} s  (n=${x.n}, ${x.min}–${x.max}, mean ${x.mean})`);
+  s.push("\n  METRICS SUMMARY");
+  s.push(`    rows                   : ${r.rowCount}`);
+  s.push(`    runs                   : ${r.run.successful}/${r.run.attemptedCount} succeeded`
+    + `${r.run.successRate != null ? ` (${r.run.successRate}%)` : ""}`
+    + ` · first try ${r.run.firstTry}`
+    + ` · ${r.run.distinctDevices} distinct devices`);
   if (r.manualSec?.n) {
-    s.push(`    ELLE surec (medyan)   : ${d(r.manualSec)}`
-      + `  = ${(r.manualSec.median / 60).toFixed(1)} dk`);
+    s.push(`    MANUAL process (median): ${d(r.manualSec)}`
+      + `  = ${(r.manualSec.median / 60).toFixed(1)} min`);
   }
-  s.push(`    arac suresi (medyan)  : ${d(r.toolSec)}`);
-  s.push(`    numara girisi (medyan): ${d(r.entrySec)}`);
-  s.push(`    dongu (giris + arac)  : ${r.cycleSec ?? "—"} sn`);
+  s.push(`    tool time (median)     : ${d(r.toolSec)}`);
+  s.push(`    number entry (median)  : ${d(r.entrySec)}`);
+  s.push(`    cycle (entry + tool)   : ${r.cycleSec ?? "—"} s`);
 
   if (r.steps?.length) {
-    s.push("\n    Adim kirilimi (medyan):");
+    s.push("\n    Step breakdown (median):");
     for (const a of r.steps) {
       // counts: birlestirilmis kovanin kac ayarlik yazmalari kapsadigi
       const span = a.counts ? ` ×${a.counts.join("/")}` : "";
       s.push(`      ${a.bottleneck ? "▲" : " "} ${String(a.step + span).padEnd(34)}`
-        + `${String(a.median).padStart(6)} sn  (${a.min}–${a.max}, n=${a.n})`);
+        + `${String(a.median).padStart(6)} s  (${a.min}–${a.max}, n=${a.n})`);
     }
   }
 
   const k = r.comparison;
   if (k) {
-    s.push(`\n    ELLE SUREC: ${k.manualSec} sn (${(k.manualSec / 60).toFixed(1)} dk)`
-      + ` · kaynak: ${k.manualSource}${k.manualN ? ` (n=${k.manualN})` : ""}`);
+    s.push(`\n    MANUAL PROCESS: ${k.manualSec} s (${(k.manualSec / 60).toFixed(1)} min)`
+      + ` · source: ${k.manualSource}${k.manualN ? ` (n=${k.manualN})` : ""}`);
     if (k.cycle) {
-      s.push(`      dongu suresi      : %${k.cycle.reductionPercent} azalma`
-        + ` · ${k.cycle.factor}x hizli · modem basina ${k.cycle.savedSec} sn kazanc`);
+      s.push(`      cycle time      : ${k.cycle.reductionPercent}% lower`
+        + ` · ${k.cycle.factor}x faster · ${k.cycle.savedSec} s saved per modem`);
     }
     if (k.humanBusy) {
-      s.push(`      insan mesgul suresi: %${k.humanBusy.reductionPercent} azalma`
-        + ` · ${k.humanBusy.factor}x · gerisi GOZETIMSIZ geciyor`);
+      s.push(`      human busy time : ${k.humanBusy.reductionPercent}% lower`
+        + ` · ${k.humanBusy.factor}x · the rest runs UNATTENDED`);
     }
     if (k.scale) {
-      s.push(`      ${k.scale.modem} modemde toplam kazanc: ${k.scale.savedHours} saat`);
+      s.push(`      total over ${k.scale.modem} modems: ${k.scale.savedHours} hours`);
     }
     if (k.warning) s.push(`      ! ${k.warning}`);
     if (k.manualWarning) s.push(`      ! ${k.manualWarning}`);
   } else {
-    s.push("\n    (Elle sureci karsilastirmak icin: --elle-dk 15 --elle-kaynak \"...\")");
+    s.push("\n    (To compare against the manual process: --manual-minutes 15 --manual-source \"...\")");
   }
   return s;
 }
@@ -153,7 +153,7 @@ export function summaryText(report) {
   s.push(`Ricon modem — ${report.modemIp || report.modem?.host || "?"}`
     + `  (${report.timestamp || ""})`);
   if (report.system) {
-    s.push("\n  Sistem:");
+    s.push("\n  System:");
     for (const [k, v] of Object.entries(report.system)) s.push(`    ${k.padEnd(16)}: ${g(v)}`);
   }
   for (const label of ["sim1", "sim2"]) {
@@ -164,16 +164,16 @@ export function summaryText(report) {
     }
   }
   if (report.nvramKeyCount != null) {
-    s.push(`\n  nvram: ${report.nvramKeyCount} anahtar cekildi`);
+    s.push(`\n  nvram: ${report.nvramKeyCount} keys pulled`);
   }
-  if (report.command === "fark") {
-    s.push(`\n  nvram farki: ${report.summary?.changed || 0} degisen, `
-      + `${report.summary?.added || 0} eklenen, ${report.summary?.removed || 0} silinen`);
+  if (report.command === "diff") {
+    s.push(`\n  nvram diff: ${report.summary?.changed || 0} changed, `
+      + `${report.summary?.added || 0} added, ${report.summary?.removed || 0} removed`);
     for (const [k, v] of Object.entries(report.changed || {})) {
       s.push(`    ~ ${k}: ${g(v.previous)}  ->  ${g(v.next)}`);
     }
     for (const [k, v] of Object.entries(report.added || {})) s.push(`    + ${k} = ${g(v)}`);
-    for (const [k, v] of Object.entries(report.removed || {})) s.push(`    - ${k} (idi: ${g(v)})`);
+    for (const [k, v] of Object.entries(report.removed || {})) s.push(`    - ${k} (was: ${g(v)})`);
   }
   if (report.command === "sim") {
     const s1 = report.sim1 || {};
@@ -184,104 +184,104 @@ export function summaryText(report) {
     s.push(`    ${"msisdn".padEnd(14)}: ${g(report.msisdn)}${report.msisdnSource ? " (" + report.msisdnSource + ")" : ""}`);
     if (report.msisdnNote) s.push(`    -> ${report.msisdnNote}`);
   }
-  if (report.command === "hazirla" || report.command === "hazirla-dongu") {
+  if (report.command === "provision" || report.command === "provision-loop") {
     s.push(`
-  Hazirla — durum: ${g(report.status)}${report.attempt ? " (deneme " + report.attempt + ")" : ""}`);
-    if (report.lastAction) s.push(`  Eylem: ${report.lastAction}`);
+  Provision — status: ${g(report.status)}${report.attempt ? " (attempt " + report.attempt + ")" : ""}`);
+    if (report.lastAction) s.push(`  Action: ${report.lastAction}`);
     if (report.internet) {
       s.push(`  Internet: ${report.internet.up
-        ? `VAR ${report.internet.wan_ip} (${report.internet.durationSec} sn) — SIM calisiyor`
-        : `YOK (${report.internet.durationSec} sn bekledi) — SIM durumu `
-          + `${g(report.internet.simStatus)} · PIN kilidi olabilir`}`);
+        ? `UP ${report.internet.wan_ip} (${report.internet.durationSec} s) — the SIM works`
+        : `DOWN (waited ${report.internet.durationSec} s) — SIM status `
+          + `${g(report.internet.simStatus)} · it may be PIN locked`}`);
     }
     if (report.record) {
       const k = report.record;
-      s.push(`  Kayit: tel ${g(k.phone)} · ICCID ${g(k.iccid)} · IMEI ${g(k.imei)}`
+      s.push(`  Record: phone ${g(k.phone)} · ICCID ${g(k.iccid)} · IMEI ${g(k.imei)}`
         + ` · MAC ${g(k.lan_mac)} · ${g(k.operator)}`
         + `${k.wan_ip ? ` · WAN ${k.wan_ip}` : ""}`);
     }
     if (report.provisioned) {
-      s.push(`  Hazirlanan modem: ${report.provisioned.length}`);
+      s.push(`  Modems provisioned: ${report.provisioned.length}`);
       for (const h of report.provisioned) {
-        s.push(`    ${h.ok ? "✓" : "✗"} ${g(h.status)} · tel ${g(h.phone)} · ICCID ${g(h.iccid)}`);
+        s.push(`    ${h.ok ? "✓" : "✗"} ${g(h.status)} · phone ${g(h.phone)} · ICCID ${g(h.iccid)}`);
       }
     }
   }
-  if (report.command === "uygula") {
-    s.push(`\n  Provizyon (${report.profile}) — ${report.apply ? "GERCEK YAZMA" : "KURU (dry-run)"}`);
-    s.push(`  Durum: ${g(report.status)}`);
+  if (report.command === "apply") {
+    s.push(`\n  Provisioning (${report.profile}) — ${report.apply ? "REAL WRITE" : "DRY RUN"}`);
+    s.push(`  Status: ${g(report.status)}`);
     if (report.planObj) {
-      s.push(`  Degisecek: ${report.planObj.changingCount}, ayni: ${report.planObj.unchangedCount}`);
+      s.push(`  Changing: ${report.planObj.changingCount}, unchanged: ${report.planObj.unchangedCount}`);
       for (const [k, v] of Object.entries(report.planObj.changing || {})) {
         s.push(`    ~ ${k}: ${g(v.current)}  ->  ${g(v.target)}`);
       }
       if (report.planObj.missingKeys?.length) {
-        s.push(`    ⚠ cihazda olmayan (yeni yazilacak): ${report.planObj.missingKeys.join(", ")}`);
+        s.push(`    ⚠ not on the device (will be created): ${report.planObj.missingKeys.join(", ")}`);
       }
     }
     if (report.verification) {
-      s.push(`  Dogrulama: ${report.verification.done
-        ? `TAMAM (${report.verification.waitedSec} sn)`
-        : "kalan: " + (report.verification.stillChanging || []).join(", ")}`);
+      s.push(`  Verification: ${report.verification.done
+        ? `OK (${report.verification.waitedSec} s)`
+        : "still changing: " + (report.verification.stillChanging || []).join(", ")}`);
       if (!report.verification.done && report.verification.reason) {
         s.push(`        → ${report.verification.reason}`);
       }
     }
-    if (report.note) s.push(`  Not: ${report.note}`);
+    if (report.note) s.push(`  Note: ${report.note}`);
   }
   // Yeni tek-is komutlari: kisa ozet. Uzun metin yok — stdout'taki JSON
   // zaten tam veri; buradaki satir "bir bakista ne oldu" icin.
-  if (report.command === "degerlendir") {
+  if (report.command === "assess") {
     s.push(`
-  konum        : ${report.modem?.location ?? "modem yok"}`);
-    s.push(`  telefon      : ${report.phone?.number ?? "—"}`
+  location     : ${report.modem?.location ?? "no modem"}`);
+    s.push(`  phone        : ${report.phone?.number ?? "—"}`
       + (report.phone?.source ? ` (${report.phone.source})` : ""));
     if (report.sim) {
-      s.push(`  SIM          : ${report.sim.present ? "takili" : "YOK"}`
-        + `${report.sim.lock ? ` · ${report.sim.lock.toUpperCase()} kilitli` : ""}`
-        + `${report.sim.pinRemaining != null ? ` · kalan hak ${report.sim.pinRemaining}` : ""}`);
+      s.push(`  SIM          : ${report.sim.present ? "present" : "MISSING"}`
+        + `${report.sim.lock ? ` · ${report.sim.lock.toUpperCase()} locked` : ""}`
+        + `${report.sim.pinRemaining != null ? ` · ${report.sim.pinRemaining} attempts left` : ""}`);
     }
     if (report.internet) {
-      s.push(`  internet     : ${report.internet.up ? report.internet.wan_ip : "YOK"}`);
+      s.push(`  internet     : ${report.internet.up ? report.internet.wan_ip : "DOWN"}`);
     }
-    s.push(`  eksik        : ${report.missing?.length ? report.missing.join(", ") : "yok"}`);
-    s.push(`  baslatilabilir: ${report.canStart ? "EVET" : "hayir"}`);
+    s.push(`  missing      : ${report.missing?.length ? report.missing.join(", ") : "nothing"}`);
+    s.push(`  can start    : ${report.canStart ? "YES" : "no"}`);
     if (report.retry) {
-      s.push(`  tekrar       : ${report.retry.retry
-        ? `${report.retry.afterSec} sn sonra (${report.retry.reason})` : `yok (${report.retry.reason})`}`);
+      s.push(`  retry        : ${report.retry.retry
+        ? `in ${report.retry.afterSec} s (${report.retry.reason})` : `no (${report.retry.reason})`}`);
     }
   }
-  if (report.command === "numara") {
+  if (report.command === "msisdn") {
     s.push(`
-  telefon      : ${report.phone ?? "okunamadi"} (${report.method})`);
-    if (report.atPort) s.push(`  AT portu     : ${report.atPort}`);
+  phone        : ${report.phone ?? "unreadable"} (${report.method})`);
+    if (report.atPort) s.push(`  AT port      : ${report.atPort}`);
   }
-  if (report.command === "sim-kilit" || report.command?.startsWith("sim-pin-")) {
+  if (report.command === "sim-lock" || report.command?.startsWith("sim-pin-")) {
     s.push(`
-  SIM durumu   : ${report.status ?? "?"}`);
-    s.push(`  kalan hak    : PIN ${report.pinRemaining ?? "?"} · PUK ${report.pukRemaining ?? "?"}`);
-    if (report.todo) s.push(`  yapilacak    : ${report.todo}`);
+  SIM status   : ${report.status ?? "?"}`);
+    s.push(`  attempts left: PIN ${report.pinRemaining ?? "?"} · PUK ${report.pukRemaining ?? "?"}`);
+    if (report.todo) s.push(`  to do        : ${report.todo}`);
     if (report.lockRemoved !== undefined) {
-      s.push(`  kilit        : ${report.lockRemoved ? "KALDIRILDI" : "duruyor"}`);
+      s.push(`  lock         : ${report.lockRemoved ? "REMOVED" : "still on"}`);
     }
     if (report.lockOpen !== undefined) {
-      s.push(`  kilit        : ${report.lockOpen ? "ACIK" : "kapali"}`
-        + (report.already ? " (zaten oyleydi)" : ""));
+      s.push(`  lock         : ${report.lockOpen ? "ON" : "off"}`
+        + (report.already ? " (already was)" : ""));
     }
   }
-  if (report.command === "olcum") s.push(...metricsText(report));
+  if (report.command === "metrics") s.push(...metricsText(report));
   // `calistir`: ad verilmemisse cagrilabilir yuzeyin listesi, verilmisse
   // fonksiyonun kendi ciktisi. Liste metnini cagirici uretir (saf), rapor
   // katmani onu yalnizca yerlestirir.
-  if (report.command === "calistir") {
-    if (report.surfaceText) s.push("\n  CAGRILABILIR YUZEY\n" + report.surfaceText);
+  if (report.command === "call") {
+    if (report.surfaceText) s.push("\n  CALLABLE SURFACE\n" + report.surfaceText);
     else if (report.value !== undefined) {
       s.push(`\n  ${report.fn} -> ${typeof report.value === "object"
         ? JSON.stringify(report.value) : String(report.value)}`);
     }
   }
   if (report.problems?.length) {
-    s.push("\n  Sorunlar:");
+    s.push("\n  Problems:");
     for (const p of report.problems) {
       const im = p.severity === "error" ? "✗" : "!";
       s.push(`    ${im} [${p.code}] ${p.message}`);
@@ -335,7 +335,7 @@ export function summarizeMetrics(rows = [], opts = {}) {
 
   const summary = {
     timestamp: new Date().toISOString(),
-    command: "olcum",
+    command: "metrics",
     rowCount: rows.length,
     run: {
       attemptedCount: runs.length,
@@ -371,9 +371,9 @@ export function summarizeMetrics(rows = [], opts = {}) {
   // uretir.
   const allDeclared = manuals.length > 0 && manuals.every((r) => r.declared);
   const sourceText = () => {
-    if (!recordedBaseline) return opts.manualSource || "BEYAN — kayitli olcum yok";
+    if (!recordedBaseline) return opts.manualSource || "DECLARED — no recorded measurement";
     const who = manuals.map((r) => r.who).filter(Boolean)[0];
-    const label = allDeclared ? "BEYAN" : "olcum";
+    const label = allDeclared ? "declared" : "measured";
     return `${summary.manualSec.n} ${label}${who ? ` · ${who}` : ""}`;
   };
   if (baseline) {
@@ -390,7 +390,7 @@ export function summarizeMetrics(rows = [], opts = {}) {
     summary.problems.push({ code: "METRICS_EMPTY", severity: "warning",
       message: "No successful provisioning runs were recorded yet.",
       check: "Run the UI flow at least a few times; each finished run appends"
-        + " one line to data/olcumler.jsonl." });
+        + " one line to data/metrics.jsonl." });
   }
   return summary;
 }
@@ -436,7 +436,7 @@ function compare(summary, opts) {
   });
   const k = {
     manualSec: manual,
-    manualSource: opts.manualSource || "belirtilmedi",
+    manualSource: opts.manualSource || "unspecified",
     manualN: opts.manualN ?? null,
     cycle: ratio(summary.cycleSec),
     humanBusy: ratio(summary.humanBusySec),
@@ -449,12 +449,12 @@ function compare(summary, opts) {
   }
   // Küçük örneklemde "%94 azalttık" demek abartı olur; eşiği açıkça söyle.
   if (summary.toolSec.n < 5) {
-    k.warning = `Yalnizca ${summary.toolSec.n} basarili calistirma var; en az 5`
-      + " (yeglenen 10) olmadan yuzde iddiasi zayif kalir.";
+    k.warning = `Only ${summary.toolSec.n} successful runs recorded; a percentage`
+      + " claim stays weak below 5 runs (10 preferred).";
   }
   if ((k.manualN ?? 0) < 3) {
-    k.manualWarning = "Elle sure icin en az 3 olcum onerilir; tek sayi ya da beyan"
-      + " ise raporda BEYAN olarak etiketlenmeli.";
+    k.manualWarning = "At least 3 manual measurements are recommended; a single"
+      + " number, or a stated one, must be labelled declared in the report.";
   }
   return k;
 }
@@ -513,44 +513,51 @@ export function takesOptions(fn) {
 //
 // Degersiz bayrak `true` olur: ["--zorla"] -> { manualConsent: true }
 //
-// KOPRU: CLI bayraklari TURKCE (tezgahtaki teknisyenin ezberi), cekirdek opts
-// alanlari INGILIZCE. Ceviri TEK YERDE, asagidaki tabloda. Tabloda olmayan
-// bayrak camelCase'e cevrilip oldugu gibi gecer — cekirdekte karsiligi varsa
-// calisir, yoksa yok sayilir.
+// KOPRU: CLI bayrak adi -> cekirdek opts alani. Cogu bayrak icin ikisi ayni
+// (--phone -> phone) ve camelCase kurali yetiyor; tablo yalnizca AYRISTIKLARI
+// yeri tutuyor (--force -> manualConsent, --rounds -> maxRounds gibi).
 //
-// Bu tablo olmadan `--kaynak-ip 5.5.5.100` sessizce `sourceIp` alanini
-// dolduruyordu; cekirdek `sourceIp` bekledigi icin KAYNAK IP HIC VERILMEMIS
-// gibi davraniyor ve yoklama yanlis arayuzden cikiyordu.
-// DIKKAT: keyList TIRNAKLI. Bunlar JS tanimlayicisi degil, CLI BAYRAK
-// ADLARI — bir yeniden adlandirma turunda ciplak keyList (zorla, profil...)
-// koda benzedigi icin cevrildi ve kopru sessizce koptu. Tirnak onu engelliyor.
+// TEK AYRISTIRICI: bu tablo eskiden SADECE `call` komutunu etkiliyordu, diger
+// on dort komut kendi `flag("--xxx")` sabitleriyle calisiyordu. Yani "kopru"
+// adini tasiyip yuzeyin ondorttebirini kapsiyordu. Artik argv bir kez burada
+// ayristiriliyor ve her komut ayni tablodan geciyor.
+//
+// DIKKAT: anahtarlar TIRNAKLI. Bunlar JS tanimlayicisi degil, CLI BAYRAK
+// ADLARI — bir yeniden adlandirma turunda ciplak anahtarlar koda benzedigi
+// icin cevrildi ve kopru sessizce koptu. Tirnak onu engelliyor.
 export const FLAG_TO_OPTION = Object.freeze({
-  "kaynak-ip": "sourceIp",
-  "saf": "pure",
-  "saha-host": "fieldHost",
-  "fabrika-host": "factoryHost",
-  "yeni-host": "newHost",
-  "yeni-kaynak": "newSourceIp",
-  "profil": "profile",
-  "telefon": "phone",
-  "uygula": "apply",
-  "zorla": "manualConsent",
-  "deneme": "attempts",
-  "internet-bekle": "internetWaitSec",
-  "sure": "durationSec",
-  "aralik": "intervalSec",
-  "tur": "maxRounds",
+  "source-ip": "sourceIp",
+  "field-host": "fieldHost",
+  "factory-host": "factoryHost",
+  "new-host": "newHost",
+  "new-source-ip": "newSourceIp",
+  "internet-wait": "internetWaitSec",
+  "force": "manualConsent",
+  "rounds": "maxRounds",
   "max": "maxModems",
+  "from-file": "fromFile",
+  "manual-minutes": "manualMinutes",
+  "manual-source": "manualSource",
+  "manual-n": "manualN",
+  "modem-count": "modemCount",
+  "no-reboot": "noReboot",
+  "duration": "durationSec",
+  "interval": "intervalSec",
 });
 
 export function parseArgv(argv = []) {
   const separator = argv.indexOf("--");
   const beforeSeparator = separator === -1 ? argv : argv.slice(0, separator);
   const positionals = separator === -1 ? [] : argv.slice(separator + 1);
+  // `bare`: ayractan ONCE gelen, bayrak olmayan ve bir bayragin degeri de
+  // olmayan sozcukler (`diff A.json B.json`). Eskiden bunlar SESSIZCE
+  // atiliyordu ve konumsal arguman alan komutlar argv'ye elle bakiyordu —
+  // yani ayristirici iki tane vardi. Tek ayristirici icin gerekli.
+  const bare = [];
   const flags = {};
   for (let i = 0; i < beforeSeparator.length; i += 1) {
     const p = beforeSeparator[i];
-    if (!p.startsWith("--")) continue;
+    if (!p.startsWith("--")) { bare.push(p); continue; }
     const rawText = p.slice(2);
     // Once koprude ara; yoksa --iki-kelime -> ikiKelime.
     const name = FLAG_TO_OPTION[rawText]
@@ -559,7 +566,7 @@ export function parseArgv(argv = []) {
     if (nextItem !== undefined && !nextItem.startsWith("--")) { flags[name] = nextItem; i += 1; }
     else flags[name] = true;
   }
-  return { flags, positionals };
+  return { flags, positionals, bare };
 }
 
 // Cagrilabilir yuzeyin tamami. tur: "function" | "constant".
@@ -576,16 +583,16 @@ export function surfaceText(list) {
   const s = [];
   const functions = list.filter((x) => x.kind === "function");
   const constants = list.filter((x) => x.kind === "constant");
-  s.push(`  CIHAZA GIDEN (${functions.filter((x) => x.takesOpts).length})`
-    + "  — ortam/bayraklar opts olarak gecer");
+  s.push(`  TOUCHES THE DEVICE (${functions.filter((x) => x.takesOpts).length})`
+    + "  — env/flags are passed as opts");
   for (const f of functions.filter((x) => x.takesOpts)) s.push(`    ${f.name}`);
-  s.push(`\n  SAF (${functions.filter((x) => !x.takesOpts).length})`
-    + "  — argumanlar `--` sonrasi verilir");
+  s.push(`\n  PURE (${functions.filter((x) => !x.takesOpts).length})`
+    + "  — arguments go after `--`");
   for (const f of functions.filter((x) => !x.takesOpts)) {
     s.push(`    ${f.name.padEnd(26)}(${f.signature}${f.signature ? ", ..." : ""})`);
   }
   if (constants.length) {
-    s.push(`\n  SABITLER (${constants.length})  — yazdirilir`);
+    s.push(`\n  CONSTANTS (${constants.length})  — printed`);
     s.push("    " + constants.map((x) => x.name).join(", "));
   }
   return s.join("\n");
@@ -612,23 +619,23 @@ export async function callByName(mode, name, { opts = {}, flags = {},
   const timestamp = new Date().toISOString();
 
   if (!name) {
-    return { timestamp, command: "calistir", ok: true, list,
+    return { timestamp, command: "call", ok: true, list,
       surfaceText: surfaceText(list), problems: [] };
   }
   if (!(name in mode)) {
     const near = nearestNames(name, list);
-    return { timestamp, command: "calistir", fn: name, ok: false, problems: [{
+    return { timestamp, command: "call", fn: name, ok: false, problems: [{
       code: "ARGS", severity: "error",
       message: `Unknown export: ${name}`,
       check: near.length
-        ? `Did you mean: ${near.join(", ")}? Full list: ricon.js calistir`
-        : "Run `ricon.js calistir` with no name to list everything.",
+        ? `Did you mean: ${near.join(", ")}? Full list: ricon call`
+        : "Run `ricon call` with no name to list everything.",
     }] };
   }
 
   const value = mode[name];
   if (typeof value !== "function") {
-    return { timestamp, command: "calistir", fn: name, kind: "constant", ok: true,
+    return { timestamp, command: "call", fn: name, kind: "constant", ok: true,
       value, problems: [] };
   }
 
@@ -644,7 +651,7 @@ export async function callByName(mode, name, { opts = {}, flags = {},
   try {
     result = await value(...args);
   } catch (e) {
-    return { timestamp, command: "calistir", fn: name, ok: false, problems: [{
+    return { timestamp, command: "call", fn: name, ok: false, problems: [{
       code: "CALL_FAILED", severity: "error",
       message: `${name}(): ${e?.name}: ${e?.message}`,
       check: `Check the argument shape: first parameter is \`${firstParameter(value)}\`.`
@@ -655,8 +662,8 @@ export async function callByName(mode, name, { opts = {}, flags = {},
   // Sonuc nesne degilse (string/bool/dizi) sarmala — CLI sozlesmesi bir
   // rapor nesnesi bekliyor (writeJson + summaryText + cikis kodu).
   if (result === null || typeof result !== "object" || Array.isArray(result)) {
-    return { timestamp, command: "calistir", fn: name, ok: true, value: result, problems: [] };
+    return { timestamp, command: "call", fn: name, ok: true, value: result, problems: [] };
   }
-  return { timestamp, command: "calistir", fn: name, ...result,
+  return { timestamp, command: "call", fn: name, ...result,
     problems: result.problems ?? [] };
 }

@@ -1,7 +1,7 @@
 {
   "name": "ricon-modem",
-  "version": "0.1.0",
-  "description": "Ricon S9922M44 endustriyel hucresel router: okuma ve saha hazirlama (provizyon) otomasyonu",
+  "version": "0.2.0",
+  "description": "Ricon S9922M44 industrial cellular router: read-out and field provisioning automation",
   "type": "module",
   "exports": {
     ".": "./src/index.js"
@@ -19,13 +19,13 @@
   ],
   "scripts": {
     "test": "node --test",
-    "start": "node --env-file-if-exists=.env bin/ricon.js hazirla --dongu",
-    "hazirla": "node --env-file-if-exists=.env bin/ricon.js hazirla",
-    "degerlendir": "node --env-file-if-exists=.env bin/ricon.js degerlendir",
-    "oku": "node --env-file-if-exists=.env bin/ricon.js oku",
-    "dogrula": "node --env-file-if-exists=.env bin/ricon.js dogrula",
-    "calistir": "node --env-file-if-exists=.env bin/ricon.js calistir",
-    "olcum": "node bin/ricon.js olcum"
+    "start": "node --env-file-if-exists=.env bin/ricon.js provision --loop",
+    "provision": "node --env-file-if-exists=.env bin/ricon.js provision",
+    "assess": "node --env-file-if-exists=.env bin/ricon.js assess",
+    "read": "node --env-file-if-exists=.env bin/ricon.js read",
+    "verify": "node --env-file-if-exists=.env bin/ricon.js verify",
+    "call": "node --env-file-if-exists=.env bin/ricon.js call",
+    "metrics": "node bin/ricon.js metrics"
   },
   "license": "UNLICENSED",
   "private": true
