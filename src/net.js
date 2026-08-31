@@ -36,144 +36,144 @@ import {
 } from "./settings.js";
 import { problem } from "./problems.js";
 
-const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Ayni host'a es zamanli iki okumayi engelleyen surec-ici kilit. Tek-baglantili
 // sunucuda hayati — anahtar yalniz host (port degil).
-const mesgulHostlar = new Set();
+const busyHosts = new Set();
 
 export class Client {
-  // opts: { host, kaynakIp, kimlik:{kullanici,sifre}|null, saltOkunur:true,
-  //         istekArasiMs, zamanAsimiMs }
+  // opts: { host, sourceIp, kimlik:{kullanici,sifre}|null, readOnly:true,
+  //         requestGapMs, timeoutMs }
   constructor(opts = {}) {
     this.host = opts.host;
     this.port = opts.port || 80;
-    this.kaynakIp = opts.kaynakIp || undefined;
-    this.kimlik = opts.kimlik || null;
-    this.saltOkunur = opts.saltOkunur !== false; // varsayilan true
-    this.istekArasiMs = dogrulaMs(opts.istekArasiMs, REQUEST_GAP_MS);
-    this.zamanAsimiMs = dogrulaMs(opts.zamanAsimiMs, REQUEST_TIMEOUT_MS);
-    this._kuyruk = Promise.resolve(); // sirali zincir
-    this._sonIstekBitti = 0;
+    this.sourceIp = opts.sourceIp || undefined;
+    this.credentials = opts.credentials || null;
+    this.readOnly = opts.readOnly !== false; // varsayilan true
+    this.requestGapMs = validMs(opts.requestGapMs, REQUEST_GAP_MS);
+    this.timeoutMs = validMs(opts.timeoutMs, REQUEST_TIMEOUT_MS);
+    this._queue = Promise.resolve(); // sirali zincir
+    this._lastRequestEndedAt = 0;
   }
 
   // GET — sirali kuyruga eklenir. Doner: { ok, kod, govde, problems, yol }
-  get(yol) {
-    return this._kuyruğaEkle("GET", yol, null);
+  get(path) {
+    return this._queueğpushInterface("GET", path, null);
   }
 
   // POST — yalnizca yazma modunda. Salt-okunurda reddedilir.
-  post(yol, govde, contentType = "application/x-www-form-urlencoded") {
-    if (this.saltOkunur) {
+  post(path, body, contentType = "application/x-www-form-urlencoded") {
+    if (this.readOnly) {
       return Promise.resolve({
-        ok: false, kod: null, govde: null, yol,
-        problems: [problem("WRITE_BLOCKED_READONLY", yol)],
+        ok: false, code: null, body: null, path,
+        problems: [problem("WRITE_BLOCKED_READONLY", path)],
       });
     }
-    return this._kuyruğaEkle("POST", yol, { govde, contentType });
+    return this._queueğpushInterface("POST", path, { body, contentType });
   }
 
   // Istegi kuyruga ekler; onceki istek bittikten sonra, aralik bekleyerek calisir.
-  _kuyruğaEkle(metot, yol, ekstra) {
-    const isi = async () => {
-      const gecen = Date.now() - this._sonIstekBitti;
-      if (this._sonIstekBitti && gecen < this.istekArasiMs) {
-        await bekle(this.istekArasiMs - gecen);
+  _queueğpushInterface(httpMethod, path, extras) {
+    const job = async () => {
+      const elapsed = Date.now() - this._lastRequestEndedAt;
+      if (this._lastRequestEndedAt && elapsed < this.requestGapMs) {
+        await wait(this.requestGapMs - elapsed);
       }
       try {
-        return await this._denemeliIstek(metot, yol, ekstra);
+        return await this._requestWithRetry(httpMethod, path, extras);
       } finally {
-        this._sonIstekBitti = Date.now();
+        this._lastRequestEndedAt = Date.now();
       }
     };
     // Zinciri ilerlet; bir istegin hatasi zinciri kirmasin.
-    const sonuc = this._kuyruk.then(isi, isi);
-    this._kuyruk = sonuc.then(() => {}, () => {});
-    return sonuc;
+    const result = this._queue.then(job, job);
+    this._queue = result.then(() => {}, () => {});
+    return result;
   }
 
-  async _denemeliIstek(metot, yol, ekstra) {
-    let sonHata = null;
-    for (let deneme = 0; deneme < REQUEST_RETRIES; deneme += 1) {
-      const r = await this._istek(metot, yol, ekstra);
-      if (r.aktarimHatasi) {
-        sonHata = r.aktarimHatasi;
-        if (deneme < REQUEST_RETRIES - 1) await bekle(RETRY_GAP_MS);
+  async _requestWithRetry(httpMethod, path, extras) {
+    let lastError = null;
+    for (let attempt = 0; attempt < REQUEST_RETRIES; attempt += 1) {
+      const r = await this._request(httpMethod, path, extras);
+      if (r.transportError) {
+        lastError = r.transportError;
+        if (attempt < REQUEST_RETRIES - 1) await wait(RETRY_GAP_MS);
         continue;
       }
-      return this._sonuca(yol, r);
+      return this._toResult(path, r);
     }
     return {
-      ok: false, kod: null, govde: null, yol,
-      problems: [problem("REQUEST_FAILED", yol, sonHata)],
+      ok: false, code: null, body: null, path,
+      problems: [problem("REQUEST_FAILED", path, lastError)],
     };
   }
 
   // Tek HTTP istegi (node:http, Connection: close, localAddress, Basic auth).
-  // Throw etmez — { kod, govde, aktarimHatasi } doner.
-  _istek(metot, yol, ekstra) {
+  // Throw etmez — { kod, govde, transportError } doner.
+  _request(httpMethod, path, extras) {
     return new Promise((resolve) => {
-      const basliklar = { Connection: "close" };
-      if (this.kimlik) {
+      const headers = { Connection: "close" };
+      if (this.credentials) {
         const t = Buffer.from(
-          `${this.kimlik.kullanici}:${this.kimlik.sifre}`,
+          `${this.credentials.user}:${this.credentials.password}`,
         ).toString("base64");
-        basliklar.Authorization = `Basic ${t}`;
+        headers.Authorization = `Basic ${t}`;
       }
-      let govdeBuf = null;
-      if (ekstra && ekstra.govde != null) {
-        govdeBuf = Buffer.from(ekstra.govde);
-        basliklar["Content-Type"] = ekstra.contentType;
-        basliklar["Content-Length"] = govdeBuf.length;
+      let bodyBuffer = null;
+      if (extras && extras.body != null) {
+        bodyBuffer = Buffer.from(extras.body);
+        headers["Content-Type"] = extras.contentType;
+        headers["Content-Length"] = bodyBuffer.length;
       }
 
-      const istek = http.request(
+      const request = http.request(
         {
           host: this.host,
           port: this.port,
-          path: yol,
-          method: metot,
-          headers: basliklar,
-          localAddress: this.kaynakIp,
-          timeout: this.zamanAsimiMs,
+          path: path,
+          method: httpMethod,
+          headers: headers,
+          localAddress: this.sourceIp,
+          timeout: this.timeoutMs,
         },
-        (yanit) => {
-          const parcalar = [];
-          yanit.on("data", (p) => parcalar.push(p));
-          yanit.on("end", () =>
-            resolve({ kod: yanit.statusCode, govde: Buffer.concat(parcalar) }),
+        (response) => {
+          const chunks = [];
+          response.on("data", (p) => chunks.push(p));
+          response.on("end", () =>
+            resolve({ code: response.statusCode, body: Buffer.concat(chunks) }),
           );
           // Gomulu sunucular chunked cevabi duzgun kapatmaz; kopmada eldeki
           // kismi govdeyi kullan (yarim-govde toleransi).
-          yanit.on("aborted", () =>
-            resolve({ kod: yanit.statusCode, govde: Buffer.concat(parcalar) }),
+          response.on("aborted", () =>
+            resolve({ code: response.statusCode, body: Buffer.concat(chunks) }),
           );
         },
       );
-      istek.on("timeout", () => istek.destroy(new Error("timeout")));
-      istek.on("error", (e) => resolve({ aktarimHatasi: `${e.code || e.name}: ${e.message}` }));
-      if (govdeBuf) istek.write(govdeBuf);
-      istek.end();
+      request.on("timeout", () => request.destroy(new Error("timeout")));
+      request.on("error", (e) => resolve({ transportError: `${e.code || e.name}: ${e.message}` }));
+      if (bodyBuffer) request.write(bodyBuffer);
+      request.end();
     });
   }
 
   // Ham istek sonucunu proje sonuc nesnesine cevirir + auth/durum sorunlari.
-  _sonuca(yol, r) {
-    const govde = r.govde ? r.govde.toString("latin1") : "";
+  _toResult(path, r) {
+    const body = r.body ? r.body.toString("latin1") : "";
     const problems = [];
-    if (r.kod === 401) {
-      problems.push(problem(this.kimlik ? "AUTH_REJECTED" : "AUTH_REQUIRED", yol));
-    } else if (r.kod >= 400) {
-      problems.push(problem("HTTP_ERROR", yol, r.kod));
-    } else if (r.kod >= 200 && r.kod < 300 && govde.length === 0) {
-      problems.push(problem("EMPTY_BODY", yol));
+    if (r.code === 401) {
+      problems.push(problem(this.credentials ? "AUTH_REJECTED" : "AUTH_REQUIRED", path));
+    } else if (r.code >= 400) {
+      problems.push(problem("HTTP_ERROR", path, r.code));
+    } else if (r.code >= 200 && r.code < 300 && body.length === 0) {
+      problems.push(problem("EMPTY_BODY", path));
     }
     return {
       ok: problems.every((p) => p.severity !== "error"),
-      kod: r.kod,
-      govde,
-      govdeBuf: r.govde,
-      yol,
+      code: r.code,
+      body,
+      bodyBuffer: r.body,
+      path,
       problems,
     };
   }
@@ -181,31 +181,31 @@ export class Client {
 
 // Host bazli kilit yardimcilari (index/oku kullanir).
 export function isHostBusy(host) {
-  return mesgulHostlar.has(host);
+  return busyHosts.has(host);
 }
 export function lockHost(host) {
-  mesgulHostlar.add(host);
+  busyHosts.add(host);
 }
 export function unlockHost(host) {
-  mesgulHostlar.delete(host);
+  busyHosts.delete(host);
 }
 
-function dogrulaMs(deger, varsayilan) {
-  if (deger == null) return varsayilan;
-  if (!Number.isFinite(deger) || deger <= 0 || deger > MAX_TIMER_MS) {
-    return varsayilan;
+function validMs(value, fallback) {
+  if (value == null) return fallback;
+  if (!Number.isFinite(value) || value <= 0 || value > MAX_TIMER_MS) {
+    return fallback;
   }
-  return deger;
+  return value;
 }
 
 // ======================================================================
 // Yerel arayuz / kaynak IP / MAC uretici
 // ======================================================================
 
-export function findSourceIp(onek) {
-  for (const [ad, adresler] of Object.entries(os.networkInterfaces())) {
-    for (const a of adresler || []) {
-      if (a.family === "IPv4" && !a.internal && a.address.startsWith(onek)) {
+export function findSourceIp(prefix) {
+  for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+    for (const a of addresses || []) {
+      if (a.family === "IPv4" && !a.internal && a.address.startsWith(prefix)) {
         return a.address;
       }
     }
@@ -215,22 +215,22 @@ export function findSourceIp(onek) {
 
 // Tum yerel IPv4 arayuzleri (teshis icin). Doner: [{arayuz, ip, mask}]
 export function localInterfaces() {
-  const cikti = [];
-  for (const [ad, adresler] of Object.entries(os.networkInterfaces())) {
-    for (const a of adresler || []) {
+  const out = [];
+  for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+    for (const a of addresses || []) {
       if (a.family === "IPv4" && !a.internal) {
-        cikti.push({ arayuz: ad, ip: a.address, mask: a.netmask });
+        out.push({ iface: name, ip: a.address, mask: a.netmask });
       }
     }
   }
-  return cikti;
+  return out;
 }
 
 // MAC onekinden (OUI) uretici tahmini.
 export function guessVendor(mac) {
   if (!mac) return null;
-  const onek = mac.toLowerCase().replace(/-/g, ":").split(":").slice(0, 3).join(":");
-  return OUI_VENDORS[onek] ?? null;
+  const prefix = mac.toLowerCase().replace(/-/g, ":").split(":").slice(0, 3).join(":");
+  return OUI_VENDORS[prefix] ?? null;
 }
 
 // ======================================================================
@@ -242,24 +242,24 @@ export function guessVendor(mac) {
 // karar verilir — banner BEKLENMEZ. Olculdu (canli): banner beklemesi her
 // yoklamaya 600 ms ekliyordu ve "hangi servis oturuyor" sorusu artik
 // sorulmuyor.
-function portAcikMi(host, kapi, kaynakIp, zamanAsimi = TCP_PROBE_MS) {
+function isPortOpen(host, port, sourceIp, timeout = TCP_PROBE_MS) {
   return new Promise((resolve) => {
-    const soket = new net.Socket();
-    let bitti = false;
-    const kapat = (acik) => {
-      if (bitti) return;
-      bitti = true;
-      soket.destroy();
-      resolve(acik);
+    const socket = new net.Socket();
+    let finished = false;
+    const finishWith = (open) => {
+      if (finished) return;
+      finished = true;
+      socket.destroy();
+      resolve(open);
     };
-    soket.setTimeout(zamanAsimi);
-    const baglantiSecenek = { host, port: kapi };
-    if (kaynakIp) baglantiSecenek.localAddress = kaynakIp;
-    soket.connect(baglantiSecenek, () => kapat(true));
+    socket.setTimeout(timeout);
+    const connectOptions = { host, port: port };
+    if (sourceIp) connectOptions.localAddress = sourceIp;
+    socket.connect(connectOptions, () => finishWith(true));
     // Baglanti kurulmadan zaman asimi = kapali; kurulduysa zaten kapat(true)
     // calismisti ve bu dinleyici etkisiz.
-    soket.on("timeout", () => kapat(!soket.connecting));
-    soket.on("error", () => kapat(false));
+    socket.on("timeout", () => finishWith(!socket.connecting));
+    socket.on("error", () => finishWith(false));
   });
 }
 
@@ -287,9 +287,9 @@ function portAcikMi(host, kapi, kaynakIp, zamanAsimi = TCP_PROBE_MS) {
 // IKIYE katliyor (iki zaman asimi ust uste) — olculdu: modem saha'dayken
 // assessDevice once fabrika'yi yokluyor ve bu 3 sn'ye cikiyordu. Paralelde
 // iskalama TEK zaman asimi kadar, cevap varsa aninda doner.
-export async function isReachable(host, kaynakIp) {
-  const sonuc = await Promise.all(
-    [80, 5123].map((kapi) => portAcikMi(host, kapi, kaynakIp)),
+export async function isReachable(host, sourceIp) {
+  const result = await Promise.all(
+    [80, 5123].map((port) => isPortOpen(host, port, sourceIp)),
   );
-  return sonuc.some(Boolean);
+  return result.some(Boolean);
 }

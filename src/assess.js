@@ -11,32 +11,32 @@
 
 import { isReachable } from "./net.js";
 import { normalizePhone } from "./device.js";
-import { readMsisdn, readSimLock, simKilidiUygunMu } from "./at.js";
+import { readMsisdn, readSimLock, isSimLockEligible } from "./at.js";
 import { problem, isOk } from "./problems.js";
 // Alt katman: OKUMA yolu da YAZMA yolu da buraya bakiyor (bkz. cihaz.js).
-import { readIdentity, simTakiliMi, pcPreflight } from "./device.js";
+import { readIdentity, isSimPresent, pcPreflight } from "./device.js";
 
 const now = () => new Date().toISOString();
-const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
-const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
-const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
+const prefixOf = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
+const notify = (opts, m) => { if (typeof opts.progress === "function") opts.progress(m); };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // PURE: hazırlamaya başlamak için NE EKSİK? Tüketici (UI/endpoint/terminal)
 // buna bakıp hangi ekranı göstereceğine karar verir — karar mantığı burada,
 // arayüzde değil. Sıra ÖNEMLİ: en temel eksik başta.
 //
 // Doner: ["modem"] | ["sim"] | ["telefon"] | ["pin"] | []  (boş = başlanabilir)
-export function provisionEksikleri({ modemVar, simTakili, simKilit, telefon, pin } = {}) {
-  const eksik = [];
-  if (!modemVar) eksik.push("modem");
-  else if (!simTakili) eksik.push("sim");
-  if (!normalizePhone(telefon)) eksik.push("telefon");
+export function provisioningGaps({ modemUp, simPresent, simLockInfo, phone, pin } = {}) {
+  const missing = [];
+  if (!modemUp) missing.push("modem");
+  else if (!simPresent) missing.push("sim");
+  if (!normalizePhone(phone)) missing.push("telefon");
   // PIN yalnızca cihaz KİLİT BİLDİRDİYSE ve elimizde PIN yoksa eksiktir.
   // Kilit yoksa PIN sorulmaz — proje hedefi PIN'siz akış.
-  if (simKilit?.kilit === "pin" && !pin) eksik.push("pin");
+  if (simLockInfo?.lock === "pin" && !pin) missing.push("pin");
   // PUK kilidi "eksik girdi" değil, insan müdahalesi gerektiren bir arıza:
   // eksik listesine koymuyoruz, problems ile bildiriliyor.
-  return eksik;
+  return missing;
 }
 
 // Cihazın O ANKI durumu ve ne eksik — TEK ÇAĞRI.
@@ -49,100 +49,100 @@ export function provisionEksikleri({ modemVar, simTakili, simKilit, telefon, pin
 // algılandığında BİR KEZ çağrılmalı (tek bağlantılı cihazı boğmayalım).
 export async function assessDevice(opts) {
   const {
-    fabrikaHost = "192.168.1.1", sahaHost = "5.5.5.1",
-    kimlik, telefon = null, pin = null,
+    factoryHost = "192.168.1.1", fieldHost = "5.5.5.1",
+    credentials, phone = null, pin = null,
   } = opts;
-  const on = pcPreflight(onekAl(fabrikaHost), onekAl(sahaHost));
-  const rapor = {
-    zaman: now(), komut: "degerlendir",
-    pc: { hazir: on.hazir, problems: on.problems },
-    modem: { konum: null, host: null },
-    kimlik: null, sim: null,
-    telefon: { numara: normalizePhone(telefon), kaynak: telefon ? "girdi" : "yok" },
+  const on = pcPreflight(prefixOf(factoryHost), prefixOf(fieldHost));
+  const report = {
+    timestamp: now(), command: "degerlendir",
+    pc: { ready: on.ready, problems: on.problems },
+    modem: { location: null, host: null },
+    credentials: null, sim: null,
+    phone: { number: normalizePhone(phone), source: phone ? "girdi" : "yok" },
     internet: null,
     problems: [...on.problems],
   };
-  if (!on.hazir) {
-    rapor.eksik = ["pc"];
-    rapor.baslatilabilir = false;
-    rapor.ok = false;
-    return rapor;
+  if (!on.ready) {
+    report.missing = ["pc"];
+    report.canStart = false;
+    report.ok = false;
+    return report;
   }
 
   // IKI ADRES AYNI ANDA yoklanir. Sirayla yoklamak, modem SAHA adresindeyken
   // once fabrika zaman asimini odemek demekti (olculdu: assessDevice'in
   // 3.4 sn'sinin 3 sn'si buydu). Farkli hostlar, cakisma yok.
   // Oncelik korunuyor: ikisi de cevap verirse FABRIKA kazanir.
-  const [fabrikaVar, sahaCevap] = await Promise.all([
-    isReachable(fabrikaHost, on.fabrikaKaynak),
-    isReachable(sahaHost, on.sahaKaynak),
+  const [factoryUp, fieldAnswer] = await Promise.all([
+    isReachable(factoryHost, on.factorySource),
+    isReachable(fieldHost, on.fieldSource),
   ]);
-  const sahaVar = fabrikaVar ? false : sahaCevap;
-  const konum = fabrikaVar
-    ? { host: fabrikaHost, kaynakIp: on.fabrikaKaynak, ad: "fabrika" }
-    : sahaVar ? { host: sahaHost, kaynakIp: on.sahaKaynak, ad: "saha" } : null;
-  rapor.modem = { konum: konum?.ad ?? null, host: konum?.host ?? null };
+  const fieldUp = factoryUp ? false : fieldAnswer;
+  const location = factoryUp
+    ? { host: factoryHost, sourceIp: on.factorySource, name: "fabrika" }
+    : fieldUp ? { host: fieldHost, sourceIp: on.fieldSource, name: "saha" } : null;
+  report.modem = { location: location?.name ?? null, host: location?.host ?? null };
 
-  if (konum && kimlik) {
+  if (location && credentials) {
     let k = null;
-    try { k = await readIdentity({ ...konum, kimlik }); } catch { /* kismi sonuc gecerli */ }
+    try { k = await readIdentity({ ...location, credentials }); } catch { /* kismi sonuc gecerli */ }
     if (k) {
-      rapor.kimlik = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
+      report.credentials = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
         lan_mac: k.lan_mac, operator: k.operator };
-      rapor.sim = { takili: simTakiliMi(k), ...k.sim };
-      rapor.internet = { var: Boolean(k.wan_ip), wan_ip: k.wan_ip };
-      if (!simTakiliMi(k)) rapor.problems.push(problem("SIM_MISSING", k.sim_durumu));
-      else if (k.sim?.kilit === "pin") rapor.problems.push(problem("SIM_PIN_LOCKED", k.sim.pin_kalan));
-      else if (k.sim?.kilit === "puk") rapor.problems.push(problem("SIM_PUK_LOCKED", k.sim.puk_kalan));
+      report.sim = { present: isSimPresent(k), ...k.sim };
+      report.internet = { up: Boolean(k.wan_ip), wan_ip: k.wan_ip };
+      if (!isSimPresent(k)) report.problems.push(problem("SIM_MISSING", k.simStatus));
+      else if (k.sim?.lock === "pin") report.problems.push(problem("SIM_PIN_LOCKED", k.sim.pinRemaining));
+      else if (k.sim?.lock === "puk") report.problems.push(problem("SIM_PUK_LOCKED", k.sim.pukRemaining));
     }
   }
-  if (!konum) rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
+  if (!location) report.problems.push(problem("DEVICE_UNREACHABLE", `${factoryHost}/${fieldHost}`));
 
   // SIM PIN KILITLI: kalan hakki MODULDEN oku. Web sayfasi bu sayiyi her zaman
-  // vermiyor (2026-08-28: `pin_kalan: null` geldi), AT tarafi veriyor
+  // vermiyor (2026-08-28: `pinRemaining: null` geldi), AT tarafi veriyor
   // (`+QPINC: "SC",3,10`). Bu sayi bir GUVENLIK kararinin girdisi — "daha once
   // hak yanmis mi?" — o yuzden tahmine birakilmaz, ~3 sn'ye deger. Yalnizca
   // KILITLI durumda okunuyor: acik SIM'de gereksiz bir tur olurdu.
-  if (konum && kimlik && rapor.sim?.kilit === "pin") {
-    bildir(opts, "SIM kilidi modulden okunuyor (kalan hak)");
-    const k = await readSimLock({ ...konum, kimlik });
-    rapor.at_port = k.at_port;
-    if (k.at_port) {
-      rapor.sim = { ...rapor.sim,
-        durum_modul: k.durum,
-        pin_kalan: k.pin_kalan ?? rapor.sim.pin_kalan,
-        puk_kalan: k.puk_kalan ?? rapor.sim.puk_kalan };
+  if (location && credentials && report.sim?.lock === "pin") {
+    notify(opts, "SIM kilidi modulden okunuyor (kalan hak)");
+    const k = await readSimLock({ ...location, credentials });
+    report.atPort = k.atPort;
+    if (k.atPort) {
+      report.sim = { ...report.sim,
+        statusModule: k.status,
+        pinRemaining: k.pinRemaining ?? report.sim.pinRemaining,
+        pukRemaining: k.pukRemaining ?? report.sim.pukRemaining };
     }
-    // Kilit kaldirmaya UYGUN MU? Karar cekirdekte (simKilidiUygunMu); tuketici
+    // Kilit kaldirmaya UYGUN MU? Karar cekirdekte (isSimLockEligible); tuketici
     // yalnizca gosterir.
     //
-    // elleOnay:true — cunku bu bilgi INSANA gosterilecek bir dugme icin.
+    // manualConsent:true — cunku bu bilgi INSANA gosterilecek bir dugme icin.
     // "Bir hak yakildiysa bir daha deneme" kurali OTOMATIK yol icindir: arac
     // kendi kendine ayni isi tekrarlamasin. Operatorun baska bir PIN denemesini
     // engellemek yanlis olur — dogru PIN'i bilen odur. Insanin da gecemedigi
-    // tek kural SON HAK; onu hakDurumu zaten elleOnay'a bakmadan reddediyor.
-    const u = simKilidiUygunMu(rapor.sim, { elleOnay: true });
-    rapor.pin_kaldirilabilir = { uygun: u.uygun, sebep: u.sebep };
-    rapor.problems.push(...u.problems.filter((p) => p.severity === "warning"));
+    // tek kural SON HAK; onu attemptState zaten manualConsent'a bakmadan reddediyor.
+    const u = isSimLockEligible(report.sim, { manualConsent: true });
+    report.pinRemovable = { eligible: u.eligible, reason: u.reason };
+    report.problems.push(...u.problems.filter((p) => p.severity === "warning"));
   }
 
   // TELEFON NUMARASINI CIHAZDAN OKU — artik elle girmeye gerek yok.
   // Yalnizca SIM HAZIRSA denenir: kilitli SIM abone verisini (EF_MSISDN)
   // acmiyor, canli olculdu (2026-08-27). Kilitliyse once PIN, sonra numara.
-  if (konum && kimlik && rapor.sim?.hazir) {
-    bildir(opts, "telefon numarasi cihazdan okunuyor (AT+CNUM)");
-    const n = await readMsisdn({ ...konum, kimlik });
-    rapor.at_port = n.at_port;
-    if (n.telefon) {
-      const elle = normalizePhone(telefon);
-      if (elle && elle !== n.telefon) {
+  if (location && credentials && report.sim?.ready) {
+    notify(opts, "telefon numarasi cihazdan okunuyor (AT+CNUM)");
+    const n = await readMsisdn({ ...location, credentials });
+    report.atPort = n.atPort;
+    if (n.phone) {
+      const manual = normalizePhone(phone);
+      if (manual && manual !== n.phone) {
         // Cihazdaki numara SIM'in KENDISINDEN geliyor; elle girilen yanlis
         // olabilir. Sessizce birini secmek yerine ikisini de bildiriyoruz.
-        rapor.problems.push(problem("MSISDN_UYUSMAZLIK", elle, n.telefon));
+        report.problems.push(problem("MSISDN_MISMATCH", manual, n.phone));
       }
-      rapor.telefon = { numara: n.telefon, kaynak: "cihaz" };
+      report.phone = { number: n.phone, source: "cihaz" };
     } else {
-      rapor.problems.push(...n.problems);
+      report.problems.push(...n.problems);
     }
   }
 
@@ -151,15 +151,15 @@ export async function assessDevice(opts) {
   // başarıyla okunduğu halde eksik ["telefon"] kalıyor, başlatılabilir
   // yanlışlıkla false oluyordu (2026-08-28 canlı görüldü). Numaranın NEREDEN
   // geldiği kararı ilgilendirmez — elimizde geçerli numara var mı, o yeter.
-  rapor.eksik = provisionEksikleri({
-    modemVar: Boolean(konum),
-    simTakili: rapor.sim?.takili ?? false,
-    simKilit: rapor.sim ?? null,
-    telefon: rapor.telefon.numara, pin,
+  report.missing = provisioningGaps({
+    modemUp: Boolean(location),
+    simPresent: report.sim?.present ?? false,
+    simLockInfo: report.sim ?? null,
+    phone: report.phone.number, pin,
   });
-  rapor.baslatilabilir = rapor.eksik.length === 0;
-  rapor.ok = isOk(rapor.problems);
-  return rapor;
+  report.canStart = report.missing.length === 0;
+  report.ok = isOk(report.problems);
+  return report;
 }
 // --- TEKRAR KARARI (PURE) ---
 //
@@ -173,40 +173,40 @@ export async function assessDevice(opts) {
 // Süreler cihazin hizina gore: degerlendirme ~5 sn suruyor, bu yuzden en
 // sik tekrar 3 sn (yoklama degil, "kablo takildi mi" bakisi).
 //
-// Doner: { tekrar, sonra_sn, sebep }
-export function yenidenDenemeKarari(rapor = {}) {
-  const kodlar = new Set((rapor.problems || []).map((p) => p.kod));
-  const hayir = (sebep) => ({ tekrar: false, sonra_sn: null, sebep });
-  const evet = (sonra_sn, sebep) => ({ tekrar: true, sonra_sn, sebep });
+// Doner: { tekrar, afterSec, sebep }
+export function retryDecision(report = {}) {
+  const codes = new Set((report.problems || []).map((p) => p.code));
+  const no = (reason) => ({ retry: false, afterSec: null, reason });
+  const yes = (afterSec, reason) => ({ retry: true, afterSec, reason });
 
   // Is bitti: operator baslatacak.
-  if (rapor.baslatilabilir) return hayir("baslatilabilir");
+  if (report.canStart) return no("baslatilabilir");
 
   // PC agi yok -> kablo/modem bekleniyor. Ucuz kontrol, sik bak.
-  if (rapor.pc && rapor.pc.hazir === false) return evet(3, "pc_hazir_degil");
+  if (report.pc && report.pc.ready === false) return yes(3, "pc_hazir_degil");
 
   // Modem yok -> takilmasi bekleniyor. Sik bak, ucuz (TCP yoklama).
-  if (!rapor.modem?.host) return evet(3, "modem_yok");
+  if (!report.modem?.host) return yes(3, "modem_yok");
 
   // Insan mudahalesi bekleniyor: tekrar bakmak ayni cevabi verir.
-  if (kodlar.has("SIM_PUK_LOCKED")) return hayir("puk_insan_bekliyor");
-  if (rapor.sim?.kilit === "pin") return hayir("pin_bekleniyor");
-  if (kodlar.has("MSISDN_CIHAZDA_YOK")) return hayir("numara_simde_yok");
-  if (kodlar.has("MSISDN_UYUSMAZLIK")) return hayir("operator_karari");
+  if (codes.has("SIM_PUK_LOCKED")) return no("puk_insan_bekliyor");
+  if (report.sim?.lock === "pin") return no("pin_bekleniyor");
+  if (codes.has("MSISDN_NOT_ON_SIM")) return no("numara_simde_yok");
+  if (codes.has("MSISDN_MISMATCH")) return no("operator_karari");
 
   // SIM takili degil -> FIZIKSEL is: modem kapatilip SIM takilacak. Bakmaya
   // devam ama seyrek; operator bu arada modemi kapatacak.
-  if (rapor.sim && rapor.sim.takili === false) return evet(10, "sim_bekleniyor");
+  if (report.sim && report.sim.present === false) return yes(10, "sim_bekleniyor");
 
   // GECICI aksilik: telnet dustu / AT portu cevap vermedi / istek yarida
   // kaldi. Tam olarak tarayici yenileyince duzelen durum bu.
-  for (const k of ["REQUEST_FAILED", "AT_PORT_YOK", "DEVICE_BUSY", "EMPTY_BODY"]) {
-    if (kodlar.has(k)) return evet(5, "gecici_hata");
+  for (const k of ["REQUEST_FAILED", "AT_PORT_NOT_FOUND", "DEVICE_BUSY", "EMPTY_BODY"]) {
+    if (codes.has(k)) return yes(5, "gecici_hata");
   }
 
   // Eksik var ama sebebini tanimadik: seyrek tekrar, sessiz kalmaktan iyi.
-  if ((rapor.eksik || []).length) return evet(10, "eksik_var");
-  return hayir("tekrar_gerekmiyor");
+  if ((report.missing || []).length) return yes(10, "eksik_var");
+  return no("tekrar_gerekmiyor");
 }
 
 // Degerlendirmeyi TEKRARLAYARAK izler. Karar yukaridaki saf fonksiyondan
@@ -216,18 +216,18 @@ export function yenidenDenemeKarari(rapor = {}) {
 //   olay : her degerlendirme sonucunda cagrilir (tuketici ekrani gunceller)
 //   dur  : true donerse dongu biter (tuketici iptal edebilir)
 // Doner: son rapor.
-export async function degerlendirmeyiIzle(opts = {}) {
-  const enFazla = opts.enFazlaTur ?? Infinity;
-  let rapor = null;
-  for (let tur = 0; tur < enFazla; tur += 1) {
-    rapor = await assessDevice(opts);
-    rapor.tekrar = yenidenDenemeKarari(rapor);
-    if (typeof opts.olay === "function") {
-      try { opts.olay(rapor); } catch { /* dinleyici hatasi donguyu kesmez */ }
+export async function watchAssessment(opts = {}) {
+  const atMost = opts.maxRounds ?? Infinity;
+  let report = null;
+  for (let kind = 0; kind < atMost; kind += 1) {
+    report = await assessDevice(opts);
+    report.retry = retryDecision(report);
+    if (typeof opts.event === "function") {
+      try { opts.event(report); } catch { /* dinleyici hatasi donguyu kesmez */ }
     }
-    if (!rapor.tekrar.tekrar) return rapor;
-    if (typeof opts.dur === "function" && opts.dur()) return rapor;
-    await bekle(rapor.tekrar.sonra_sn * 1000);
+    if (!report.retry.retry) return report;
+    if (typeof opts.halt === "function" && opts.halt()) return report;
+    await wait(report.retry.afterSec * 1000);
   }
-  return rapor;
+  return report;
 }

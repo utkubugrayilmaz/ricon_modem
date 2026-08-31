@@ -17,33 +17,33 @@ import { join } from "node:path";
 const KOK = new URL("../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 
 function metinDosyalari() {
-  const cikti = [];
+  const out = [];
   // ALT KLASORLERE INER: src/ 2026-08-31'de katmanlara bolundu
   // (domain/transport/parse/device/flow/report). Duz readdir yapan eski surum
   // tasima sonrasi hicbir src dosyasini denetlemiyordu — sessiz kapsam kaybi.
   const yuru = (dizin) => {
-    for (const ad of readdirSync(join(KOK, dizin), { withFileTypes: true })) {
-      if (ad.isDirectory()) {
-        if (ad.name === "node_modules" || ad.name.startsWith(".")) continue;
+    for (const name of readdirSync(join(KOK, dizin), { withFileTypes: true })) {
+      if (name.isDirectory()) {
+        if (name.name === "node_modules" || name.name.startsWith(".")) continue;
         if (dizin === ".") continue;              // kokte YALNIZCA dosyalar
-        yuru(`${dizin}/${ad.name}`);
+        yuru(`${dizin}/${name.name}`);
         continue;
       }
-      if (!/\.(js|json|md|html|css)$/.test(ad.name)) continue;
-      cikti.push({ ad: `${dizin}/${ad.name}`, bayt: readFileSync(join(KOK, dizin, ad.name)) });
+      if (!/\.(js|json|md|html|css)$/.test(name.name)) continue;
+      out.push({ name: `${dizin}/${name.name}`, bayt: readFileSync(join(KOK, dizin, name.name)) });
     }
   };
   for (const dizin of ["src", "bin", "tests", "examples", "."]) yuru(dizin);
-  return cikti;
+  return out;
 }
 
 test("tum kaynak dosyalar GECERLI UTF-8", () => {
   const kotu = [];
-  for (const { ad, bayt } of metinDosyalari()) {
+  for (const { name, bayt } of metinDosyalari()) {
     try {
       new TextDecoder("utf-8", { fatal: true }).decode(bayt);
     } catch {
-      kotu.push(ad);
+      kotu.push(name);
     }
   }
   assert.deepEqual(kotu, [], `gecersiz UTF-8: ${kotu.join(", ")}`);
@@ -59,7 +59,7 @@ test("kaynakta BOZUK KARAKTER (U+FFFD) yok", () => {
   const DEGISTIRME = String.fromCharCode(0xFFFD);
   const kotu = metinDosyalari()
     .filter(({ bayt }) => new TextDecoder().decode(bayt).includes(DEGISTIRME))
-    .map(({ ad }) => ad);
+    .map(({ name }) => name);
   assert.deepEqual(kotu, []);
 });
 

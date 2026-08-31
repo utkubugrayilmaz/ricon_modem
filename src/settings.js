@@ -14,12 +14,12 @@ export const DEFAULT_HOST = "192.168.1.1";
 // "kimlik" = HTTP Basic gerekli, "config" = tam yapilandirma yedegi.
 // Not: bu firmware'de canli veri .live.htm (sistem) ve .live.asp (kimlikli).
 export const ENDPOINTS = Object.freeze([
-  { ad: "info", yol: "/asp/status/Info.htm", tur: "sistem", bicim: "html" },
-  { ad: "info_live", yol: "/asp/status/Info.live.htm", tur: "sistem", bicim: "ddwrt" },
-  { ad: "internet_live", yol: "/asp/status/Status_Internet.live.asp", tur: "kimlik", bicim: "ddwrt" },
-  { ad: "wireless_live", yol: "/asp/status/Status_Wireless.live.asp", tur: "kimlik", bicim: "ddwrt" },
-  { ad: "setup_index", yol: "/asp/setup/index.asp", tur: "kimlik", bicim: "html" },
-  { ad: "nvram_yedek", yol: "/nvrambak.bin", tur: "config", bicim: "nvram" },
+  { name: "info", path: "/asp/status/Info.htm", kind: "sistem", format: "html" },
+  { name: "info_live", path: "/asp/status/Info.live.htm", kind: "sistem", format: "ddwrt" },
+  { name: "internet_live", path: "/asp/status/Status_Internet.live.asp", kind: "kimlik", format: "ddwrt" },
+  { name: "wireless_live", path: "/asp/status/Status_Wireless.live.asp", kind: "kimlik", format: "ddwrt" },
+  { name: "setup_index", path: "/asp/setup/index.asp", kind: "kimlik", format: "html" },
+  { name: "nvram_yedek", path: "/nvrambak.bin", kind: "config", format: "nvram" },
 ]);
 
 // DD-WRT canli sayfa alan adi -> bizim okunabilir adimiz. m1 = birincil modul,
@@ -29,19 +29,19 @@ export const SIM_FIELD_MAP = Object.freeze({
   m1simiccid: "iccid",
   m1simimsi: "imsi",
   m1imei: "imei",
-  m1sim: "aktif_sim_yuvasi",
-  m1simst: "sim_durumu",
-  m1network: "sebeke_tipi",
+  m1sim: "activeSimSlot",
+  m1simst: "simStatus",
+  m1network: "networkType",
   m1bandinfo: "band",
-  m13gname: "modul_adi",
-  m1dbm: "sinyal_dbm",
-  m1cellid: "hucre_id",
-  m1noiseratio: "sinyal_gurultu",
+  m13gname: "moduleName",
+  m1dbm: "signalDbm",
+  m1cellid: "cellId",
+  m1noiseratio: "signalNoise",
   w1_wan_ip: "wan_ip",
-  w1_wan_gw: "wan_ag_gecidi",
+  w1_wan_gw: "wanGateway",
   w1_wan_dns: "wan_dns",
-  w1_wanup: "bagli_sure",
-  w1_wan_shortproto: "wan_protokol",
+  w1_wanup: "connectedFor",
+  w1_wan_shortproto: "wanProtocol",
 });
 
 // SIM2 haritasi birincilden turetilir (m1->m2, w1_->w2_).
@@ -76,59 +76,59 @@ export const OPERATORS = Object.freeze({
 //   gizli   : degeri ekranda maskele (parola alani)
 export const SETTING_LABELS = Object.freeze({
   // Cihaz adi = SIM'in telefon numarasi (arayuzde Device Name).
-  router_name: { ad: "Device Name (telefon no)", sayfa: "Cihaz" },
+  router_name: { name: "Device Name (telefon no)", page: "Cihaz" },
   // SIM PIN — degeri EKRANDA MASKELENIR, log/deftere hic yazilmaz.
-  m1s1simpin: { ad: "SIM1 PIN", sayfa: "Modem/WAN → Main Link", gizli: true },
+  m1s1simpin: { name: "SIM1 PIN", page: "Modem/WAN → Main Link", secret: true },
 
-  w1_wan_proto: { ad: "Connection Type", sayfa: "Modem/WAN → Main Link",
-    degerler: { m13gdhcp: "M1-DHCP", m13g: "M1-PPP" } },
-  m1simswtch: { ad: "SIM Backup", sayfa: "Modem/WAN → Main Link",
-    degerler: { 0: "Disable", 1: "Enable" } },
-  mullinkfail: { ad: "Link Fail to Restart", sayfa: "Modem/WAN → Main Link", birim: "dk" },
-  m1s1wanapn: { ad: "APN (SIM1)", sayfa: "Modem/WAN → Main Link" },
-  m1s1pppuser: { ad: "SIM1 User Name", sayfa: "Modem/WAN → Main Link" },
-  m1s1ppppwd: { ad: "SIM1 Password", sayfa: "Modem/WAN → Main Link", gizli: true },
-  m1s2pppuser: { ad: "SIM2 User Name", sayfa: "Modem/WAN → Main Link" },
-  m1s2ppppwd: { ad: "SIM2 Password", sayfa: "Modem/WAN → Main Link", gizli: true },
+  w1_wan_proto: { name: "Connection Type", page: "Modem/WAN → Main Link",
+    values: { m13gdhcp: "M1-DHCP", m13g: "M1-PPP" } },
+  m1simswtch: { name: "SIM Backup", page: "Modem/WAN → Main Link",
+    values: { 0: "Disable", 1: "Enable" } },
+  mullinkfail: { name: "Link Fail to Restart", page: "Modem/WAN → Main Link", unit: "dk" },
+  m1s1wanapn: { name: "APN (SIM1)", page: "Modem/WAN → Main Link" },
+  m1s1pppuser: { name: "SIM1 User Name", page: "Modem/WAN → Main Link" },
+  m1s1ppppwd: { name: "SIM1 Password", page: "Modem/WAN → Main Link", secret: true },
+  m1s2pppuser: { name: "SIM2 User Name", page: "Modem/WAN → Main Link" },
+  m1s2ppppwd: { name: "SIM2 Password", page: "Modem/WAN → Main Link", secret: true },
 
-  w1_connfailsw: { ad: "Connect Fail", sayfa: "Modem/WAN → Others" },
-  w1_kponm: { ad: "Keep Alive", sayfa: "Modem/WAN → Others",
-    degerler: { 1: "None", 7: "ICMP+" } },
-  m1_pap_allowed: { ad: "Authentication · PAP", sayfa: "Modem/WAN → Others",
-    degerler: { 0: "kapali", 1: "acik" } },
-  m1_chap_allowed: { ad: "Authentication · CHAP", sayfa: "Modem/WAN → Others",
-    degerler: { 0: "kapali", 1: "acik" } },
-  m1_chapms_allowed: { ad: "Authentication · MS-CHAP", sayfa: "Modem/WAN → Others",
-    degerler: { 0: "kapali", 1: "acik" } },
-  m1_chapms_v2_allowed: { ad: "Authentication · MS-CHAPv2", sayfa: "Modem/WAN → Others",
-    degerler: { 0: "kapali", 1: "acik" } },
+  w1_connfailsw: { name: "Connect Fail", page: "Modem/WAN → Others" },
+  w1_kponm: { name: "Keep Alive", page: "Modem/WAN → Others",
+    values: { 1: "None", 7: "ICMP+" } },
+  m1_pap_allowed: { name: "Authentication · PAP", page: "Modem/WAN → Others",
+    values: { 0: "kapali", 1: "acik" } },
+  m1_chap_allowed: { name: "Authentication · CHAP", page: "Modem/WAN → Others",
+    values: { 0: "kapali", 1: "acik" } },
+  m1_chapms_allowed: { name: "Authentication · MS-CHAP", page: "Modem/WAN → Others",
+    values: { 0: "kapali", 1: "acik" } },
+  m1_chapms_v2_allowed: { name: "Authentication · MS-CHAPv2", page: "Modem/WAN → Others",
+    values: { 0: "kapali", 1: "acik" } },
 
-  w2_wan_proto: { ad: "Connection Type", sayfa: "Modem/WAN → Backup Link",
-    degerler: { disabled: "Disabled", dhcp: "Automatic Configuration - DHCP" } },
+  w2_wan_proto: { name: "Connection Type", page: "Modem/WAN → Backup Link",
+    values: { disabled: "Disabled", dhcp: "Automatic Configuration - DHCP" } },
 
-  wl0_net_mode: { ad: "WLAN radyo", sayfa: "Wireless",
-    degerler: { disabled: "kapali" } },
-  wl_net_mode: { ad: "WLAN radyo (genel)", sayfa: "Wireless",
-    degerler: { disabled: "kapali" } },
+  wl0_net_mode: { name: "WLAN radyo", page: "Wireless",
+    values: { disabled: "kapali" } },
+  wl_net_mode: { name: "WLAN radyo (genel)", page: "Wireless",
+    values: { disabled: "kapali" } },
 
   // DHCP sunucusu. Bonus: bu anahtar KIMLIKSIZ sayfada da (Info.live.htm)
   // goruldugu icin parolasiz dogrulanabiliyor.
-  lan_proto: { ad: "DHCP Server", sayfa: "DHCP Server",
-    degerler: { dhcp: "Enabled", static: "Disabled" } },
+  lan_proto: { name: "DHCP Server", page: "DHCP Server",
+    values: { dhcp: "Enabled", static: "Disabled" } },
 
-  lan_ipaddr: { ad: "Local IP", sayfa: "LAN" },
-  lan_ipaddr_ex1: { ad: "Local IP Address1", sayfa: "LAN",
-    degerler: { "0.0.0.0": "yok (silinmis)" } },
-  lan_netmask_ex1: { ad: "Subnet Mask1", sayfa: "LAN",
-    degerler: { "0.0.0.0": "yok (silinmis)" } },
-  lan_ipaddr_ex2: { ad: "Local IP Address2", sayfa: "LAN",
-    degerler: { "0.0.0.0": "yok (silinmis)" } },
-  lan_netmask_ex2: { ad: "Subnet Mask2", sayfa: "LAN",
-    degerler: { "0.0.0.0": "yok (silinmis)" } },
-  lan_ipaddr_ex3: { ad: "Local IP Address3", sayfa: "LAN",
-    degerler: { "0.0.0.0": "yok (silinmis)" } },
-  lan_netmask_ex3: { ad: "Subnet Mask3", sayfa: "LAN",
-    degerler: { "0.0.0.0": "yok (silinmis)" } },
+  lan_ipaddr: { name: "Local IP", page: "LAN" },
+  lan_ipaddr_ex1: { name: "Local IP Address1", page: "LAN",
+    values: { "0.0.0.0": "yok (silinmis)" } },
+  lan_netmask_ex1: { name: "Subnet Mask1", page: "LAN",
+    values: { "0.0.0.0": "yok (silinmis)" } },
+  lan_ipaddr_ex2: { name: "Local IP Address2", page: "LAN",
+    values: { "0.0.0.0": "yok (silinmis)" } },
+  lan_netmask_ex2: { name: "Subnet Mask2", page: "LAN",
+    values: { "0.0.0.0": "yok (silinmis)" } },
+  lan_ipaddr_ex3: { name: "Local IP Address3", page: "LAN",
+    values: { "0.0.0.0": "yok (silinmis)" } },
+  lan_netmask_ex3: { name: "Subnet Mask3", page: "LAN",
+    values: { "0.0.0.0": "yok (silinmis)" } },
 });
 
 // MAC uretici onekleri (OUI). Cihazi adresini bilmeden komsu tablosunda
@@ -188,12 +188,12 @@ export const WRITE_GROUPS = [
   {
     // Cihaz adı = telefon numarası. En başta: en zararsız yazma, sorun çıkarsa
     // gerisi hiç denenmemiş olur.
-    ad: "Cihaz",
-    anahtarlar: ["router_name"],
+    name: "Cihaz",
+    keys: ["router_name"],
   },
   {
-    ad: "Modem/WAN",
-    anahtarlar: [
+    name: "Modem/WAN",
+    keys: [
       "w1_wan_proto", "m1simswtch", "mullinkfail",
       "m1s1wanapn", "m1s1pppuser", "m1s1ppppwd", "m1s2pppuser", "m1s2ppppwd",
       "m1s1simpin",
@@ -204,13 +204,13 @@ export const WRITE_GROUPS = [
     ],
   },
   {
-    ad: "DHCP",
+    name: "DHCP",
     // lan_proto: dhcp = DHCP sunucusu acik, static = kapali (diff ile teyitli).
-    anahtarlar: ["lan_proto"],
+    keys: ["lan_proto"],
   },
   {
-    ad: "LAN",
-    anahtarlar: [
+    name: "LAN",
+    keys: [
       "lan_ipaddr_ex1", "lan_netmask_ex1",
       "lan_ipaddr_ex2", "lan_netmask_ex2",
       "lan_ipaddr_ex3", "lan_netmask_ex3",
@@ -220,8 +220,8 @@ export const WRITE_GROUPS = [
 ];
 
 export const FIELD_PROFILE = {
-  ad: "saha",
-  aciklama: "ACO RVM saha profili — Ricon S9922M44",
+  name: "saha",
+  description: "ACO RVM saha profili — Ricon S9922M44",
 
   // nvram anahtar -> hedef değer (hepsi string; nvram string tutar).
   nvram: {
@@ -288,8 +288,8 @@ export const FIELD_PROFILE = {
 // da bir kez pristine /nvrambak.bin yedegi alip `nvram restore` etmek
 // (golden-backup yaklasimi — ileride, pristine yedek gerektirir).
 export const FACTORY_PROFILE = {
-  ad: "fabrika",
-  aciklama: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
+  name: "fabrika",
+  description: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
   nvram: {
     // Modem/WAN Main Link defaults
     w1_wan_proto: "m13gdhcp",  // Connection Type M1-DHCP
@@ -325,4 +325,4 @@ export const FACTORY_PROFILE = {
 };
 
 // Ad -> profil. CLI `--profil <ad>` ile secilir.
-export const PROFILES = { saha: FIELD_PROFILE, fabrika: FACTORY_PROFILE };
+export const PROFILES = { field: FIELD_PROFILE, factory: FACTORY_PROFILE };

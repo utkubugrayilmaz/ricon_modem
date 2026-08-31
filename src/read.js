@@ -13,91 +13,91 @@ import { parsePairs, simView } from "./device.js";
 import { parseNvram } from "./nvram.js";
 import { localInterfaces, guessVendor } from "./net.js";
 import { isReachable } from "./net.js";
-import { consoleRecon, consoleNvram } from "./console.js";
+import { consoleSystem, consoleNvram } from "./console.js";
 import { problem, isOk } from "./problems.js";
 
 const now = () => new Date().toISOString();
-const onekAl = (host) => host.split(".").slice(0, 3).join(".") + ".";
-const bildir = (opts, mesaj) => { if (typeof opts.ilerle === "function") opts.ilerle(mesaj); };
+const prefixOf = (host) => host.split(".").slice(0, 3).join(".") + ".";
+const notify = (opts, msg) => { if (typeof opts.progress === "function") opts.progress(msg); };
 
 // --- dogrula: ortam/erisim teshisi ---
 export async function checkDevice(opts) {
-  const { host, kaynakIp, kimlik } = opts;
-  const rapor = { zaman: now(), komut: "dogrula", modem_ip: host, problems: [] };
-  rapor.yerel_arayuzler = localInterfaces();
-  rapor.kaynak_ip = kaynakIp || null;
-  if (!kaynakIp) rapor.problems.push(problem("NO_SOURCE_IP", `${onekAl(host)}50`));
+  const { host, sourceIp, credentials } = opts;
+  const report = { timestamp: now(), command: "dogrula", modemIp: host, problems: [] };
+  report.localInterfaces = localInterfaces();
+  report.sourceIp = sourceIp || null;
+  if (!sourceIp) report.problems.push(problem("NO_SOURCE_IP", `${prefixOf(host)}50`));
 
-  rapor.erisilebilir = await isReachable(host, kaynakIp);
-  if (!rapor.erisilebilir) rapor.problems.push(problem("DEVICE_UNREACHABLE", host));
+  report.reachable = await isReachable(host, sourceIp);
+  if (!report.reachable) report.problems.push(problem("DEVICE_UNREACHABLE", host));
 
-  if (rapor.erisilebilir) {
-    const c = new Client({ host, kaynakIp, kimlik });
-    const sistem = await c.get("/asp/status/Info.live.htm");
-    rapor.sistem_ucu = { kod: sistem.kod, boyut: sistem.govde?.length ?? 0 };
-    const korumali = await c.get("/asp/status/Status_Internet.live.asp");
-    rapor.kimlikli_uc = { kod: korumali.kod };
-    rapor.problems.push(...korumali.problems);
+  if (report.reachable) {
+    const c = new Client({ host, sourceIp, credentials });
+    const system = await c.get("/asp/status/Info.live.htm");
+    report.systemEndpoint = { code: system.code, size: system.body?.length ?? 0 };
+    const authed = await c.get("/asp/status/Status_Internet.live.asp");
+    report.authEndpoint = { code: authed.code };
+    report.problems.push(...authed.problems);
   }
-  rapor.kimlik_hazir = Boolean(kimlik);
-  rapor.ok = isOk(rapor.problems);
-  return rapor;
+  report.credentialsReady = Boolean(credentials);
+  report.ok = isOk(report.problems);
+  return report;
 }
 
 // --- oku: HER SEYI cek (sistem + SIM + ayar + nvram) ---
 export async function readDevice(opts) {
-  const { host, kaynakIp, kimlik } = opts;
+  const { host, sourceIp, credentials } = opts;
   if (isHostBusy(host)) {
-    return { zaman: now(), komut: "oku", modem_ip: host, ok: false,
+    return { timestamp: now(), command: "oku", modemIp: host, ok: false,
       problems: [problem("DEVICE_BUSY", host)] };
   }
   lockHost(host);
   try {
-    const c = new Client({ host, kaynakIp, kimlik });
-    const rapor = {
-      zaman: now(), komut: "oku", modem_ip: host, kimlik_hazir: Boolean(kimlik),
-      uclar: {}, ham_alanlar: {}, problems: [],
+    const c = new Client({ host, sourceIp, credentials });
+    const report = {
+      timestamp: now(), command: "oku", modemIp: host, credentialsReady: Boolean(credentials),
+      endpoints: {}, rawFields: {}, problems: [],
     };
     for (const uc of ENDPOINTS) {
-      bildir(opts, `oku ${uc.yol}`);
-      const r = await c.get(uc.yol);
-      rapor.uclar[uc.ad] = { yol: uc.yol, kod: r.kod, boyut: r.govde?.length ?? 0, tur: uc.tur };
-      rapor.problems.push(...r.problems.filter((p) => p.severity === "error" || p.kod === "AUTH_REQUIRED"));
-      if (!r.ok || !r.govde) continue;
-      if (uc.bicim === "ddwrt") {
-        Object.assign(rapor.ham_alanlar, parsePairs(r.govde));
-      } else if (uc.bicim === "nvram") {
-        const { degerler, sayi, problems } = parseNvram(r.govdeBuf);
-        rapor.nvram = degerler;
-        rapor.nvram_anahtar_sayisi = sayi;
-        rapor.problems.push(...problems);
+      notify(opts, `oku ${uc.path}`);
+      const r = await c.get(uc.path);
+      report.endpoints[uc.name] = { path: uc.path, code: r.code, size: r.body?.length ?? 0, kind: uc.kind };
+      report.problems.push(...r.problems.filter((p) => p.severity === "error" || p.code === "AUTH_REQUIRED"));
+      if (!r.ok || !r.body) continue;
+      if (uc.format === "ddwrt") {
+        Object.assign(report.rawFields, parsePairs(r.body));
+      } else if (uc.format === "nvram") {
+        const { values, finiteOrNull, problems } = parseNvram(r.bodyBuffer);
+        report.nvram = values;
+        report.nvramKeyCount = finiteOrNull;
+        report.problems.push(...problems);
       } else {
-        rapor.uclar[uc.ad].ham_html_boyut = r.govde.length;
+        report.endpoints[uc.name].rawHtmlBytes = r.body.length;
       }
     }
-    const { sim1, sim2 } = simView(rapor.ham_alanlar);
-    rapor.sim1 = sim1;
-    rapor.sim2 = sim2;
-    rapor.sistem = systemView(rapor.ham_alanlar);
-    rapor.ok = isOk(rapor.problems);
-    return rapor;
+    const { sim1, sim2 } = simView(report.rawFields);
+    report.sim1 = sim1;
+    report.sim2 = sim2;
+    report.system = systemView(report.rawFields);
+    report.ok = isOk(report.problems);
+    return report;
   } finally {
     unlockHost(host);
   }
 }
 
 // Info.live.htm ham alanlarindan okunabilir sistem gorunumu.
-export function systemView(ham) {
-  const al = (k) => (ham[k] ?? "").trim() || undefined;
+export function systemView(raw) {
+  const al = (k) => (raw[k] ?? "").trim() || undefined;
   return {
-    lan_ip: al("lan_ip"),
+    lanIp: al("lan_ip"),
     lan_mac: al("lan_mac"),
-    lan_mac_uretici: guessVendor(al("lan_mac")),
+    lanMacVendor: guessVendor(al("lan_mac")),
     wan_mac1: al("wan_mac1"),
-    wifi_durum: al("wl_radio"),
-    wifi_kanal: al("wl_channel"),
+    wifiStatus: al("wl_radio"),
+    wifiChannel: al("wl_channel"),
     uptime: al("uptime_spe") || al("uptime"),
-    bellek: al("mem_info"),
+    memory: al("mem_info"),
     lan_proto: al("lan_proto"),
   };
 }
@@ -105,26 +105,26 @@ export function systemView(ham) {
 // --- konsol: telnet root shell (salt okunur) ---
 // opts.nvram=true ise tam nvram; degilse sistem kesfi.
 export async function readConsole(opts) {
-  const { host, kaynakIp, kimlik, nvram = false } = opts;
-  if (!kimlik) {
-    return { zaman: now(), komut: "konsol", modem_ip: host, ok: false,
+  const { host, sourceIp, credentials, nvram = false } = opts;
+  if (!credentials) {
+    return { timestamp: now(), command: "konsol", modemIp: host, ok: false,
       problems: [problem("AUTH_REQUIRED", "telnet 5123")] };
   }
-  const kOpts = { host, kaynakIp, kullanici: kimlik.kullanici, sifre: kimlik.sifre };
-  const rapor = { zaman: now(), komut: "konsol", modem_ip: host, problems: [] };
+  const consoleOptions = { host, sourceIp, user: credentials.user, password: credentials.password };
+  const report = { timestamp: now(), command: "konsol", modemIp: host, problems: [] };
   if (nvram) {
-    bildir(opts, "nvram tam dokumu (CLI)");
-    const { degerler, sayi, problems } = await consoleNvram(kOpts);
-    rapor.nvram = degerler;
-    rapor.nvram_anahtar_sayisi = sayi;
-    rapor.problems.push(...problems);
+    notify(opts, "nvram tam dokumu (CLI)");
+    const { values, finiteOrNull, problems } = await consoleNvram(consoleOptions);
+    report.nvram = values;
+    report.nvramKeyCount = finiteOrNull;
+    report.problems.push(...problems);
   } else {
-    bildir(opts, "sistem kesfi");
-    const { ciktilar, problems } = await consoleRecon(kOpts);
-    rapor.komutlar = ciktilar;
-    rapor.problems.push(...problems);
+    notify(opts, "sistem kesfi");
+    const { outs, problems } = await consoleSystem(consoleOptions);
+    report.commands = outs;
+    report.problems.push(...problems);
   }
-  rapor.ok = isOk(rapor.problems);
-  return rapor;
+  report.ok = isOk(report.problems);
+  return report;
 }
 

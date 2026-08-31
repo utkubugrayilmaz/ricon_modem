@@ -15,58 +15,58 @@ import { isReachable } from "./net.js";
 import { applyProvisioning, applyPin } from "./provision.js";
 import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./settings.js";
 import { normalizePhone } from "./device.js";
-import { readIdentity, simTakiliMi, waitForInternet, pcPreflight } from "./device.js";
+import { readIdentity, isSimPresent, waitForInternet, pcPreflight } from "./device.js";
 import { problem } from "./problems.js";
 import { readMsisdn } from "./at.js";
-import { pinDenemesiUygunMu, hakYakilmisMi } from "./at.js";
+import { canSpendPinAttempt, isAttemptBurned } from "./at.js";
 
 const now = () => new Date().toISOString();
-const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
-const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
-const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
+const prefixOf = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const notify = (opts, m) => { if (typeof opts.progress === "function") opts.progress(m); };
 // Yapilandirilmis olay (UI canli guncellemesi) — provisioning.js'teki ile ayni
 // sozlesme: opsiyonel, tuketicinin isi, dinleyici hatasi akisi kesmez.
-const olayla = (opts, olay) => {
-  if (typeof opts.olay !== "function") return;
-  try { opts.olay(olay); } catch { /* dinleyici hatasi akisi kesmez */ }
+const emitEvent = (opts, event) => {
+  if (typeof opts.event !== "function") return;
+  try { opts.event(event); } catch { /* dinleyici hatasi akisi kesmez */ }
 };
 
 // PURE: bir hazırlamanın kalıcı kayıt satırı (JSONL). Cihaza gitmez.
 // Bu satır sahada "bu modem hazırlanmış mıydı, hangi hat takılıydı"
 // sorusunun tek kanıtı — şema DAR ve SABİT tutulur.
-export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
-  profilAd = null, host = null, internet = null } = {}) {
+export function provisionRecord({ result = {}, phone = null, identity = {},
+  profileName = null, host = null, internet = null } = {}) {
   return {
-    zaman: sonuc.zaman || now(),
-    durum: sonuc.durum ?? null,
-    ok: Boolean(sonuc.ok),
-    deneme: sonuc.deneme ?? null,
-    profil: profilAd,
-    modem_ip: host,
-    telefon,
-    lan_mac: kimlikBilgi.lan_mac ?? null,
-    iccid: kimlikBilgi.iccid ?? null,
-    imsi: kimlikBilgi.imsi ?? null,
-    imei: kimlikBilgi.imei ?? null,
-    operator: kimlikBilgi.operator ?? null,
+    timestamp: result.timestamp || now(),
+    status: result.status ?? null,
+    ok: Boolean(result.ok),
+    attempt: result.attempt ?? null,
+    profile: profileName,
+    modemIp: host,
+    phone,
+    lan_mac: identity.lan_mac ?? null,
+    iccid: identity.iccid ?? null,
+    imsi: identity.imsi ?? null,
+    imei: identity.imei ?? null,
+    operator: identity.operator ?? null,
     // SIM durum metni. PIN kilitli SIM'de bu alanın ne yazdığını HENÜZ
     // bilmiyoruz (görülenler: OK / Invalid / Not Insert) — kaydediyoruz ki ilk
     // PIN'li SIM'de tam değeri elimizde olsun ve 89 sn beklemek yerine anında
     // yakalayalım.
-    sim_durumu: kimlikBilgi.sim_durumu ?? null,
+    simStatus: identity.simStatus ?? null,
     // İnternet doğrulaması: "bu SIM gerçekten çalışıyor mu" sorusunun kanıtı.
     // PIN kilitli SIM'i yakalayan şey bu (ICCID PIN'li SIM'de de okunabiliyor).
-    wan_ip: internet?.wan_ip ?? kimlikBilgi.wan_ip ?? null,
-    internet_sure_sn: internet?.sure_sn ?? null,
+    wan_ip: internet?.wan_ip ?? identity.wan_ip ?? null,
+    internetSec: internet?.durationSec ?? null,
     // PIN DENENDİ Mİ — yalnızca boolean. PIN'in KENDİSİ hiçbir zaman deftere,
     // log'a, olaya ya da rapora yazılmaz.
-    pin_denendi: Boolean(sonuc.pin_denemesi?.denendi),
+    pinAttempted: Boolean(result.pinAttempt?.attempted),
     // SAHAYA HAZIR MI — tek soruyla cevap. `ok` tek başına YANILTICI: ayarlar
     // doğru olsa da SIM çalışmıyorsa o modem sahada iş yapmaz. Üç değer:
     //   true  = ayarlar doğrulandı VE internet geldi
     //   false = ayarlar doğrulandı ama SIM çalışmıyor (PIN/kapsama/paket)
     //   null  = internet doğrulaması yapılmadı (kapatılmış) → BİLİNMİYOR
-    sahaya_hazir: internet === null ? null : Boolean(sonuc.ok) && Boolean(internet.var),
+    fieldReady: internet === null ? null : Boolean(result.ok) && Boolean(internet.up),
   };
 }
 
@@ -89,51 +89,51 @@ export function provisionRecord({ sonuc = {}, telefon = null, kimlikBilgi = {},
 // PIN göndermiş demektir (modem her boot'ta saklı PIN'i gönderiyor — ölçüldü).
 // Kanıt yoksa dokunmuyoruz.
 // Doner: { hedef: string|undefined, problems: [] }
-export function simPinHedefi(simKilit, pin, { elleOnay = false } = {}) {
+export function simPinTarget(simLockInfo, pin, { manualConsent = false } = {}) {
   const problems = [];
-  if (!simKilit?.kilit) return { hedef: undefined, problems };          // 1, 2
+  if (!simLockInfo?.lock) return { target: undefined, problems };          // 1, 2
 
-  if (simKilit.kilit === "pin" && pin) {
+  if (simLockInfo.lock === "pin" && pin) {
     // DENEME KARARI PAYLASILAN MODULDE (pin-karar.js): bicim, son hak, yanmis
     // hak. AT yolu ve internet-sonrasi deneme yolu da ayni yere soruyor.
-    const k = pinDenemesiUygunMu(simKilit, pin, { elleOnay });
-    if (k.uygun) return { hedef: String(pin), problems: k.problems };   // 3
+    const k = canSpendPinAttempt(simLockInfo, pin, { manualConsent });
+    if (k.eligible) return { target: String(pin), problems: k.problems };   // 3
     problems.push(...k.problems);                                       // 4, 5, 5c
   }
 
   // Denenmeyecek. Saklanan PIN bu SIM'e ait DEGILSE temizlenir: yoksa modem
   // her acilista yanlis PIN gonderip hak yakar.
-  if (hakYakilmisMi(simKilit) || simKilit.kilit === "puk") {
-    problems.push(problem("PIN_STALE_CLEARED", simKilit.pin_kalan));
-    return { hedef: "", problems };                                     // 6, 7
+  if (isAttemptBurned(simLockInfo) || simLockInfo.lock === "puk") {
+    problems.push(problem("PIN_STALE_CLEARED", simLockInfo.pinRemaining));
+    return { target: "", problems };                                     // 6, 7
   }
-  return { hedef: undefined, problems };
+  return { target: undefined, problems };
 }
 
-// PIN denemesi kararı — TEK YER. `rapor.pin_denemesi`yi doldurur.
+// PIN denemesi kararı — TEK YER. `rapor.pinAttempt`yi doldurur.
 //
 // EN ÖNEMLİ KURAL: SON HAK OTOMATİK YAKILMAZ. Cihaz kalan deneme sayısını
 // söylüyor ("PIN: 3/3"); 1 hak kalmışsa yanlış bir PIN SIM'i PUK'a kilitler ve
 // bunu bir otomasyonun kendi başına riske atması kabul edilemez. O durumda
 // karar insana bırakılır.
-async function pinDene({ konum, kimlik, pin, rapor, opts, simDurum }) {
-  const kalan = simDurum?.pin_kalan ?? null;
+async function tryPin({ location, credentials, pin, report, opts, simState }) {
+  const remaining = simState?.pinRemaining ?? null;
   // KARAR PAYLASILAN MODULDE. Burada eskiden yalniz "son hak" kontrolu vardi;
   // "daha once hak yanmis" korumasi YOKTU — nvram yolunda vardi, burada
   // yoktu (2026-08-28 denetimi). Ayni yere sorunca fark kapandi.
-  const k = pinDenemesiUygunMu(simDurum ?? {}, pin);
-  if (!k.uygun) {
-    rapor.problems.push(...k.problems);
-    rapor.pin_denemesi = { denendi: false, atlandi: k.sebep, pin_kalan: kalan };
+  const k = canSpendPinAttempt(simState ?? {}, pin);
+  if (!k.eligible) {
+    report.problems.push(...k.problems);
+    report.pinAttempt = { attempted: false, skipped: k.reason, pinRemaining: remaining };
     return;
   }
-  rapor.problems.push(...k.problems);   // izin verildi; varsa UYARI tasinir
-  bildir(opts, `SIM PIN denenecek (kalan hak: ${kalan ?? "?"})`);
+  report.problems.push(...k.problems);   // izin verildi; varsa UYARI tasinir
+  notify(opts, `SIM PIN denenecek (kalan hak: ${remaining ?? "?"})`);
   const p = await applyPin(
-    { ...konum, kimlik, ilerle: opts.ilerle, olay: opts.olay }, pin,
+    { ...location, credentials, progress: opts.progress, event: opts.event }, pin,
   );
-  rapor.pin_denemesi = { denendi: p.denendi, atlandi: p.atlandi, pin_kalan: kalan };
-  rapor.problems.push(...p.problems);
+  report.pinAttempt = { attempted: p.attempted, skipped: p.skipped, pinRemaining: remaining };
+  report.problems.push(...p.problems);
 }
 
 // İnternet doğrulaması + gerekirse TEK PIN denemesi. `rapor`u günceller.
@@ -142,158 +142,158 @@ async function pinDene({ konum, kimlik, pin, rapor, opts, simDurum }) {
 //
 // Sıra önemli: önce internet beklenir. Gelirse PIN'e HİÇ dokunulmaz — kilitli
 // olmayan SIM'e PIN yazmak 3 denemeden birini yakmak demek (bkz. applyPin).
-async function internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts,
-  simDurum = null, pinPlanlandi = false }) {
-  if (!(internetBekle > 0)) return null;
+async function internetAndPin({ location, credentials, pin, internetWaitSec, report, opts,
+  simState = null, pinPlanned = false }) {
+  if (!(internetWaitSec > 0)) return null;
 
   // HIZLI YOL — cihaz "Need verification PIN code (PIN: 3/3, PUK: 10/10)"
   // diyorsa interneti beklemenin ANLAMI YOK: cevabı zaten biliyoruz. 150 sn
   // yerine 0 sn. (2026-08-27 canlı: bu metin PIN kilitli SIM'de görüldü.)
-  if (simDurum?.kilit) {
-    bildir(opts, `SIM ${simDurum.kilit.toUpperCase()} kilitli — internet beklenmiyor`);
-    olayla(opts, { tur: "sim_kilit", kilit: simDurum.kilit,
-      pin_kalan: simDurum.pin_kalan, puk_kalan: simDurum.puk_kalan, ham: simDurum.ham });
-    rapor.sim_kilit = simDurum;
-    const sonuc = { var: false, sure_sn: 0, wan_ip: null, sim_durumu: simDurum.ham };
+  if (simState?.lock) {
+    notify(opts, `SIM ${simState.lock.toUpperCase()} kilitli — internet beklenmiyor`);
+    emitEvent(opts, { kind: "sim_kilit", lock: simState.lock,
+      pinRemaining: simState.pinRemaining, pukRemaining: simState.pukRemaining, raw: simState.raw });
+    report.simLock = simState;
+    const result = { up: false, durationSec: 0, wan_ip: null, simStatus: simState.raw };
 
     // PUK kilidi: PIN yazmak İŞE YARAMAZ, dokunmayız. Operatör PUK'la açacak.
-    if (simDurum.kilit === "puk") {
-      rapor.problems.push(problem("SIM_PUK_LOCKED", simDurum.puk_kalan));
-      rapor.internet = sonuc;
-      return sonuc;
+    if (simState.lock === "puk") {
+      report.problems.push(problem("SIM_PUK_LOCKED", simState.pukRemaining));
+      report.internet = result;
+      return result;
     }
-    rapor.problems.push(problem("SIM_PIN_LOCKED", simDurum.pin_kalan));
+    report.problems.push(problem("SIM_PIN_LOCKED", simState.pinRemaining));
     // PIN ANA PASTA YAZILDIYSA burada tekrar yazmıyoruz — ikinci bir deneme
     // yakmak olurdu. Kilit metni provizyon ÖNCESİNDEN kalma; reboot sonrası
     // gerçek durumu internet kontrolü söyleyecek.
-    if (pinPlanlandi) {
-      bildir(opts, "PIN ana yazma pasinda gonderildi — internet kontrol ediliyor");
-      const yeni = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
-      rapor.internet = yeni;
-      if (!yeni.var) rapor.problems.push(problem("INTERNET_YOK", internetBekle, yeni.sim_durumu));
-      return yeni;
+    if (pinPlanned) {
+      notify(opts, "PIN ana yazma pasinda gonderildi — internet kontrol ediliyor");
+      const next = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
+      report.internet = next;
+      if (!next.up) report.problems.push(problem("INTERNET_DOWN", internetWaitSec, next.simStatus));
+      return next;
     }
     // PIN verilmediyse burada PIN_REQUIRED EKLEMİYORUZ: SIM_PIN_LOCKED zaten
     // durumu ve doğru çözümü söylüyor. İkinci bir mesaj hem tekrar hem de ters
     // yönü ("PIN gir") öneriyor olurdu.
-    if (pin) await pinDene({ konum, kimlik, pin, rapor, opts, simDurum });
-    else rapor.pin_denemesi = { denendi: false, atlandi: "pin_verilmedi",
-      pin_kalan: simDurum.pin_kalan };
-    if (rapor.pin_denemesi?.denendi) {
-      const yeni = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
-      rapor.pin_denemesi.sonuc = yeni.var ? "internet_geldi" : "internet_gelmedi";
-      rapor.internet = yeni;
-      if (!yeni.var) rapor.problems.push(problem("INTERNET_YOK", internetBekle, yeni.sim_durumu));
-      return yeni;
+    if (pin) await tryPin({ location, credentials, pin, report, opts, simState });
+    else report.pinAttempt = { attempted: false, skipped: "pin_verilmedi",
+      pinRemaining: simState.pinRemaining };
+    if (report.pinAttempt?.attempted) {
+      const next = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
+      report.pinAttempt.result = next.up ? "internet_geldi" : "internet_gelmedi";
+      report.internet = next;
+      if (!next.up) report.problems.push(problem("INTERNET_DOWN", internetWaitSec, next.simStatus));
+      return next;
     }
-    rapor.internet = sonuc;
-    return sonuc;
+    report.internet = result;
+    return result;
   }
 
-  bildir(opts, "internet dogrulamasi (SIM calisiyor mu)");
-  let sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
+  notify(opts, "internet dogrulamasi (SIM calisiyor mu)");
+  let result = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
 
-  if (!sonuc.var) {
+  if (!result.up) {
     // İnternet gelmedi ama cihaz PIN kilidi de DEMEDİ. Yine de PIN verilmişse
     // deneriz (kilit metni her firmwarede aynı olmayabilir); son hak koruması
-    // pinDene içinde.
-    await pinDene({ konum, kimlik, pin, rapor, opts, simDurum });
-    if (rapor.pin_denemesi?.denendi) {
-      sonuc = await waitForInternet({ ...konum, kimlik }, internetBekle, opts);
-      rapor.pin_denemesi.sonuc = sonuc.var ? "internet_geldi" : "internet_gelmedi";
+    // tryPin içinde.
+    await tryPin({ location, credentials, pin, report, opts, simState });
+    if (report.pinAttempt?.attempted) {
+      result = await waitForInternet({ ...location, credentials }, internetWaitSec, opts);
+      report.pinAttempt.result = result.up ? "internet_geldi" : "internet_gelmedi";
     }
   }
 
-  rapor.internet = sonuc;
-  if (!sonuc.var) {
-    rapor.problems.push(problem("INTERNET_YOK", internetBekle, sonuc.sim_durumu));
+  report.internet = result;
+  if (!result.up) {
+    report.problems.push(problem("INTERNET_DOWN", internetWaitSec, result.simStatus));
   }
-  return sonuc;
+  return result;
 }
 
 // Her çıkışta çalışır: kimliği tamamla, kalıcı kayıt satırını üret, dışarıya
 // bildir. Çekirdek DOSYAYA YAZMAZ — nereye yazılacağı tüketicinin kararı.
-async function kaydiTamamla({ rapor, konum, hazirKimlik, kimlik, telefon,
-  profil, internet, opts }) {
-  let kimlikBilgi = hazirKimlik || {};
-  if (!hazirKimlik && konum && kimlik) {
+async function finishRecord({ report, location, readyIdentity, credentials, phone,
+  profile, internet, opts }) {
+  let identity = readyIdentity || {};
+  if (!readyIdentity && location && credentials) {
     try {
-      bildir(opts, "cihaz kimligi okunuyor (kayit icin)");
-      kimlikBilgi = await readIdentity({ ...konum, kimlik });
+      notify(opts, "cihaz kimligi okunuyor (kayit icin)");
+      identity = await readIdentity({ ...location, credentials });
     } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
   }
-  rapor.kimlik_bilgi = kimlikBilgi;
-  if (konum && kimlik) olayla(opts, { tur: "kimlik", kimlik_bilgi: kimlikBilgi });
+  report.identity = identity;
+  if (location && credentials) emitEvent(opts, { kind: "kimlik", identity: identity });
   // Duvar saati: cagrinin basindan buraya. Tuketici bunu bir olcum satirina
   // cevirebilir (bkz. summarizeMetrics). Cekirdek dosyaya YAZMAZ, sadece
   // sureyi bildirir — "ne kadar surdu" sorusunun cevabi cihaz isine ait.
-  if (rapor.baslangic_ms) {
-    rapor.toplam_sn = Number(((Date.now() - rapor.baslangic_ms) / 1000).toFixed(1));
-    delete rapor.baslangic_ms;
+  if (report.startedMs) {
+    report.totalSec = Number(((Date.now() - report.startedMs) / 1000).toFixed(1));
+    delete report.startedMs;
   }
-  rapor.kayit = provisionRecord({
-    sonuc: rapor, telefon: normalizePhone(telefon), kimlikBilgi,
-    profilAd: profil?.ad, host: konum?.host ?? null, internet,
+  report.record = provisionRecord({
+    result: report, phone: normalizePhone(phone), identity,
+    profileName: profile?.name, host: location?.host ?? null, internet,
   });
-  if (typeof opts.kayit === "function") {
-    try { opts.kayit(rapor.kayit); } catch { /* kayit yazimi akisi bozmaz */ }
+  if (typeof opts.record === "function") {
+    try { opts.record(report.record); } catch { /* kayit yazimi akisi bozmaz */ }
   }
-  olayla(opts, { tur: "sonuc", durum: rapor.durum, ok: rapor.ok,
-    deneme: rapor.deneme ?? null, kayit: rapor.kayit, problems: rapor.problems });
-  return rapor;
+  emitEvent(opts, { kind: "sonuc", status: report.status, ok: report.ok,
+    attempt: report.attempt ?? null, record: report.record, problems: report.problems });
+  return report;
 }
 
 // PURE: konum + dry-run durumuna göre sıradaki eylem. Test edilebilir.
 // Doner: "zaten_hazir" | "provizyon_fabrika" | "provizyon_saha" | "modem_yok"
-export function nextAction(fabrikaVar, sahaVar, sahaDryRunDurum) {
-  if (sahaVar && sahaDryRunDurum === "zaten_istenen_durumda") return "zaten_hazir";
-  if (sahaVar) return "provizyon_saha";   // saha adresinde ama eksik provizyon
-  if (fabrikaVar) return "provizyon_fabrika";
+export function nextAction(factoryUp, fieldUp, fieldDryRunStatus) {
+  if (fieldUp && fieldDryRunStatus === "zaten_istenen_durumda") return "zaten_hazir";
+  if (fieldUp) return "provizyon_saha";   // saha adresinde ama eksik provizyon
+  if (factoryUp) return "provizyon_fabrika";
   return "modem_yok";
 }
 
 // Bir modemi hazırlar (algıla → provizyon → doğrula → retry).
-// opts: { fabrikaHost, fabrikaKaynak, sahaHost, sahaKaynak, kimlik, profil,
+// opts: { factoryHost, factorySource, fieldHost, fieldSource, kimlik, profil,
 //         denemeler=3, ilerle }
 export async function provisionModem(opts) {
   const {
-    fabrikaHost = "192.168.1.1", fabrikaKaynak,
-    sahaHost = "5.5.5.1", sahaKaynak,
-    kimlik, profil, denemeler = 3, telefon,
+    factoryHost = "192.168.1.1", factorySource,
+    fieldHost = "5.5.5.1", fieldSource,
+    credentials, profile, attempts = 3, phone,
     // SIM PIN — OPSIYONEL. Yalnizca internet dogrulamasi BASARISIZ olursa ve
     // burada bir deger varsa denenir. Kilitli olmayan SIM'e ASLA yazilmaz.
     pin = null,
     // Internet dogrulamasi ust siniri (sn). 0 = kapat. Varsayilan ACIK:
     // teknisyenin elle yaptigi kaliteyi kaybetmeyelim (PIN kilitli SIM yakalar).
-    internetBekle = 150,
+    internetWaitSec = 150,
     // Tuketici kimligi ZATEN okuduysa (or. UI sol paneli icin) tekrar okumayiz
     // — tek baglantili cihazda gereksiz ~4 sn demek.
-    kimlikBilgi: hazirKimlikBilgi = null,
+    identity: readyIdentityInfo = null,
   } = opts;
-  const rapor = { zaman: now(), komut: "hazirla", baslangic_ms: Date.now(), problems: [] };
+  const report = { timestamp: now(), command: "hazirla", startedMs: Date.now(), problems: [] };
   // Numara CAGRIDAN gelebilir ya da CIHAZDAN okunur (asagida, SIM hazirsa).
-  // `let` cunku cozum algilamadan sonra olusuyor; bitir()/etkinProfilYap()
+  // `let` cunku cozum algilamadan sonra olusuyor; finish()/buildActiveProfile()
   // cagri aninda gecerli degeri goruyor.
-  let telefonNorm = normalizePhone(telefon);
-  let telefonKaynak = telefonNorm ? "girdi" : null;
+  let phoneNormalized = normalizePhone(phone);
+  let phoneSource = phoneNormalized ? "girdi" : null;
 
-  // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetVePin,
-  // kaydiTamamla). Cagri yerleri degismedi.
-  const internetiDogrula = (konum, simDurum, pinPlanlandi) =>
-    internetVePin({ konum, kimlik, pin, internetBekle, rapor, opts,
-      simDurum, pinPlanlandi });
+  // Ince sarmalayicilar: govdeler yukarida modul seviyesinde (internetAndPin,
+  // finishRecord). Cagri yerleri degismedi.
+  const verifyInternet = (location, simState, pinPlanned) =>
+    internetAndPin({ location, credentials, pin, internetWaitSec, report, opts,
+      simState, pinPlanned });
 
 
-  const bitir = (konum, hazirKimlik = null, internet = null) => {
-    rapor.telefon = { numara: telefonNorm, kaynak: telefonKaynak };
-    return kaydiTamamla({ rapor, konum, hazirKimlik, kimlik,
-      telefon: telefonNorm, profil, internet, opts });
+  const finish = (location, readyIdentity = null, internet = null) => {
+    report.phone = { number: phoneNormalized, source: phoneSource };
+    return finishRecord({ report, location, readyIdentity, credentials,
+      phone: phoneNormalized, profile, internet, opts });
   };
 
 
-  if (!kimlik) {
-    rapor.problems.push(problem("AUTH_REQUIRED", "modem"));
-    rapor.durum = "kimlik_yok"; rapor.ok = false; return bitir(null);
+  if (!credentials) {
+    report.problems.push(problem("AUTH_REQUIRED", "modem"));
+    report.status = "kimlik_yok"; report.ok = false; return finish(null);
   }
 
   // KAYNAK IP OLMADAN YOKLAMA YAPILMAZ. Sebebi olculdu: kaynak baglanmadan
@@ -302,15 +302,15 @@ export async function provisionModem(opts) {
   // "SIM yok" gibi YANLIS TESHIS uretiyor (bkz. scanner.js isReachable).
   // Cagiran kaynagi vermediyse burada turetiyoruz; turetemiyorsak durup
   // gercek sebebi soyluyoruz.
-  let kFabrika = fabrikaKaynak;
-  let kSaha = sahaKaynak;
-  if (!kFabrika || !kSaha) {
-    const on = pcPreflight(onekAl(fabrikaHost), onekAl(sahaHost));
-    kFabrika = kFabrika || on.fabrikaKaynak;
-    kSaha = kSaha || on.sahaKaynak;
-    if (!kFabrika && !kSaha) {
-      rapor.problems.push(...on.problems);
-      rapor.durum = "pc_hazir_degil"; rapor.ok = false; return bitir(null);
+  let factorySrc = factorySource;
+  let fieldSrc = fieldSource;
+  if (!factorySrc || !fieldSrc) {
+    const on = pcPreflight(prefixOf(factoryHost), prefixOf(fieldHost));
+    factorySrc = factorySrc || on.factorySource;
+    fieldSrc = fieldSrc || on.fieldSource;
+    if (!factorySrc && !fieldSrc) {
+      report.problems.push(...on.problems);
+      report.status = "pc_hazir_degil"; report.ok = false; return finish(null);
     }
   }
   // Telefon (MSISDN) hazirlamanin ZORUNLU girdisi — kayitsiz modem sahaya
@@ -319,22 +319,22 @@ export async function provisionModem(opts) {
   //
   // Burada yalniz VERILMIS ama GECERSIZ numara reddediliyor: bu bir GIRDI
   // hatasi, cihaza gitmeye gerek yok.
-  if (telefon && !telefonNorm) {
-    rapor.problems.push(problem("MSISDN_INVALID", telefon));
-    rapor.durum = "telefon_yok"; rapor.ok = false; return bitir(null);
+  if (phone && !phoneNormalized) {
+    report.problems.push(problem("MSISDN_INVALID", phone));
+    report.status = "telefon_yok"; report.ok = false; return finish(null);
   }
 
-  // ETKİN PROFİL = profil + ÇALIŞMA ANINA ÖZEL anahtarlar. İkisi de profilde
+  // ETKİN PROFİL = profil + ÇALIŞMA ANINA ÖZEL keys_. İkisi de profilde
   // sabit olamaz, çünkü her modemde/SIM'de farklıdır:
   //   · cihaz adı = telefon numarası (modeme bağlanan hangi hat olduğunu görsün;
   //     not: bu alan yalnızca parolayla girince okunur, defter hâlâ tek kaynak)
   //   · SIM PIN — YALNIZCA kilit varsa ve güvenlik kapıları geçilirse
-  const etkinProfilYap = (pinHedef) => {
-    const ek = {};
-    if (telefonNorm) ek[DEVICE_NAME_KEY] = `0${telefonNorm}`;
-    if (pinHedef !== undefined) ek[SIM_PIN_KEY] = pinHedef;
-    return Object.keys(ek).length
-      ? { ...profil, nvram: { ...profil.nvram, ...ek } } : profil;
+  const buildActiveProfile = (pinTarget) => {
+    const extra = {};
+    if (phoneNormalized) extra[DEVICE_NAME_KEY] = `0${phoneNormalized}`;
+    if (pinTarget !== undefined) extra[SIM_PIN_KEY] = pinTarget;
+    return Object.keys(extra).length
+      ? { ...profile, nvram: { ...profile.nvram, ...extra } } : profile;
   };
 
   // PIN'İ AYNI YAZMA PASINA KOYMA KARARI — tek reboot için.
@@ -346,46 +346,46 @@ export async function provisionModem(opts) {
   //
   // "AYNI PIN ZATEN YAZILI" KORUMASI BEDAVA GELİYOR: motor idempotent, değer
   // aynıysa plana hiç girmez → deneme yakılmaz. Ayrı bir kontrol yazmıyoruz.
-  const pinHedefi = (simKilit) => {
-    const { hedef, problems } = simPinHedefi(simKilit, pin);
-    rapor.problems.push(...problems);
-    return hedef;
+  const pinTargetOf = (simLockInfo) => {
+    const { target, problems } = simPinTarget(simLockInfo, pin);
+    report.problems.push(...problems);
+    return target;
   };
 
   // Kimlik bir kez okunur: hem SIM kontrolu hem defter kaydi ayni okumayi
   // kullanir (cihaza iki kez gitmeyiz).
-  let kimlikBilgiOnce = hazirKimlikBilgi;
+  let identityBefore = readyIdentityInfo;
 
   // Tuketici kimligi zaten okuduysa ve SIM yoksa: cihaza HIC GITMEDEN reddet.
   // (Ayni kontrol asagida, kimligi kendimiz okudugumuz yolda da var.)
-  if (hazirKimlikBilgi && !simTakiliMi(hazirKimlikBilgi)) {
-    rapor.problems.push(problem("SIM_MISSING", hazirKimlikBilgi.sim_durumu));
-    rapor.durum = "sim_yok"; rapor.ok = false;
-    return bitir(null, hazirKimlikBilgi);
+  if (readyIdentityInfo && !isSimPresent(readyIdentityInfo)) {
+    report.problems.push(problem("SIM_MISSING", readyIdentityInfo.simStatus));
+    report.status = "sim_yok"; report.ok = false;
+    return finish(null, readyIdentityInfo);
   }
 
-  for (let deneme = 1; deneme <= denemeler; deneme += 1) {
-    bildir(opts, `deneme ${deneme}/${denemeler}: modem algilaniyor`);
-    const fabrikaVar = kFabrika ? await isReachable(fabrikaHost, kFabrika) : false;
-    const sahaVar = fabrikaVar || !kSaha ? false : await isReachable(sahaHost, kSaha);
-    const konum = fabrikaVar
-      ? { host: fabrikaHost, kaynakIp: kFabrika }
-      : sahaVar ? { host: sahaHost, kaynakIp: kSaha } : null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    notify(opts, `deneme ${attempt}/${attempts}: modem algilaniyor`);
+    const factoryUp = factorySrc ? await isReachable(factoryHost, factorySrc) : false;
+    const fieldUp = factoryUp || !fieldSrc ? false : await isReachable(fieldHost, fieldSrc);
+    const location = factoryUp
+      ? { host: factoryHost, sourceIp: factorySrc }
+      : fieldUp ? { host: fieldHost, sourceIp: fieldSrc } : null;
 
     // SIM KONTROLU — nvram'a bakmadan, HICBIR SEY yazmadan, EN BASTA.
     // Sebep: SIM'siz modemde provizyon "basarili" gorunur ama cihaz sebekeye
     // kaydolamaz; defterde ICCID'siz satir kalir. 45 sn harcayip sonunda
     // anlamak yerine ilk saniyede soyluyoruz (2026-08-27 canli gozlem).
-    if (konum && !kimlikBilgiOnce) {
-      bildir(opts, `kimlik/SIM kontrolu (${konum.host})`);
+    if (location && !identityBefore) {
+      notify(opts, `kimlik/SIM kontrolu (${location.host})`);
       try {
-        kimlikBilgiOnce = await readIdentity({ ...konum, kimlik });
-      } catch { kimlikBilgiOnce = null; }
+        identityBefore = await readIdentity({ ...location, credentials });
+      } catch { identityBefore = null; }
     }
-    if (konum && kimlikBilgiOnce && !simTakiliMi(kimlikBilgiOnce)) {
-      rapor.problems.push(problem("SIM_MISSING", kimlikBilgiOnce.sim_durumu));
-      rapor.durum = "sim_yok"; rapor.deneme = deneme; rapor.ok = false;
-      return bitir(konum, kimlikBilgiOnce);
+    if (location && identityBefore && !isSimPresent(identityBefore)) {
+      report.problems.push(problem("SIM_MISSING", identityBefore.simStatus));
+      report.status = "sim_yok"; report.attempt = attempt; report.ok = false;
+      return finish(location, identityBefore);
     }
 
     // NUMARAYI CIHAZDAN OKU — verilmediyse. SIM KONTROLUNDEN SONRA: SIM yoksa
@@ -394,182 +394,182 @@ export async function provisionModem(opts) {
     //
     // Bu adim provisionModem'in ICINDE, arayuzde degil: CLI, HTTP ucu ve
     // baska bir Node projesi de otomatik numara aliyor.
-    if (konum && !telefonNorm && kimlikBilgiOnce?.sim?.hazir) {
-      bildir(opts, "telefon numarasi SIM'den okunuyor (AT+CNUM)");
-      const n = await readMsisdn({ ...konum, kimlik });
-      if (n.telefon) {
-        telefonNorm = n.telefon;
-        telefonKaynak = "cihaz";
+    if (location && !phoneNormalized && identityBefore?.sim?.ready) {
+      notify(opts, "telefon numarasi SIM'den okunuyor (AT+CNUM)");
+      const n = await readMsisdn({ ...location, credentials });
+      if (n.phone) {
+        phoneNormalized = n.phone;
+        phoneSource = "cihaz";
       } else {
-        rapor.problems.push(...n.problems);
+        report.problems.push(...n.problems);
       }
     }
     // YEDEK: tuketiciye sor (CLI operatore sorar, arayuz alani acar).
     // `deneme` gecilir ki dongude "3. modem" yazsin — sabit 1 yaziyordu.
-    if (konum && !telefonNorm && typeof opts.telefonSor === "function") {
-      const elle = normalizePhone(await opts.telefonSor(deneme));
-      if (elle) { telefonNorm = elle; telefonKaynak = "operator"; }
+    if (location && !phoneNormalized && typeof opts.askPhone === "function") {
+      const manual = normalizePhone(await opts.askPhone(attempt));
+      if (manual) { phoneNormalized = manual; phoneSource = "operator"; }
     }
     // Numara YOK. Son denemede vazgec; oncesinde DEVAM ET — okuma gecici
     // olarak da basarisiz olabiliyor (telnet dusmesi olculdu) ve
     // `denemeler` tam bunun icin var. Ilk turda return etmek retry'i
     // isletmiyordu.
-    if (konum && !telefonNorm) {
-      if (deneme < denemeler) {
-        bildir(opts, "numara okunamadi, yeniden denenecek");
-        await bekle(2000);
+    if (location && !phoneNormalized) {
+      if (attempt < attempts) {
+        notify(opts, "numara okunamadi, yeniden denenecek");
+        await wait(2000);
         continue;
       }
-      rapor.problems.push(problem("MSISDN_REQUIRED", "—"));
-      rapor.durum = "telefon_yok"; rapor.ok = false;
-      return bitir(konum, kimlikBilgiOnce);
+      report.problems.push(problem("MSISDN_REQUIRED", "—"));
+      report.status = "telefon_yok"; report.ok = false;
+      return finish(location, identityBefore);
     }
 
 
     // Kimlik okundu; PIN karari ve etkin profil BURADA kuruluyor (once
     // kuramazdik: kilit bilgisi kimlik okumasindan geliyor).
-    const simKilit = kimlikBilgiOnce?.sim ?? null;
-    const pinHedef = pinHedefi(simKilit);
-    const pinPlanlandi = typeof pinHedef === "string" && pinHedef !== "";
-    const etkinProfil = etkinProfilYap(pinHedef);
+    const simLockInfo = identityBefore?.sim ?? null;
+    const pinTarget = pinTargetOf(simLockInfo);
+    const pinPlanned = typeof pinTarget === "string" && pinTarget !== "";
+    const activeProfile = buildActiveProfile(pinTarget);
 
     // Saha adresinde mi? Zaten hazir mi diye dry-run.
-    let sahaDry = null;
-    if (sahaVar) {
+    let fieldDry = null;
+    if (fieldUp) {
       const d = await applyProvisioning(
-        { host: sahaHost, kaynakIp: kSaha, kimlik, uygula: false, olay: opts.olay },
-        etkinProfil,
+        { host: fieldHost, sourceIp: fieldSrc, credentials, apply: false, event: opts.event },
+        activeProfile,
       );
-      sahaDry = d.durum;
+      fieldDry = d.status;
     }
 
-    const eylem = nextAction(fabrikaVar, sahaVar, sahaDry);
-    rapor.son_eylem = eylem;
-    olayla(opts, { tur: "algilandi", eylem, deneme,
-      konum: fabrikaVar ? fabrikaHost : sahaVar ? sahaHost : null });
+    const action = nextAction(factoryUp, fieldUp, fieldDry);
+    report.lastAction = action;
+    emitEvent(opts, { kind: "algilandi", action, attempt,
+      location: factoryUp ? factoryHost : fieldUp ? fieldHost : null });
 
-    if (eylem === "zaten_hazir") {
-      rapor.deneme = deneme; rapor.ok = true;
-      const konumSaha = { host: sahaHost, kaynakIp: kSaha };
-      const net = await internetiDogrula(konumSaha, simKilit, pinPlanlandi);
-      rapor.durum = !net || net.var ? "zaten_hazir"
-        : (rapor.sim_kilit?.kilit ? "zaten_hazir_sim_kilitli" : "zaten_hazir_internet_yok");
-      return bitir(konumSaha, kimlikBilgiOnce, net);
+    if (action === "zaten_hazir") {
+      report.attempt = attempt; report.ok = true;
+      const fieldPlace = { host: fieldHost, sourceIp: fieldSrc };
+      const net = await verifyInternet(fieldPlace, simLockInfo, pinPlanned);
+      report.status = !net || net.up ? "zaten_hazir"
+        : (report.simLock?.lock ? "zaten_hazir_sim_kilitli" : "zaten_hazir_internet_yok");
+      return finish(fieldPlace, identityBefore, net);
     }
-    if (eylem === "modem_yok") {
-      rapor.problems.push(problem("DEVICE_UNREACHABLE", `${fabrikaHost}/${sahaHost}`));
-      if (deneme < denemeler) { await bekle(3000); continue; }
-      rapor.durum = "modem_yok"; rapor.ok = false; return bitir(null);
+    if (action === "modem_yok") {
+      report.problems.push(problem("DEVICE_UNREACHABLE", `${factoryHost}/${fieldHost}`));
+      if (attempt < attempts) { await wait(3000); continue; }
+      report.status = "modem_yok"; report.ok = false; return finish(null);
     }
 
-    // Provizyon: fabrikadaysa fabrikaHost'tan (LAN degisecek+reboot+yeni adres
-    // dogrulama); sahadaysa sahaHost'tan (LAN degismez, eksikleri tamamla).
-    const fabrikada = eylem === "provizyon_fabrika";
+    // Provizyon: fabrikadaysa factoryHost'tan (LAN degisecek+reboot+yeni adres
+    // dogrulama); sahadaysa fieldHost'tan (LAN degismez, eksikleri tamamla).
+    const atFactory = action === "provizyon_fabrika";
     const r = await applyProvisioning({
-      host: fabrikada ? fabrikaHost : sahaHost,
-      kaynakIp: fabrikada ? kFabrika : kSaha,
-      kimlik, uygula: true,
-      yeniHost: sahaHost, yeniKaynakIp: kSaha,
-      ilerle: opts.ilerle, olay: opts.olay,
-    }, etkinProfil);
-    rapor.deneme = deneme;
-    rapor.detay = { durum: r.durum, plan: r.plan?.degisecek_sayisi, dogrulama: r.dogrulama };
+      host: atFactory ? factoryHost : fieldHost,
+      sourceIp: atFactory ? factorySrc : fieldSrc,
+      credentials, apply: true,
+      newHost: fieldHost, newSourceIp: fieldSrc,
+      progress: opts.progress, event: opts.event,
+    }, activeProfile);
+    report.attempt = attempt;
+    report.detail = { status: r.status, planObj: r.planObj?.changingCount, verification: r.verification };
 
     // PIN ana pasta gercekten yazildi mi? Yazilmadiysa (plan onu "ayni" gordu)
     // demek ki AYNI PIN nvram'da zaten duruyordu ama SIM yine kilitliydi:
     // yani KAYITLI PIN YANLIS. Operatore bunu soylemek, ayni PIN'i tekrar
     // tekrar yazdirmaktan iyidir.
-    if (pinPlanlandi) {
-      const yazilanlar = Object.values(r.yazilan ?? {}).flat();
-      const yazildi = yazilanlar.includes(SIM_PIN_KEY);
-      rapor.pin_denemesi = { denendi: yazildi, pin_kalan: simKilit?.pin_kalan ?? null,
-        atlandi: yazildi ? null : "ayni_pin_zaten_yazili" };
-      if (!yazildi) rapor.problems.push(problem("PIN_STORED_WRONG"));
+    if (pinPlanned) {
+      const writtenKeys = Object.values(r.written ?? {}).flat();
+      const wasWritten = writtenKeys.includes(SIM_PIN_KEY);
+      report.pinAttempt = { attempted: wasWritten, pinRemaining: simLockInfo?.pinRemaining ?? null,
+        skipped: wasWritten ? null : "ayni_pin_zaten_yazili" };
+      if (!wasWritten) report.problems.push(problem("PIN_STORED_WRONG"));
     }
-    if (r.ok && (r.durum === "basarili" || r.durum === "zaten_istenen_durumda")) {
-      rapor.ok = true;
-      const konumSaha = { host: sahaHost, kaynakIp: kSaha };
-      const net = await internetiDogrula(konumSaha, simKilit, pinPlanlandi);
-      rapor.durum = !net || net.var ? "hazir"
-        : (rapor.sim_kilit?.kilit ? "hazir_sim_kilitli" : "hazir_internet_yok");
-      return bitir(konumSaha, kimlikBilgiOnce, net);
+    if (r.ok && (r.status === "basarili" || r.status === "zaten_istenen_durumda")) {
+      report.ok = true;
+      const fieldPlace = { host: fieldHost, sourceIp: fieldSrc };
+      const net = await verifyInternet(fieldPlace, simLockInfo, pinPlanned);
+      report.status = !net || net.up ? "hazir"
+        : (report.simLock?.lock ? "hazir_sim_kilitli" : "hazir_internet_yok");
+      return finish(fieldPlace, identityBefore, net);
     }
-    rapor.problems.push(...r.problems);
-    bildir(opts, `deneme ${deneme} basarisiz (${r.durum}); tekrar denenecek`);
-    if (deneme < denemeler) await bekle(5000);
+    report.problems.push(...r.problems);
+    notify(opts, `deneme ${attempt} basarisiz (${r.status}); tekrar denenecek`);
+    if (attempt < attempts) await wait(5000);
   }
-  rapor.durum = "basarisiz"; rapor.ok = false;
+  report.status = "basarisiz"; report.ok = false;
   // Basarisiz kayit da KIMLIKLI olsun: cihaz hangi adreste cevap veriyorsa
   // oradan oku (LAN IP yazilmis ama dogrulama tamamlanmamis olabilir).
-  const sahada = await isReachable(sahaHost, kSaha);
-  const fabrikada = sahada ? false : await isReachable(fabrikaHost, kFabrika);
-  return bitir(
-    sahada ? { host: sahaHost, kaynakIp: kSaha }
-      : fabrikada ? { host: fabrikaHost, kaynakIp: kFabrika } : null,
+  const atField = await isReachable(fieldHost, fieldSrc);
+  const atFactory = atField ? false : await isReachable(factoryHost, factorySrc);
+  return finish(
+    atField ? { host: fieldHost, sourceIp: fieldSrc }
+      : atFactory ? { host: factoryHost, sourceIp: factorySrc } : null,
   );
 }
 
 // Döngü: çok modem için. Bir modem hazırlanınca çıkarılmasını (link/erisim
-// kaybı) bekler, sonra sıradakine geçer. maxModem ile sınırlanabilir.
-// opts: provisionModem opts + { maxModem=Infinity, cikarmaBekle=true }
+// kaybı) bekler, sonra sıradakine geçer. maxModems ile sınırlanabilir.
+// opts: provisionModem opts + { maxModems=Infinity, waitForRemoval=true }
 export async function provisionLoop(opts) {
   const on = pcPreflight(
-    (opts.fabrikaHost || "192.168.1.1").split(".").slice(0, 3).join(".") + ".",
-    (opts.sahaHost || "5.5.5.1").split(".").slice(0, 3).join(".") + ".",
+    (opts.factoryHost || "192.168.1.1").split(".").slice(0, 3).join(".") + ".",
+    (opts.fieldHost || "5.5.5.1").split(".").slice(0, 3).join(".") + ".",
   );
-  const sonuc = { zaman: now(), komut: "hazirla-dongu", hazirlanan: [], problems: [] };
-  if (!on.hazir) {
-    sonuc.problems.push(...on.problems);
-    sonuc.ok = false;
-    return sonuc;
+  const result = { timestamp: now(), command: "hazirla-dongu", provisioned: [], problems: [] };
+  if (!on.ready) {
+    result.problems.push(...on.problems);
+    result.ok = false;
+    return result;
   }
-  const modemOpts = { ...opts, fabrikaKaynak: on.fabrikaKaynak, sahaKaynak: on.sahaKaynak };
-  const maxModem = opts.maxModem ?? Infinity;
+  const modemOptions = { ...opts, factorySource: on.factorySource, fieldSource: on.fieldSource };
+  const maxModems = opts.maxModems ?? Infinity;
 
-  let sayac = 0;
-  while (sayac < maxModem) {
-    bildir(opts, "modem takilmasi bekleniyor...");
-    await modemBekle(modemOpts);
-    bildir(opts, "modem algilandi, hazirlaniyor");
+  let counter = 0;
+  while (counter < maxModems) {
+    notify(opts, "modem takilmasi bekleniyor...");
+    await waitForModem(modemOptions);
+    notify(opts, "modem algilandi, hazirlaniyor");
     // Numarayi SORMUYORUZ: provisionModem onu SIM'den okuyor. Okuyamazsa
-    // yine opts.telefonSor'a dusuyor — yani yedek yol duruyor, ama artik
+    // yine opts.askPhone'a dusuyor — yani yedek yol duruyor, ama artik
     // her modemde operatoru bekletmiyor. Dongunun amaci tam bu: tak, cikar.
-    const r = await provisionModem({ ...modemOpts, telefon: opts.telefon });
-    sonuc.hazirlanan.push({
-      durum: r.durum, ok: r.ok, deneme: r.deneme, toplam_sn: r.toplam_sn ?? null,
-      telefon: r.kayit?.telefon ?? null, iccid: r.kayit?.iccid ?? null,
+    const r = await provisionModem({ ...modemOptions, phone: opts.phone });
+    result.provisioned.push({
+      status: r.status, ok: r.ok, attempt: r.attempt, totalSec: r.totalSec ?? null,
+      phone: r.record?.phone ?? null, iccid: r.record?.iccid ?? null,
     });
     // Dongu SURESIZ calisir; sonuc nesnesi cikista donuyor. Olcum satiri
     // MODEM BASINA yazilmali, yoksa hicbir zaman yazilmaz. Cekirdek yine
     // dosyaya dokunmuyor — tuketicinin geri cagrisini calistiriyor.
-    if (typeof opts.olcumKayit === "function") {
-      try { opts.olcumKayit(r); } catch { /* olcum yazimi akisi bozmaz */ }
+    if (typeof opts.metricsRecord === "function") {
+      try { opts.metricsRecord(r); } catch { /* olcum yazimi akisi bozmaz */ }
     }
-    sayac += 1;
-    bildir(opts, r.ok ? `HAZIR (${r.durum}) — cihazi cikarabilirsin` : `BASARISIZ (${r.durum})`);
-    if (opts.cikarmaBekle !== false) await modemCikarmaBekle(modemOpts);
+    counter += 1;
+    notify(opts, r.ok ? `HAZIR (${r.status}) — cihazi cikarabilirsin` : `BASARISIZ (${r.status})`);
+    if (opts.waitForRemoval !== false) await waitForModemRemoval(modemOptions);
   }
-  sonuc.ok = sonuc.hazirlanan.every((h) => h.ok);
-  return sonuc;
+  result.ok = result.provisioned.every((h) => h.ok);
+  return result;
 }
 
 // Modem takılana kadar bekler (fabrika ya da saha adresinde cevap).
-async function modemBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
-  sahaHost = "5.5.5.1", sahaKaynak } = {}) {
+async function waitForModem({ factoryHost = "192.168.1.1", factorySource,
+  fieldHost = "5.5.5.1", fieldSource } = {}) {
   for (;;) {
-    if (await isReachable(fabrikaHost, fabrikaKaynak)) return;
-    if (await isReachable(sahaHost, sahaKaynak)) return;
-    await bekle(3000);
+    if (await isReachable(factoryHost, factorySource)) return;
+    if (await isReachable(fieldHost, fieldSource)) return;
+    await wait(3000);
   }
 }
 
 // Modem çıkarılana kadar bekler (her iki adreste de erişim kaybolunca).
-async function modemCikarmaBekle({ fabrikaHost = "192.168.1.1", fabrikaKaynak,
-  sahaHost = "5.5.5.1", sahaKaynak } = {}) {
+async function waitForModemRemoval({ factoryHost = "192.168.1.1", factorySource,
+  fieldHost = "5.5.5.1", fieldSource } = {}) {
   for (;;) {
-    const f = await isReachable(fabrikaHost, fabrikaKaynak);
-    const s = f ? true : await isReachable(sahaHost, sahaKaynak);
+    const f = await isReachable(factoryHost, factorySource);
+    const s = f ? true : await isReachable(fieldHost, fieldSource);
     if (!f && !s) return;
-    await bekle(3000);
+    await wait(3000);
   }
 }

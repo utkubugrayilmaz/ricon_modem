@@ -15,16 +15,16 @@ import { problem, isOk } from "./problems.js";
 import { isReachable } from "./net.js";
 
 const now = () => new Date().toISOString();
-const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
-const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const notify = (opts, m) => { if (typeof opts.progress === "function") opts.progress(m); };
 
 // Yapilandirilmis olay bildirimi (UI canli guncellemesi icin). `ilerle` insana
 // okunur METIN yollar; `olay` makineye NESNE yollar. Ikisi de OPSIYONEL ve
 // tuketicinin isi — cekirdek hicbir yere yazmaz, sadece haber verir. Tuketici
 // patlarsa provizyon akisi bozulmaz.
-const olayla = (opts, olay) => {
-  if (typeof opts.olay !== "function") return;
-  try { opts.olay(olay); } catch { /* dinleyici hatasi akisi kesmez */ }
+const emitEvent = (opts, event) => {
+  if (typeof opts.event !== "function") return;
+  try { opts.event(event); } catch { /* dinleyici hatasi akisi kesmez */ }
 };
 
 // PURE: mevcut nvram + profil -> plan. Cihaza gitmez, test edilebilir.
@@ -32,167 +32,167 @@ const olayla = (opts, olay) => {
 // `onceki`/`hedef`: profildeki TUM anahtarlarin oncesi/hedefi — degismeyenler
 // dahil. Gosterim tarafi (UI'in "kurulum oncesi" paneli) tam liste ister;
 // motorun kendisi yalnizca `degisecek`i kullanir.
-export function planProvisioning(mevcut, profil) {
-  const degisecek = {};
-  const ayni = [];
-  const eksik = [];
-  const onceki = {};
-  const hedefler = {};
-  for (const [k, hedefRaw] of Object.entries(profil.nvram)) {
-    const hedef = String(hedefRaw);
-    hedefler[k] = hedef;
-    onceki[k] = k in mevcut ? mevcut[k] : null;
-    if (!(k in mevcut)) { eksik.push(k); degisecek[k] = { mevcut: null, hedef }; continue; }
-    if (mevcut[k] === hedef) ayni.push(k);
-    else degisecek[k] = { mevcut: mevcut[k], hedef };
+export function planProvisioning(current, profile) {
+  const changing = {};
+  const unchanged = [];
+  const missing = [];
+  const before = {};
+  const targets = {};
+  for (const [k, targetRaw] of Object.entries(profile.nvram)) {
+    const target = String(targetRaw);
+    targets[k] = target;
+    before[k] = k in current ? current[k] : null;
+    if (!(k in current)) { missing.push(k); changing[k] = { current: null, target }; continue; }
+    if (current[k] === target) unchanged.push(k);
+    else changing[k] = { current: current[k], target };
   }
-  return { degisecek, ayni, eksik, onceki, hedef: hedefler };
+  return { changing, unchanged, missing, before, target: targets };
 }
 
 // PURE: planı YAZMA SIRASINA göre gruplar (Modem/WAN -> DHCP -> LAN).
 // Gruplanmamış anahtar "Diger" grubuna düşer ve LAN'dan ÖNCE yazılır — yönetim
 // adresi her zaman en sonda kalsın. Neden sıra: profile.js WRITE_GROUPS notu.
 // Doner: [{ ad, ciftler:{k:{mevcut,hedef}} }]  (boş gruplar atlanır)
-export function groupPlan(degisecek) {
-  const kalan = new Set(Object.keys(degisecek));
-  const gruplar = [];
+export function groupPlan(changing) {
+  const remaining = new Set(Object.keys(changing));
+  const groups = [];
   for (const g of WRITE_GROUPS) {
-    const ciftler = {};
-    for (const k of g.anahtarlar) {
-      if (kalan.has(k)) { ciftler[k] = degisecek[k]; kalan.delete(k); }
+    const pairs = {};
+    for (const k of g.keys) {
+      if (remaining.has(k)) { pairs[k] = changing[k]; remaining.delete(k); }
     }
-    if (Object.keys(ciftler).length) gruplar.push({ ad: g.ad, ciftler });
+    if (Object.keys(pairs).length) groups.push({ name: g.name, pairs });
   }
-  if (kalan.size) {
-    const ciftler = {};
-    for (const k of kalan) ciftler[k] = degisecek[k];
-    const grup = { ad: "Diger", ciftler };
-    const lanSira = gruplar.findIndex((g) => g.ad === "LAN");
-    if (lanSira === -1) gruplar.push(grup); else gruplar.splice(lanSira, 0, grup);
+  if (remaining.size) {
+    const pairs = {};
+    for (const k of remaining) pairs[k] = changing[k];
+    const group = { name: "Diger", pairs };
+    const lanOrder = groups.findIndex((g) => g.name === "LAN");
+    if (lanOrder === -1) groups.push(group); else groups.splice(lanOrder, 0, group);
   }
-  return gruplar;
+  return groups;
 }
 
 // Bir grup yönetim adresini (LAN IP) değiştiriyor mu?
-const yonetimAdresiniDegistirir = (ciftler) =>
-  Object.keys(ciftler).some((k) => LAN_IP_KEYS.includes(k));
+const changesManagementAddress = (pairs) =>
+  Object.keys(pairs).some((k) => LAN_IP_KEYS.includes(k));
 
 // Provizyon: oku → planla → (uygula ise) yaz → reboot → doğrula.
-// opts: { host, kaynakIp, kimlik, uygula:false, reboot:true,
-//         yeniHost, yeniKaynakIp, ilerle }
+// opts: { host, sourceIp, kimlik, uygula:false, reboot:true,
+//         newHost, newSourceIp, ilerle }
 // uygula=false (varsayılan): DRY-RUN — sadece plan döner, cihaza YAZMAZ.
-export async function applyProvisioning(opts, profil) {
-  const { host, kaynakIp, kimlik, uygula = false, reboot = true } = opts;
-  const rapor = { zaman: now(), komut: "uygula", modem_ip: host, profil: profil.ad,
-    uygula, problems: [] };
+export async function applyProvisioning(opts, profile) {
+  const { host, sourceIp, credentials, apply = false, reboot = true } = opts;
+  const report = { timestamp: now(), command: "uygula", modemIp: host, profile: profile.name,
+    apply, problems: [] };
 
-  if (!kimlik) {
-    rapor.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
-    rapor.ok = false;
-    return rapor;
+  if (!credentials) {
+    report.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
+    report.ok = false;
+    return report;
   }
-  const kOpts = { host, kaynakIp, kullanici: kimlik.kullanici, sifre: kimlik.sifre };
+  const consoleOptions = { host, sourceIp, user: credentials.user, password: credentials.password };
 
   // 1) Oku
-  bildir(opts, "nvram okunuyor");
-  const { degerler, sayi, problems: okumaSorun } = await consoleNvram(kOpts);
-  rapor.problems.push(...okumaSorun);
-  if (sayi === 0) { rapor.ok = false; return rapor; }
+  notify(opts, "nvram okunuyor");
+  const { values, finiteOrNull, problems: readProblem } = await consoleNvram(consoleOptions);
+  report.problems.push(...readProblem);
+  if (finiteOrNull === 0) { report.ok = false; return report; }
 
   // 2) Planla
-  const plan = planProvisioning(degerler, profil);
-  const gruplar = groupPlan(plan.degisecek);
-  const lanDegisiyor = gruplar.some((g) => yonetimAdresiniDegistirir(g.ciftler));
-  rapor.plan = {
-    degisecek_sayisi: Object.keys(plan.degisecek).length,
-    ayni_sayisi: plan.ayni.length,
-    degisecek: plan.degisecek,
-    yazma_sirasi: gruplar.map((g) => ({ ad: g.ad, anahtar: Object.keys(g.ciftler) })),
-    lan_ip_degisecek: lanDegisiyor ? LAN_IP_KEYS.filter((k) => k in plan.degisecek) : [],
-    onceki: plan.onceki,
-    hedef: plan.hedef,
+  const planObj = planProvisioning(values, profile);
+  const groups = groupPlan(planObj.changing);
+  const lanChanging = groups.some((g) => changesManagementAddress(g.pairs));
+  report.planObj = {
+    changingCount: Object.keys(planObj.changing).length,
+    unchangedCount: planObj.unchanged.length,
+    changing: planObj.changing,
+    writeOrder: groups.map((g) => ({ name: g.name, key: Object.keys(g.pairs) })),
+    lanIpChanging: lanChanging ? LAN_IP_KEYS.filter((k) => k in planObj.changing) : [],
+    before: planObj.before,
+    target: planObj.target,
   };
-  olayla(opts, { tur: "plan", plan: rapor.plan });
-  if (plan.eksik.length) {
+  emitEvent(opts, { kind: "plan", planObj: report.planObj });
+  if (planObj.missing.length) {
     // Profilde olup cihazda hiç olmayan anahtar — beklenmedik, uyar (yazılır
     // ama dikkat).
-    rapor.plan.eksik_anahtarlar = plan.eksik;
+    report.planObj.missingKeys = planObj.missing;
   }
 
   // Değişecek bir şey yoksa: zaten istenen durumda (idempotent başarı).
-  if (Object.keys(plan.degisecek).length === 0) {
-    rapor.durum = "zaten_istenen_durumda";
-    rapor.ok = isOk(rapor.problems);
-    return rapor;
+  if (Object.keys(planObj.changing).length === 0) {
+    report.status = "zaten_istenen_durumda";
+    report.ok = isOk(report.problems);
+    return report;
   }
 
   // 3) DRY-RUN ise burada dur.
-  if (!uygula) {
-    rapor.durum = "kuru_calisma";
-    rapor.not = "Hicbir sey yazilmadi. Gercek uygulama icin uygula:true (CLI: --uygula).";
-    rapor.ok = isOk(rapor.problems);
-    return rapor;
+  if (!apply) {
+    report.status = "kuru_calisma";
+    report.note = "Hicbir sey yazilmadi. Gercek uygulama icin uygula:true (CLI: --uygula).";
+    report.ok = isOk(report.problems);
+    return report;
   }
 
   // 4) YAZ — grup grup, SIRAYLA. Yönetim adresi (LAN IP) en son grupta.
-  rapor.yazilan = {};
-  for (const grup of gruplar) {
-    const anahtarlar = Object.keys(grup.ciftler);
-    bildir(opts, `${grup.ad}: ${anahtarlar.length} ayar yaziliyor`);
-    olayla(opts, { tur: "yaziliyor", grup: grup.ad, anahtarlar });
-    const y = await consoleWrite(kOpts, esle(grup.ciftler));
-    rapor.problems.push(...y.problems);
-    rapor.yazilan[grup.ad] = y.yazilan;
+  report.written = {};
+  for (const group of groups) {
+    const keys = Object.keys(group.pairs);
+    notify(opts, `${group.name}: ${keys.length} ayar yaziliyor`);
+    emitEvent(opts, { kind: "yaziliyor", group: group.name, keys });
+    const y = await consoleWrite(consoleOptions, match(group.pairs));
+    report.problems.push(...y.problems);
+    report.written[group.name] = y.written;
     if (!y.ok) {
       // Yönetim adresi grubunda kaldıysa cihaz HALA eski adreste — sıranın
       // sebebi tam bu (bkz. profile.js WRITE_GROUPS).
-      rapor.durum = yonetimAdresiniDegistirir(grup.ciftler)
+      report.status = changesManagementAddress(group.pairs)
         ? "lan_yazma_hatasi" : "yazma_hatasi";
-      rapor.basarisiz_grup = grup.ad;
-      rapor.ok = false;
-      olayla(opts, { tur: "yazma_hatasi", grup: grup.ad, anahtarlar });
-      return rapor;
+      report.failedGroup = group.name;
+      report.ok = false;
+      emitEvent(opts, { kind: "yazma_hatasi", group: group.name, keys });
+      return report;
     }
-    olayla(opts, { tur: "yazildi", grup: grup.ad, anahtarlar: y.yazilan });
+    emitEvent(opts, { kind: "yazildi", group: group.name, keys: y.written });
   }
 
   // 6) Reboot (config'i temiz uygula). Fire-and-forget: reboot bağlantıyı
   // koparır, cevap beklemeyiz.
   if (reboot) {
-    bildir(opts, "reboot (config uygulaniyor)");
-    olayla(opts, { tur: "reboot" });
-    await rebootFireForget(kOpts);
-    rapor.reboot_gonderildi = true;
+    notify(opts, "reboot (config uygulaniyor)");
+    emitEvent(opts, { kind: "reboot" });
+    await rebootFireForget(consoleOptions);
+    report.rebootSent = true;
   }
 
   // 7) Doğrulama: LAN IP değiştiyse cihaz yeni adreste; doğrulama için yeni
   // host/kaynak gerekir. Yoksa kullanıcıya bırak.
-  const dogrulamaHost = opts.yeniHost || (lanDegisiyor ? profil.nvram.lan_ipaddr : host);
-  const dogrulamaKaynak = opts.yeniKaynakIp || kaynakIp;
-  if (opts.yeniHost || !lanDegisiyor) {
-    bildir(opts, `dogrulama: ${dogrulamaHost} bekleniyor`);
-    const dog = await dogrula(
-      { host: dogrulamaHost, kaynakIp: dogrulamaKaynak, kimlik }, profil, opts,
-      rapor.reboot_gonderildi === true,
+  const verifyHost = opts.newHost || (lanChanging ? profile.nvram.lan_ipaddr : host);
+  const verifySource = opts.newSourceIp || sourceIp;
+  if (opts.newHost || !lanChanging) {
+    notify(opts, `dogrulama: ${verifyHost} bekleniyor`);
+    const verify = await verifyPin(
+      { host: verifyHost, sourceIp: verifySource, credentials }, profile, opts,
+      report.rebootSent === true,
     );
-    rapor.dogrulama = dog;
-    rapor.durum = dog.tamam ? "basarili" : "dogrulama_bekliyor";
-    rapor.ok = dog.tamam && isOk(rapor.problems);
-    olayla(opts, { tur: "bitti", durum: rapor.durum, ok: rapor.ok, dogrulama: dog });
+    report.verification = verify;
+    report.status = verify.done ? "basarili" : "dogrulama_bekliyor";
+    report.ok = verify.done && isOk(report.problems);
+    emitEvent(opts, { kind: "bitti", status: report.status, ok: report.ok, verification: verify });
   } else {
     // LAN IP değişti ama yeni adres verilmedi -> PC'yi 5.5.5.x'e alıp doğrula.
-    rapor.durum = "reboot_sonrasi_dogrulama_gerek";
-    rapor.not = `LAN IP ${profil.nvram.lan_ipaddr} yapildi + reboot edildi. `
-      + `Dogrulama icin PC'ye 5.5.5.x ekleyip: uygula --yeni-host ${profil.nvram.lan_ipaddr} --kuru`;
-    rapor.ok = isOk(rapor.problems);
+    report.status = "reboot_sonrasi_dogrulama_gerek";
+    report.note = `LAN IP ${profile.nvram.lan_ipaddr} yapildi + reboot edildi. `
+      + `Dogrulama icin PC'ye 5.5.5.x ekleyip: uygula --yeni-host ${profile.nvram.lan_ipaddr} --kuru`;
+    report.ok = isOk(report.problems);
   }
-  return rapor;
+  return report;
 }
 
 // degisecek {k:{mevcut,hedef}} -> consoleWrite icin {k:hedef}
-function esle(degisecek) {
+function match(changing) {
   const out = {};
-  for (const [k, v] of Object.entries(degisecek)) out[k] = v.hedef;
+  for (const [k, v] of Object.entries(changing)) out[k] = v.target;
   return out;
 }
 
@@ -213,56 +213,56 @@ function esle(degisecek) {
 // "denendi mi" bilgisini taşır.
 // Doner: { ok, denendi, atlandi, problems }
 export async function applyPin(opts, pin) {
-  const { host, kaynakIp, kimlik, reboot = true } = opts;
-  const rapor = { ok: false, denendi: false, atlandi: null, problems: [] };
-  if (!kimlik) {
-    rapor.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
-    rapor.atlandi = "kimlik_yok";
-    return rapor;
+  const { host, sourceIp, credentials, reboot = true } = opts;
+  const report = { ok: false, attempted: false, skipped: null, problems: [] };
+  if (!credentials) {
+    report.problems.push(problem("AUTH_REQUIRED", "telnet 5123"));
+    report.skipped = "kimlik_yok";
+    return report;
   }
   // (2) Biçim
   if (!/^\d{4,8}$/.test(String(pin ?? ""))) {
-    rapor.problems.push(problem("PIN_INVALID"));
-    rapor.atlandi = "gecersiz_bicim";
-    return rapor;
+    report.problems.push(problem("PIN_INVALID"));
+    report.skipped = "gecersiz_bicim";
+    return report;
   }
-  const kOpts = { host, kaynakIp, kullanici: kimlik.kullanici, sifre: kimlik.sifre };
+  const consoleOptions = { host, sourceIp, user: credentials.user, password: credentials.password };
 
   // (3) Aynı PIN zaten yazılı mı? Yazılıysa denenmiş; tekrarlamak deneme yakar.
-  bildir(opts, "PIN kontrolu (ayni PIN daha once denenmis mi)");
-  const { degerler, sayi } = await consoleNvram(kOpts);
-  if (sayi === 0) {
-    rapor.problems.push(problem("REQUEST_FAILED", "nvram", "PIN oncesi okuma basarisiz"));
-    rapor.atlandi = "nvram_okunamadi";
-    return rapor;
+  notify(opts, "PIN kontrolu (ayni PIN daha once denenmis mi)");
+  const { values, finiteOrNull } = await consoleNvram(consoleOptions);
+  if (finiteOrNull === 0) {
+    report.problems.push(problem("REQUEST_FAILED", "nvram", "PIN oncesi okuma basarisiz"));
+    report.skipped = "nvram_okunamadi";
+    return report;
   }
-  if (degerler[SIM_PIN_KEY] === String(pin)) {
-    rapor.atlandi = "ayni_pin_zaten_yazili";
-    rapor.ok = true;   // hata değil: yapılacak bir şey yok
-    return rapor;
+  if (values[SIM_PIN_KEY] === String(pin)) {
+    report.skipped = "ayni_pin_zaten_yazili";
+    report.ok = true;   // hata değil: yapılacak bir şey yok
+    return report;
   }
 
   // (4) Tek deneme.
-  bildir(opts, "SIM PIN yaziliyor (TEK deneme)");
-  olayla(opts, { tur: "pin_deneniyor" });
-  const y = await consoleWrite(kOpts, { [SIM_PIN_KEY]: String(pin) });
-  rapor.problems.push(...y.problems);
-  if (!y.ok) { rapor.atlandi = "yazma_hatasi"; return rapor; }
-  rapor.denendi = true;
+  notify(opts, "SIM PIN yaziliyor (TEK deneme)");
+  emitEvent(opts, { kind: "pin_deneniyor" });
+  const y = await consoleWrite(consoleOptions, { [SIM_PIN_KEY]: String(pin) });
+  report.problems.push(...y.problems);
+  if (!y.ok) { report.skipped = "yazma_hatasi"; return report; }
+  report.attempted = true;
 
   if (reboot) {
-    bildir(opts, "reboot (PIN ile SIM yeniden baslatiliyor)");
-    olayla(opts, { tur: "reboot" });
-    await rebootFireForget(kOpts);
+    notify(opts, "reboot (PIN ile SIM yeniden baslatiliyor)");
+    emitEvent(opts, { kind: "reboot" });
+    await rebootFireForget(consoleOptions);
   }
-  rapor.ok = true;
-  return rapor;
+  report.ok = true;
+  return report;
 }
 
 // Reboot gönder, cevap bekleme (bağlantı kopar). Hata yutulur.
-async function rebootFireForget(kOpts) {
+async function rebootFireForget(consoleOptions) {
   try {
-    await runConsole({ ...kOpts, yazmaIzni: true, zamanAsimiMs: 4000 }, ["reboot"]);
+    await runConsole({ ...consoleOptions, writeAllowed: true, timeoutMs: 4000 }, ["reboot"]);
   } catch { /* reboot baglantiyi koparir; beklenen */ }
 }
 
@@ -275,27 +275,27 @@ async function rebootFireForget(kOpts) {
 //                                 tekrar bak (aynı eksik ÜST ÜSTE 3 kez
 //                                 görülürse artık oturmuştur: gerçek uyuşmazlık)
 //   3) okunuyor, eksik yok     -> TAMAM
-// Doner: { tamam, kalan_degisecek, bekleme_sn, sebep }
-async function dogrula(opts, profil, anaOpts, rebootGonderildi = false) {
-  const kOpts = { host: opts.host, kaynakIp: opts.kaynakIp,
-    kullanici: opts.kimlik.kullanici, sifre: opts.kimlik.sifre };
-  const UST_SINIR_MS = 100000;   // reboot suresinden rahat uzun
-  const ARALIK_MS = 1000;        // canlilik yoklamasi artik bedava (bkz. asagi)
-  const KARARLI_SINIR = 3;       // ayni eksik en az kac kez ust uste
-  const KARARLI_SURE_MS = 10000; // ...VE en az bu kadar surdu = artik oturmaz
+// Doner: { tamam, stillChanging, waitedSec, sebep }
+async function verifyPin(opts, profile, mainOptions, rebootWasSent = false) {
+  const consoleOptions = { host: opts.host, sourceIp: opts.sourceIp,
+    user: opts.credentials.user, password: opts.credentials.password };
+  const UPPER_BOUND_MS = 100000;   // reboot suresinden rahat uzun
+  const POLL_GAP_MS = 1000;        // canlilik yoklamasi artik bedava (bkz. asagi)
+  const STABLE_ROUNDS = 3;       // ayni eksik en az kac kez ust uste
+  const STABLE_WINDOW_MS = 10000; // ...VE en az bu kadar surdu = artik oturmaz
   const t0 = Date.now();
-  const gecenSn = () => Math.round((Date.now() - t0) / 1000);
-  let oncekiImza = null;
-  let ayniSayac = 0;
-  let imzaBaslangic = 0;
-  let sonKalan = null;
-  let deneme = 0;
+  const elapsedSec = () => Math.round((Date.now() - t0) / 1000);
+  let previousSignature = null;
+  let sameCount = 0;
+  let signatureStart = 0;
+  let lastRemaining = null;
+  let attempt = 0;
   // Reboot gonderildiyse cihazi bir kez DUSMUS gormeden "dogrulandi" demeyiz:
   // LAN IP degismeyen (idempotent) durumda cihaz reboot komutundan sonra bir
   // sure daha ayakta kalir ve o oturumdan okunan nvram "yeni durum" sayilirdi.
   // Eskiden bunu dongu basindaki kor 5 sn ortuyordu.
-  let dustuMu = !rebootGonderildi;
-  const DUSME_TOLERANS_MS = 12000;   // hic dusmezse (reboot yutulduysa) devam et
+  let wentDown = !rebootWasSent;
+  const DROP_TOLERANCE_MS = 12000;   // hic dusmezse (reboot yutulduysa) devam et
 
   // ONCE UCUZ YOKLAMA, SONRA PAHALI OKUMA.
   //
@@ -306,52 +306,52 @@ async function dogrula(opts, profil, anaOpts, rebootGonderildi = false) {
   // Artik isReachable neredeyse bedava (2 port, paralel, banner beklemesi yok)
   // — saniyede bir yoklayip cihaz TCP'ye cevap verdigi anda nvram'a gidiyoruz.
   // Reboot suresi cihazin kendi isi; kazanc yoklama granulasyonundan geliyor.
-  while (Date.now() - t0 < UST_SINIR_MS) {
+  while (Date.now() - t0 < UPPER_BOUND_MS) {
     // Kaynak IP yoksa yoklama guvenilir degil (bkz. scanner.js uyarisi):
     // o durumda gecidi atla, dogrudan konsola git — eski davranis.
-    const ayakta = opts.kaynakIp ? await isReachable(opts.host, opts.kaynakIp) : true;
-    if (!ayakta) {
-      dustuMu = true;
-      olayla(anaOpts, { tur: "dogrulama", deneme: deneme + 1, durum: "cihaz_bekleniyor" });
-      await bekle(ARALIK_MS);
+    const up = opts.sourceIp ? await isReachable(opts.host, opts.sourceIp) : true;
+    if (!up) {
+      wentDown = true;
+      emitEvent(mainOptions, { kind: "dogrulama", attempt: attempt + 1, status: "cihaz_bekleniyor" });
+      await wait(POLL_GAP_MS);
       continue;
     }
-    if (!dustuMu && Date.now() - t0 < DUSME_TOLERANS_MS) {
-      olayla(anaOpts, { tur: "dogrulama", deneme: deneme + 1, durum: "reboot_bekleniyor" });
-      await bekle(ARALIK_MS);
+    if (!wentDown && Date.now() - t0 < DROP_TOLERANCE_MS) {
+      emitEvent(mainOptions, { kind: "dogrulama", attempt: attempt + 1, status: "reboot_bekleniyor" });
+      await wait(POLL_GAP_MS);
       continue;
     }
-    deneme += 1;
-    bildir(anaOpts, `dogrulama denemesi ${deneme} (${gecenSn()} sn)`);
-    const { degerler, sayi } = await consoleNvram(kOpts);
-    if (sayi === 0) {                       // TCP acik ama konsol henuz hazir degil
-      olayla(anaOpts, { tur: "dogrulama", deneme, durum: "cihaz_bekleniyor" });
-      await bekle(ARALIK_MS);
+    attempt += 1;
+    notify(mainOptions, `dogrulama denemesi ${attempt} (${elapsedSec()} sn)`);
+    const { values, finiteOrNull } = await consoleNvram(consoleOptions);
+    if (finiteOrNull === 0) {                       // TCP acik ama konsol henuz hazir degil
+      emitEvent(mainOptions, { kind: "dogrulama", attempt, status: "cihaz_bekleniyor" });
+      await wait(POLL_GAP_MS);
       continue;
     }
 
-    const kalan = Object.keys(planProvisioning(degerler, profil).degisecek);
-    if (kalan.length === 0) {                                   // (3) TAMAM
-      olayla(anaOpts, { tur: "dogrulandi", bekleme_sn: gecenSn() });
-      return { tamam: true, kalan_degisecek: [], bekleme_sn: gecenSn() };
+    const remaining = Object.keys(planProvisioning(values, profile).changing);
+    if (remaining.length === 0) {                                   // (3) TAMAM
+      emitEvent(mainOptions, { kind: "dogrulandi", waitedSec: elapsedSec() });
+      return { done: true, stillChanging: [], waitedSec: elapsedSec() };
     }
-    olayla(anaOpts, { tur: "dogrulama", deneme, durum: "oturmadi", kalan });
+    emitEvent(mainOptions, { kind: "dogrulama", attempt, status: "oturmadi", remaining });
 
-    sonKalan = kalan;                                           // (2) oturmadi
-    const imza = kalan.slice().sort().join(",");
-    if (imza === oncekiImza) { ayniSayac += 1; } else { ayniSayac = 0; imzaBaslangic = Date.now(); }
-    oncekiImza = imza;
-    bildir(anaOpts, `dogrulama: ${kalan.length} anahtar henuz oturmadi (${kalan.join(", ")})`);
-    if (ayniSayac + 1 >= KARARLI_SINIR && Date.now() - imzaBaslangic >= KARARLI_SURE_MS) {
-      return { tamam: false, kalan_degisecek: kalan, bekleme_sn: gecenSn(),
-        sebep: `ayni eksik ${KARARLI_SINIR} kez ust uste: cihaz bu degeri kabul etmiyor` };
+    lastRemaining = remaining;                                           // (2) oturmadi
+    const signature = remaining.slice().sort().join(",");
+    if (signature === previousSignature) { sameCount += 1; } else { sameCount = 0; signatureStart = Date.now(); }
+    previousSignature = signature;
+    notify(mainOptions, `dogrulama: ${remaining.length} anahtar henuz oturmadi (${remaining.join(", ")})`);
+    if (sameCount + 1 >= STABLE_ROUNDS && Date.now() - signatureStart >= STABLE_WINDOW_MS) {
+      return { done: false, stillChanging: remaining, waitedSec: elapsedSec(),
+        reason: `ayni eksik ${STABLE_ROUNDS} kez ust uste: cihaz bu degeri kabul etmiyor` };
     }
-    await bekle(ARALIK_MS);   // deger boot sirasinda oturabilir; kisa nefes
+    await wait(POLL_GAP_MS);   // deger boot sirasinda oturabilir; kisa nefes
   }
   return {
-    tamam: false,
-    kalan_degisecek: sonKalan ?? ["(cihaz reboot sonrasi gelmedi)"],
-    bekleme_sn: gecenSn(),
-    sebep: sonKalan ? "sure doldu, eksikler oturmadi" : "cihaz reboot sonrasi gelmedi",
+    done: false,
+    stillChanging: lastRemaining ?? ["(cihaz reboot sonrasi gelmedi)"],
+    waitedSec: elapsedSec(),
+    reason: lastRemaining ? "sure doldu, eksikler oturmadi" : "cihaz reboot sonrasi gelmedi",
   };
 }

@@ -14,7 +14,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import * as cekirdek from "../src/index.js";
+import * as core from "../src/index.js";
 
 const SRC = new URL("../src/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 
@@ -44,15 +44,15 @@ test("src/ DUZ: klasor yok, dosya listesi beklendigi gibi", () => {
 });
 
 test("index.js HER modulu disa aciyor (kapiya bagli olmayan modul kalmasin)", () => {
-  const kapi = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
-  const eksik = DOSYALAR
-    .filter((ad) => ad !== "index.js")
-    .filter((ad) => !kapi.includes(`"./${ad}"`));
-  assert.deepEqual(eksik, [], `index.js'te export edilmeyen modul: ${eksik.join(", ")}`);
+  const port = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
+  const missing = DOSYALAR
+    .filter((name) => name !== "index.js")
+    .filter((name) => !port.includes(`"./${name}"`));
+  assert.deepEqual(missing, [], `index.js'te export edilmeyen modul: ${missing.join(", ")}`);
 });
 
 test("public API bos degil ve hepsi cagrilabilir bir sey", () => {
-  const girisler = Object.entries(cekirdek);
+  const girisler = Object.entries(core);
   assert.ok(girisler.length > 50, `beklenenden az export: ${girisler.length}`);
   // Her export ya bir fonksiyon ya bir sabit; undefined export sessiz bir
   // kirik yoldur (yanlis modulden re-export edilmis olabilir).

@@ -4,9 +4,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nextAction, provisionModem, provisionRecord } from "../src/pipeline.js";
-// pcPreflight ve simTakiliMi ALT KATMANDA (cihaz.js): okuma yolu da yazma
+// pcPreflight ve isSimPresent ALT KATMANDA (cihaz.js): okuma yolu da yazma
 // yolu da onlara bakiyor, pipeline'a ait degiller.
-import { pcPreflight, simTakiliMi } from "../src/device.js";
+import { pcPreflight, isSimPresent } from "../src/device.js";
 import { problem, isOk } from "../src/problems.js";
 import { applyPin } from "../src/provision.js";
 import { stripSecrets } from "../src/report.js";
@@ -30,16 +30,16 @@ test("nextAction: hicbiri -> modem_yok", () => {
 test("pcPreflight: kaynak IP yoksa NO_SOURCE_IP problemi", () => {
   // Var olmayan onekler -> ikisi de bulunamaz
   const r = pcPreflight("203.0.113.", "198.51.100.");
-  assert.equal(r.hazir, false);
+  assert.equal(r.ready, false);
   assert.equal(r.problems.length, 2);
-  assert.equal(r.problems[0].kod, "NO_SOURCE_IP");
+  assert.equal(r.problems[0].code, "NO_SOURCE_IP");
 });
 
 test("provisionModem: kimliksiz -> kimlik_yok (cihaza gitmez)", async () => {
-  const r = await provisionModem({ kimlik: null, profil: { nvram: {} } });
+  const r = await provisionModem({ credentials: null, profile: { nvram: {} } });
   assert.equal(r.ok, false);
-  assert.equal(r.durum, "kimlik_yok");
-  assert.equal(r.problems[0].kod, "AUTH_REQUIRED");
+  assert.equal(r.status, "kimlik_yok");
+  assert.equal(r.problems[0].code, "AUTH_REQUIRED");
 });
 
 // SOZLESME DEGISTI (2026-08-28): telefon artik ZORUNLU GIRDI DEGIL —
@@ -53,12 +53,12 @@ test("provisionModem: kimliksiz -> kimlik_yok (cihaza gitmez)", async () => {
 // bildirilir: o alt aga bu makineden cikilamiyor.
 test("provisionModem: kaynak IP turetilemezse KOR YOKLAMA yapmaz", async () => {
   const r = await provisionModem({
-    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
-    fabrikaHost: "192.0.2.1", sahaHost: "192.0.2.2", denemeler: 1,
+    credentials: { user: "u", password: "p" }, profile: { name: "saha", nvram: {} },
+    factoryHost: "192.0.2.1", fieldHost: "192.0.2.2", attempts: 1,
   });
   assert.equal(r.ok, false);
-  assert.equal(r.durum, "pc_hazir_degil");
-  assert.ok(r.problems.some((p) => p.kod === "NO_SOURCE_IP"),
+  assert.equal(r.status, "pc_hazir_degil");
+  assert.ok(r.problems.some((p) => p.code === "NO_SOURCE_IP"),
     "gercek sebep: o alt aga cikilamiyor — 'SIM yok' demek yanlis teshisti");
 });
 
@@ -67,97 +67,97 @@ test("provisionModem: kaynak IP turetilemezse KOR YOKLAMA yapmaz", async () => {
 test("provisionModem: gecersiz telefon -> MSISDN_INVALID, CIHAZA GITMEZ", async () => {
   const t = Date.now();
   const r = await provisionModem({
-    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
-    telefon: "1234",
+    credentials: { user: "u", password: "p" }, profile: { name: "saha", nvram: {} },
+    phone: "1234",
   });
-  assert.equal(r.durum, "telefon_yok");
-  assert.equal(r.problems[0].kod, "MSISDN_INVALID");
+  assert.equal(r.status, "telefon_yok");
+  assert.equal(r.problems[0].code, "MSISDN_INVALID");
   assert.ok(Date.now() - t < 500, "girdi hatasi aga cikmadan donmeli");
 });
 
 test("provisionModem: basarisiz cikista da KAYIT uretilir ve bildirilir", async () => {
-  const yazilan = [];
+  const written = [];
   const r = await provisionModem({
-    kimlik: null, profil: { ad: "saha", nvram: {} },
-    kayit: (satir) => yazilan.push(satir),
+    credentials: null, profile: { name: "saha", nvram: {} },
+    record: (line) => written.push(line),
   });
-  assert.equal(yazilan.length, 1, "kayit callback tam 1 kez cagrilir");
-  assert.equal(yazilan[0].durum, "kimlik_yok");
-  assert.equal(yazilan[0].ok, false);
-  assert.equal(yazilan[0].telefon, null);
-  assert.deepEqual(r.kayit, yazilan[0]);
+  assert.equal(written.length, 1, "kayit callback tam 1 kez cagrilir");
+  assert.equal(written[0].status, "kimlik_yok");
+  assert.equal(written[0].ok, false);
+  assert.equal(written[0].phone, null);
+  assert.deepEqual(r.record, written[0]);
 });
 
 test("provisionModem: kayit callback patlarsa akis bozulmaz", async () => {
   const r = await provisionModem({
-    kimlik: null, profil: { ad: "saha", nvram: {} },
-    kayit: () => { throw new Error("disk dolu"); },
+    credentials: null, profile: { name: "saha", nvram: {} },
+    record: () => { throw new Error("disk dolu"); },
   });
-  assert.equal(r.durum, "kimlik_yok");   // throw yutuldu, sonuc yine dondu
+  assert.equal(r.status, "kimlik_yok");   // throw yutuldu, sonuc yine dondu
 });
 
 test("provisionRecord: PURE — sabit sema, telefon normalize edilmis gelir", () => {
   const k = provisionRecord({
-    sonuc: { zaman: "2026-08-27T00:00:00.000Z", durum: "hazir", ok: true, deneme: 1 },
-    telefon: "5321234567",
-    kimlikBilgi: { lan_mac: "00:0c:43:43:5f:4e", iccid: "8990", imei: "867", operator: "Turkcell" },
-    profilAd: "saha", host: "5.5.5.1",
+    result: { timestamp: "2026-08-27T00:00:00.000Z", status: "hazir", ok: true, attempt: 1 },
+    phone: "5321234567",
+    identity: { lan_mac: "00:0c:43:43:5f:4e", iccid: "8990", imei: "867", operator: "Turkcell" },
+    profileName: "saha", host: "5.5.5.1",
   });
   assert.deepEqual(Object.keys(k), [
-    "zaman", "durum", "ok", "deneme", "profil", "modem_ip", "telefon",
-    "lan_mac", "iccid", "imsi", "imei", "operator", "sim_durumu", "wan_ip",
-    "internet_sure_sn", "pin_denendi", "sahaya_hazir",
+    "timestamp", "status", "ok", "attempt", "profile", "modemIp", "phone",
+    "lan_mac", "iccid", "imsi", "imei", "operator", "simStatus", "wan_ip",
+    "internetSec", "pinAttempted", "fieldReady",
   ]);
-  assert.equal(k.telefon, "5321234567");
+  assert.equal(k.phone, "5321234567");
   assert.equal(k.imsi, null, "verilmeyen alan null (0 ya da bos degil)");
 });
 
 test("simTakiliMi: ICCID varsa takili, yoksa degil", () => {
-  assert.equal(simTakiliMi({ iccid: "8990011626160064930" }), true);
-  assert.equal(simTakiliMi({ iccid: null, sim_durumu: "Not Insert" }), false);
-  assert.equal(simTakiliMi({}), false);
-  assert.equal(simTakiliMi(), false);
+  assert.equal(isSimPresent({ iccid: "8990011626160064930" }), true);
+  assert.equal(isSimPresent({ iccid: null, simStatus: "Not Insert" }), false);
+  assert.equal(isSimPresent({}), false);
+  assert.equal(isSimPresent(), false);
 });
 
 test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
-  const yazilan = [];
+  const written = [];
   const r = await provisionModem({
-    kimlik: { kullanici: "u", sifre: "p" }, profil: { ad: "saha", nvram: {} },
-    telefon: "05350641858",
-    kimlikBilgi: { iccid: null, sim_durumu: "Not Insert", imei: "867", lan_mac: "aa" },
-    kayit: (satir) => yazilan.push(satir),
+    credentials: { user: "u", password: "p" }, profile: { name: "saha", nvram: {} },
+    phone: "05350641858",
+    identity: { iccid: null, simStatus: "Not Insert", imei: "867", lan_mac: "aa" },
+    record: (line) => written.push(line),
   });
   assert.equal(r.ok, false);
-  assert.equal(r.durum, "sim_yok");
-  assert.equal(r.problems[0].kod, "SIM_MISSING");
+  assert.equal(r.status, "sim_yok");
+  assert.equal(r.problems[0].code, "SIM_MISSING");
   assert.match(r.problems[0].message, /Not Insert/, "teshis metni operatore gider");
   // Kayit yine tutulur: "bu modem SIM'siz geldi" sahada gercek bir bilgi.
-  assert.equal(yazilan.length, 1);
-  assert.equal(yazilan[0].durum, "sim_yok");
-  assert.equal(yazilan[0].iccid, null);
-  assert.equal(yazilan[0].telefon, "5350641858");
+  assert.equal(written.length, 1);
+  assert.equal(written[0].status, "sim_yok");
+  assert.equal(written[0].iccid, null);
+  assert.equal(written[0].phone, "5350641858");
 });
 
 
 test("provisionRecord: wan_ip yoksa null (kurulum HATASI degil, sadece kayit)", () => {
-  const yok = provisionRecord({ kimlikBilgi: { iccid: "899", sim_durumu: "OK" } });
+  const yok = provisionRecord({ identity: { iccid: "899", simStatus: "OK" } });
   assert.equal(yok.wan_ip, null, "o an internet yoktu -> null");
-  assert.equal(yok.sim_durumu, "OK");
-  const var_ = provisionRecord({ kimlikBilgi: { wan_ip: "178.245.239.236" } });
+  assert.equal(yok.simStatus, "OK");
+  const var_ = provisionRecord({ identity: { wan_ip: "178.245.239.236" } });
   assert.equal(var_.wan_ip, "178.245.239.236");
 });
 
 test("provisionRecord: internet sonucu wan_ip ve sureyi TASIR", () => {
   const k = provisionRecord({
-    kimlikBilgi: { iccid: "899", wan_ip: null },
-    internet: { var: true, sure_sn: 88.9, wan_ip: "178.245.239.236" },
+    identity: { iccid: "899", wan_ip: null },
+    internet: { up: true, durationSec: 88.9, wan_ip: "178.245.239.236" },
   });
   assert.equal(k.wan_ip, "178.245.239.236", "internet sonucu kimlikteki null'i EZER");
-  assert.equal(k.internet_sure_sn, 88.9);
+  assert.equal(k.internetSec, 88.9);
 });
 
 test("INTERNET_YOK bir UYARIDIR — sonucu ok:false yapmaz", () => {
-  const p = problem("INTERNET_YOK", 150, "OK");
+  const p = problem("INTERNET_DOWN", 150, "OK");
   assert.equal(p.severity, "warning");
   assert.match(p.check, /PIN-locked/, "PIN ilk suphe olarak yazili");
   assert.equal(isOk([p]), true, "ayarlar dogru; retry hicbir seyi cozmez");
@@ -167,17 +167,17 @@ test("INTERNET_YOK bir UYARIDIR — sonucu ok:false yapmaz", () => {
 
 test("applyPin: BOZUK bicim cihaza HIC GITMEDEN reddedilir", async () => {
   for (const kotu of ["", "12", "123456789", "abcd", "12a4", null, undefined]) {
-    const r = await applyPin({ host: "203.0.113.9", kimlik: { kullanici: "u", sifre: "p" } }, kotu);
-    assert.equal(r.denendi, false, `"${kotu}" denenmemeli`);
-    assert.equal(r.atlandi, "gecersiz_bicim");
-    assert.equal(r.problems[0].kod, "PIN_INVALID");
+    const r = await applyPin({ host: "203.0.113.9", credentials: { user: "u", password: "p" } }, kotu);
+    assert.equal(r.attempted, false, `"${kotu}" denenmemeli`);
+    assert.equal(r.skipped, "gecersiz_bicim");
+    assert.equal(r.problems[0].code, "PIN_INVALID");
   }
 });
 
 test("applyPin: kimliksiz denemez", async () => {
-  const r = await applyPin({ host: "203.0.113.9", kimlik: null }, "1234");
-  assert.equal(r.denendi, false);
-  assert.equal(r.atlandi, "kimlik_yok");
+  const r = await applyPin({ host: "203.0.113.9", credentials: null }, "1234");
+  assert.equal(r.attempted, false);
+  assert.equal(r.skipped, "kimlik_yok");
 });
 
 test("PIN_INVALID ve PIN_REQUIRED PUK riskini ACIKCA soyluyor", () => {
@@ -190,36 +190,36 @@ test("provisionRecord: PIN'in KENDISI kayda GIRMEZ, sadece denendi mi", () => {
   // nesnelerinin hicbiri kayitta PIN degeri uretmemeli.
   const PIN = "4271";
   const k = provisionRecord({
-    sonuc: { pin_denemesi: { denendi: true, pin: PIN }, pin: PIN },
-    kimlikBilgi: { iccid: "8990", pin: PIN, m1s1simpin: PIN },
-    internet: { var: false, sure_sn: 150, pin: PIN },
-    telefon: "05350641858",
+    result: { pinAttempt: { attempted: true, pin: PIN }, pin: PIN },
+    identity: { iccid: "8990", pin: PIN, m1s1simpin: PIN },
+    internet: { up: false, durationSec: 150, pin: PIN },
+    phone: "05350641858",
   });
-  assert.equal(k.pin_denendi, true, "sadece 'denendi mi' bilgisi tasinir");
+  assert.equal(k.pinAttempted, true, "sadece 'denendi mi' bilgisi tasinir");
   assert.ok(!JSON.stringify(k).includes(PIN), "PIN degeri kayitta HIC gorunmemeli");
   // Sema sabit: PIN tasiyabilecek yeni bir alan sessizce eklenmis olmasin.
-  assert.ok(!Object.keys(k).some((a) => /pin/.test(a) && a !== "pin_denendi"),
-    "pin_denendi disinda pin icerikli alan yok");
+  assert.ok(!Object.keys(k).some((a) => /pin/.test(a) && a !== "pinAttempted"),
+    "pinAttempted disinda pin icerikli alan yok");
 });
 
 test("stripSecrets: PIN alanlari ciktidan silinir", () => {
-  const temiz = stripSecrets({ m1s1simpin: "1234", pin: "5678", telefon: "5350641858" });
+  const temiz = stripSecrets({ m1s1simpin: "1234", pin: "5678", phone: "5350641858" });
   assert.equal(temiz.m1s1simpin, undefined);
   assert.equal(temiz.pin, undefined);
-  assert.equal(temiz.telefon, "5350641858", "telefon sir DEGIL, kalir");
+  assert.equal(temiz.phone, "5350641858", "telefon sir DEGIL, kalir");
 });
 
 test("provisionRecord: sahaya_hazir uc degerli — 'ok' tek basina YANILTICI", () => {
   // Ayarlar dogru + internet var -> gercekten hazir
-  const hazir = provisionRecord({ sonuc: { ok: true },
-    internet: { var: true, wan_ip: "1.2.3.4", sure_sn: 40 } });
-  assert.equal(hazir.sahaya_hazir, true);
+  const ready = provisionRecord({ result: { ok: true },
+    internet: { up: true, wan_ip: "1.2.3.4", durationSec: 40 } });
+  assert.equal(ready.fieldReady, true);
   // Ayarlar dogru ama SIM calismiyor -> sahada is yapmaz
-  const yarim = provisionRecord({ sonuc: { ok: true },
-    internet: { var: false, sure_sn: 150 } });
+  const yarim = provisionRecord({ result: { ok: true },
+    internet: { up: false, durationSec: 150 } });
   assert.equal(yarim.ok, true, "ayarlar dogru oldugu icin ok:true KALIR");
-  assert.equal(yarim.sahaya_hazir, false, "ama sahaya hazir DEGIL");
+  assert.equal(yarim.fieldReady, false, "ama sahaya hazir DEGIL");
   // Internet dogrulamasi kapatilmis -> bilinmiyor, false demek yanlis olur
-  const bilinmiyor = provisionRecord({ sonuc: { ok: true }, internet: null });
-  assert.equal(bilinmiyor.sahaya_hazir, null);
+  const bilinmiyor = provisionRecord({ result: { ok: true }, internet: null });
+  assert.equal(bilinmiyor.fieldReady, null);
 });

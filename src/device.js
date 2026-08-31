@@ -14,42 +14,42 @@ import {
 } from "./settings.js";
 import { problem } from "./problems.js";
 
-const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
-const olayla = (opts, olay) => {
-  if (typeof opts.olay !== "function") return;
-  try { opts.olay(olay); } catch { /* dinleyici hatasi akisi kesmez */ }
+const notify = (opts, m) => { if (typeof opts.progress === "function") opts.progress(m); };
+const emitEvent = (opts, event) => {
+  if (typeof opts.event !== "function") return;
+  try { opts.event(event); } catch { /* dinleyici hatasi akisi kesmez */ }
 };
-const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Cihaz kimliği — "bu hangi modemdi" sorusunun kalıcı cevabı.
 // NOT: cihazın ETİKET seri numarası ne HTTP'de ne nvram'da YOK (2026-08-27
 // arandı; BULGULAR'daki S/N fiziksel etiketten okundu). Bu yüzden kalıcı
 // kimlik: LAN MAC (cihaza ait, kimliksiz okunur) + IMEI (modül) + ICCID (SIM).
-export async function readIdentity({ host, kaynakIp, kimlik }) {
-  const sonuc = { lan_mac: null, iccid: null, imsi: null, imei: null,
-    operator: null, sim_durumu: null, wan_ip: null };
-  const c = new Client({ host, kaynakIp, kimlik });
-  const bilgi = await c.get("/asp/status/Info.live.htm");
-  sonuc.lan_mac = parsePairs(bilgi.govde || "").lan_mac || null;
-  const s = await readSim({ host, kaynakIp, kimlik });
+export async function readIdentity({ host, sourceIp, credentials }) {
+  const result = { lan_mac: null, iccid: null, imsi: null, imei: null,
+    operator: null, simStatus: null, wan_ip: null };
+  const c = new Client({ host, sourceIp, credentials });
+  const info = await c.get("/asp/status/Info.live.htm");
+  result.lan_mac = parsePairs(info.body || "").lan_mac || null;
+  const s = await readSim({ host, sourceIp, credentials });
   const s1 = s.sim1 || {};
-  sonuc.iccid = s1.iccid_temiz || s1.iccid || null;
-  sonuc.imsi = s1.imsi || null;
-  sonuc.imei = s1.imei || null;
-  sonuc.operator = s1.operator || null;
-  sonuc.sim_durumu = s1.sim_durumu || null;
+  result.iccid = s1.iccidClean || s1.iccid || null;
+  result.imsi = s1.imsi || null;
+  result.imei = s1.imei || null;
+  result.operator = s1.operator || null;
+  result.simStatus = s1.simStatus || null;
   // Durum metnini çöz: kilit var mı, kaç deneme kaldı. PIN kilidini 150 sn
   // internet bekleyerek anlamak yerine BURADA, ~4 sn'de anlıyoruz.
-  sonuc.sim = parseSimStatus(s1.sim_durumu);
+  result.sim = parseSimStatus(s1.simStatus);
   // WAN IP zaten bu okumada geliyor — BEDAVA kanıt: "bu SIM o an çevrimiçiydi".
   // Beklemiyoruz, yoksa yok yazıyoruz; kurulum süresine tek saniye eklemiyor.
-  const wan = (s1.wan_ip || "").trim();
-  sonuc.wan_ip = wan && wan !== "0.0.0.0" ? wan : null;
-  return sonuc;
+  const wanFields = (s1.wan_ip || "").trim();
+  result.wan_ip = wanFields && wanFields !== "0.0.0.0" ? wanFields : null;
+  return result;
 }
 
 // SIM gerçekten takılı mı? ICCID yalnızca SIM varken okunabiliyor, o yüzden
-// tek güvenilir ölçüt o. `sim_durumu` ("Not Insert" / "Invalid") teşhis metni
+// tek güvenilir ölçüt o. `simStatus` ("Not Insert" / "Invalid") teşhis metni
 // olarak taşınır — operatöre ne olduğunu söylemek için.
 //
 // NEDEN ÖNEMLİ (2026-08-27 canlı gözlem): SIM'siz bir modemde provizyon
@@ -58,8 +58,8 @@ export async function readIdentity({ host, kaynakIp, kimlik }) {
 // bir satır düşüyor. Yani "hazır" denen modem sahada çalışmaz. Bu yüzden SIM
 // kontrolü EN BASA alındı: 45 saniye harcayıp sonunda anlamak yerine
 // ilk saniyede söylüyoruz.
-export function simTakiliMi(kimlikBilgi = {}) {
-  return Boolean(kimlikBilgi.iccid);
+export function isSimPresent(identity = {}) {
+  return Boolean(identity.iccid);
 }
 
 // İNTERNET DOĞRULAMASI — "bu SIM gerçekten çalışıyor mu?"
@@ -76,36 +76,36 @@ export function simTakiliMi(kimlikBilgi = {}) {
 // İnternet gelmemesi provizyonun BAŞARISIZLIĞI değildir: ayarlar doğrulanmış
 // olabilir ama atölyede kapsama olmayabilir, SIM'in data paketi bitmiş olabilir.
 // Bu yüzden AYRI bir sonuç alanı olarak taşınır; operatör kararı verir.
-// Doner: { var, sure_sn, wan_ip, sim_durumu }
-export async function waitForInternet({ host, kaynakIp, kimlik }, maxSn = 150, opts = {}) {
-  const baslangic = Date.now();
-  const gecen = () => Math.round((Date.now() - baslangic) / 100) / 10;
+// Doner: { var, durationSec, wan_ip, simStatus }
+export async function waitForInternet({ host, sourceIp, credentials }, maxSec = 150, opts = {}) {
+  const startAt = Date.now();
+  const elapsed = () => Math.round((Date.now() - startAt) / 100) / 10;
   // Yoklamada readIdentity DEĞİL readSim kullanıyoruz: readIdentity ayrıca
   // Info.live.htm'i de çekiyor (yalnızca lan_mac için) ve burada lan_mac'e
   // ihtiyaç yok. Tek uç = yoklama başına ~2 sn tasarruf, tek bağlantılı
   // cihazda da yarı yük.
-  const bak = async () => {
-    const s = await readSim({ host, kaynakIp, kimlik });
+  const probe = async () => {
+    const s = await readSim({ host, sourceIp, credentials });
     const s1 = s.sim1 || {};
-    const wan = (s1.wan_ip || "").trim();
-    return { wan_ip: wan && wan !== "0.0.0.0" ? wan : null,
-      sim_durumu: s1.sim_durumu || null };
+    const wanFields = (s1.wan_ip || "").trim();
+    return { wan_ip: wanFields && wanFields !== "0.0.0.0" ? wanFields : null,
+      simStatus: s1.simStatus || null };
   };
   for (;;) {
     let k = null;
-    try { k = await bak(); } catch { /* cihaz reboot'ta olabilir; yeniden dene */ }
+    try { k = await probe(); } catch { /* cihaz reboot'ta olabilir; yeniden dene */ }
     if (k?.wan_ip) {
-      const sure = gecen();
-      olayla(opts, { tur: "internet", var: true, sure_sn: sure, wan_ip: k.wan_ip });
-      return { var: true, sure_sn: sure, wan_ip: k.wan_ip, sim_durumu: k.sim_durumu };
+      const duration = elapsed();
+      emitEvent(opts, { kind: "internet", up: true, durationSec: duration, wan_ip: k.wan_ip });
+      return { up: true, durationSec: duration, wan_ip: k.wan_ip, simStatus: k.simStatus };
     }
-    if (gecen() >= maxSn) {
-      olayla(opts, { tur: "internet", var: false, sure_sn: gecen(),
-        sim_durumu: k?.sim_durumu ?? null });
-      return { var: false, sure_sn: gecen(), wan_ip: null, sim_durumu: k?.sim_durumu ?? null };
+    if (elapsed() >= maxSec) {
+      emitEvent(opts, { kind: "internet", up: false, durationSec: elapsed(),
+        simStatus: k?.simStatus ?? null });
+      return { up: false, durationSec: elapsed(), wan_ip: null, simStatus: k?.simStatus ?? null };
     }
-    bildir(opts, `internet bekleniyor (${gecen()} sn / ${maxSn} sn)`);
-    olayla(opts, { tur: "internet_bekleniyor", gecen_sn: gecen(), max_sn: maxSn });
+    notify(opts, `internet bekleniyor (${elapsed()} sn / ${maxSec} sn)`);
+    emitEvent(opts, { kind: "internet_bekleniyor", elapsedSec: elapsed(), maxSec: maxSec });
     // Yoklama araligi. Olculdu (2026-08-31, enstrumanli reboot): tek readSim
     // 0.10-0.19 sn suruyor, yani yoklamanin MALIYETI yok — kayip tamamen
     // GRANULASYONDAN geliyordu. Ayni olcumde WAN IP, nvram okunabilir hale
@@ -113,19 +113,19 @@ export async function waitForInternet({ host, kaynakIp, kimlik }, maxSn = 150, o
     // kadar gec goruyor (canli kurulum kaydinda: gercek 6.3-11.2 arasi, biz
     // 11.2 dedik). 2 sn hem bu kaybi ~1 sn'ye indiriyor hem de tek baglantili
     // cihazi zorlamiyor (2 sn'de bir 0.1 sn'lik istek).
-    await bekle(2000);
+    await wait(2000);
   }
 }
 
 // PC ön-kontrol: gerekli ikincil kaynak IP'ler var mı?
-// Doner: { hazir, problems, fabrikaKaynak, sahaKaynak }
-export function pcPreflight(fabrikaOnek = "192.168.1.", sahaOnek = "5.5.5.") {
-  const fabrikaKaynak = findSourceIp(fabrikaOnek);
-  const sahaKaynak = findSourceIp(sahaOnek);
+// Doner: { hazir, problems, factorySource, fieldSource }
+export function pcPreflight(factoryPrefix = "192.168.1.", fieldPrefix = "5.5.5.") {
+  const factorySource = findSourceIp(factoryPrefix);
+  const fieldSource = findSourceIp(fieldPrefix);
   const problems = [];
-  if (!fabrikaKaynak) problems.push(problem("NO_SOURCE_IP", `${fabrikaOnek}50`));
-  if (!sahaKaynak) problems.push(problem("NO_SOURCE_IP", `${sahaOnek}100`));
-  return { hazir: problems.length === 0, problems, fabrikaKaynak, sahaKaynak };
+  if (!factorySource) problems.push(problem("NO_SOURCE_IP", `${factoryPrefix}50`));
+  if (!fieldSource) problems.push(problem("NO_SOURCE_IP", `${fieldPrefix}100`));
+  return { ready: problems.length === 0, problems, factorySource, fieldSource };
 }
 
 // ======================================================================
@@ -133,7 +133,7 @@ export function pcPreflight(fabrikaOnek = "192.168.1.", sahaOnek = "5.5.5.") {
 // ======================================================================
 
 const now = () => new Date().toISOString();
-const SIM_UC = "/asp/status/Status_Internet.live.asp";
+const SIM_ENDPOINT = "/asp/status/Status_Internet.live.asp";
 
 // PURE: "Status of SIM" metnini çözer. Cihazın verdiği metin (2026-08-27
 // canlı, PIN kilitli SIM):
@@ -148,34 +148,34 @@ const SIM_UC = "/asp/status/Status_Internet.live.asp";
 // biliyoruz — 3 yanlış deneme SIM'i PUK'a kilitler, son hakkı kör körüne
 // harcamak zorunda değiliz.
 //
-// Doner: { ham, kilit: "pin"|"puk"|null, hazir, pin_kalan, pin_toplam,
-//          puk_kalan, puk_toplam }
-export function parseSimStatus(ham) {
-  const metin = String(ham ?? "").trim();
-  const sayac = (ad) => {
-    const m = metin.match(new RegExp(`${ad}:\\s*(\\d+)\\s*/\\s*(\\d+)`, "i"));
-    return m ? { kalan: Number(m[1]), toplam: Number(m[2]) } : { kalan: null, toplam: null };
+// Doner: { ham, kilit: "pin"|"puk"|null, hazir, pinRemaining, pinTotal,
+//          pukRemaining, pukTotal }
+export function parseSimStatus(raw) {
+  const text = String(raw ?? "").trim();
+  const counter = (name) => {
+    const m = text.match(new RegExp(`${name}:\\s*(\\d+)\\s*/\\s*(\\d+)`, "i"));
+    return m ? { remaining: Number(m[1]), total: Number(m[2]) } : { remaining: null, total: null };
   };
-  const pin = sayac("PIN");
-  const puk = sayac("PUK");
-  let kilit = null;
-  if (/verification\s+puk|puk\s+(code\s+)?required|puk\s+lock/i.test(metin)) kilit = "puk";
-  else if (/verification\s+pin|pin\s+(code\s+)?required|pin\s+lock/i.test(metin)) kilit = "pin";
+  const pin = counter("PIN");
+  const pukText = counter("PUK");
+  let lock = null;
+  if (/verification\s+puk|puk\s+(code\s+)?required|puk\s+lock/i.test(text)) lock = "puk";
+  else if (/verification\s+pin|pin\s+(code\s+)?required|pin\s+lock/i.test(text)) lock = "pin";
   return {
-    ham: metin || null,
-    kilit,
+    raw: text || null,
+    lock,
     // "hazir": SIM kullanıma hazır. Kilit varsa ya da metin boş/OK değilse hayır.
-    hazir: kilit === null && /^ok$/i.test(metin),
-    pin_kalan: pin.kalan, pin_toplam: pin.toplam,
-    puk_kalan: puk.kalan, puk_toplam: puk.toplam,
+    ready: lock === null && /^ok$/i.test(text),
+    pinRemaining: pin.remaining, pinTotal: pin.total,
+    pukRemaining: pukText.remaining, pukTotal: pukText.total,
   };
 }
 
 // Turkiye mobil numarasini 5xxxxxxxxx (10 hane) olarak normalize eder.
 // Gecersizse null. (+90 / 0 / bosluk-tire kabul.)
-export function normalizePhone(ham) {
-  if (!ham) return null;
-  const d = String(ham).replace(/[\s.\-()]/g, "").replace(/^\+?90/, "").replace(/^0/, "");
+export function normalizePhone(raw) {
+  if (!raw) return null;
+  const d = String(raw).replace(/[\s.\-()]/g, "").replace(/^\+?90/, "").replace(/^0/, "");
   return /^5\d{9}$/.test(d) ? d : null;
 }
 
@@ -186,58 +186,58 @@ export function normalizePhone(ham) {
 // nasil gosterilecegi bir karardir; karar cekirdekte, arayuz hazir degeri
 // basar. Ayni sebeple bir tane daha normalize fonksiyonu yazmiyoruz —
 // normalizePhone tek dogru kaynak, bu onun ustunde ince bir katman.
-export function telefonGirdiBicimi(ham) {
-  const n = normalizePhone(ham);
+export function phoneInputFormat(raw) {
+  const n = normalizePhone(raw);
   return n ? `0${n}` : "";
 }
 
-// SIM/hucresel bilgisini okur. opts: { host, kaynakIp, kimlik, telefon? }
+// SIM/hucresel bilgisini okur. opts: { host, sourceIp, kimlik, telefon? }
 // Doner: sonuc nesnesi (throw etmez).
 export async function readSim(opts) {
-  const { host, kaynakIp, kimlik, telefon } = opts;
-  const rapor = { zaman: now(), komut: "sim", modem_ip: host, problems: [] };
-  if (!kimlik) {
-    rapor.problems.push(problem("AUTH_REQUIRED", SIM_UC));
-    rapor.ok = false;
-    return rapor;
+  const { host, sourceIp, credentials, phone } = opts;
+  const report = { timestamp: now(), command: "sim", modemIp: host, problems: [] };
+  if (!credentials) {
+    report.problems.push(problem("AUTH_REQUIRED", SIM_ENDPOINT));
+    report.ok = false;
+    return report;
   }
-  const c = new Client({ host, kaynakIp, kimlik });
-  const r = await c.get(SIM_UC);
-  rapor.problems.push(...r.problems.filter((p) => p.severity === "error"));
-  const { sim1, sim2 } = simView(parsePairs(r.govde || ""));
-  rapor.sim1 = sim1;
-  rapor.sim2 = sim2;
+  const c = new Client({ host, sourceIp, credentials });
+  const r = await c.get(SIM_ENDPOINT);
+  report.problems.push(...r.problems.filter((p) => p.severity === "error"));
+  const { sim1, sim2 } = simView(parsePairs(r.body || ""));
+  report.sim1 = sim1;
+  report.sim2 = sim2;
 
   // MSISDN: cihazdan gelmez; operator/UI girdisi (opts.telefon).
-  const norm = normalizePhone(telefon);
-  if (telefon && !norm) rapor.problems.push(problem("MSISDN_INVALID", telefon));
-  rapor.msisdn = norm;
-  rapor.msisdn_kaynak = norm ? "operator_girisi" : null;
-  if (!norm) {
-    rapor.msisdn_not = "Telefon no cihazdan alinamaz; operator/UI girisi gerekir "
+  const normalized = normalizePhone(phone);
+  if (phone && !normalized) report.problems.push(problem("MSISDN_INVALID", phone));
+  report.msisdn = normalized;
+  report.msisdnSource = normalized ? "operator_girisi" : null;
+  if (!normalized) {
+    report.msisdnNote = "Telefon no cihazdan alinamaz; operator/UI girisi gerekir "
       + "(--telefon 05xxxxxxxxx) ya da operatorden ICCID->numara listesi.";
   }
-  rapor.ok = isOk(rapor.problems);
-  return rapor;
+  report.ok = isOk(report.problems);
+  return report;
 }
 
 // ======================================================================
 // dd-wrt ciktisi ayristirma
 // ======================================================================
 
-export function parsePairs(metin) {
-  const ciftler = Object.create(null);
-  const desen = /\{(\w+)::([^}]*)\}/g;
+export function parsePairs(text) {
+  const pairs = Object.create(null);
+  const pattern = /\{(\w+)::([^}]*)\}/g;
   let m;
-  while ((m = desen.exec(metin || "")) !== null) {
-    ciftler[m[1]] = temizle(m[2]);
+  while ((m = pattern.exec(text || "")) !== null) {
+    pairs[m[1]] = clean(m[2]);
   }
-  return ciftler;
+  return pairs;
 }
 
 // Tek bir degeri temizler: kenar bosluklari + tirnak; HTML varsa etiket at.
-function temizle(deger) {
-  let t = deger.trim().replace(/^['"]|['"]$/g, "");
+function clean(value) {
+  let t = value.trim().replace(/^['"]|['"]$/g, "");
   if (t.includes("<")) {
     t = t.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
@@ -245,9 +245,9 @@ function temizle(deger) {
 }
 
 // ICCID sonundaki dolgu 'F' gercek hane degildir, atilir.
-export function cleanIccid(ham) {
-  if (!ham) return null;
-  const t = ham.trim().toUpperCase().replace(/F+$/, "");
+export function cleanIccid(raw) {
+  if (!raw) return null;
+  const t = raw.trim().toUpperCase().replace(/F+$/, "");
   return t || null;
 }
 
@@ -260,21 +260,21 @@ export function guessOperator(imsi) {
 // Ham ciftlerden okunabilir SIM/hucresel gorunum uretir. HAM alanlar
 // silinmez — bu yalnizca EK bir gorunum. Bos degerler atlanir (bilinmeyen
 // deger 0 degil, yok demektir).
-export function simView(ham) {
-  const cikar = (harita) => {
-    const cikti = Object.create(null);
-    for (const [modemAlani, bizimAd] of Object.entries(harita)) {
-      const deger = (ham[modemAlani] ?? "").trim();
-      if (deger) cikti[bizimAd] = deger;
+export function simView(raw) {
+  const strip = (table) => {
+    const out = Object.create(null);
+    for (const [modemField, ourName] of Object.entries(table)) {
+      const value = (raw[modemField] ?? "").trim();
+      if (value) out[ourName] = value;
     }
-    return cikti;
+    return out;
   };
 
-  const sim1 = cikar(SIM_FIELD_MAP);
-  const sim2 = cikar(SIM2_FIELD_MAP);
+  const sim1 = strip(SIM_FIELD_MAP);
+  const sim2 = strip(SIM2_FIELD_MAP);
 
   for (const sim of [sim1, sim2]) {
-    if (sim.iccid) sim.iccid_temiz = cleanIccid(sim.iccid);
+    if (sim.iccid) sim.iccidClean = cleanIccid(sim.iccid);
     if (sim.imsi) sim.operator = guessOperator(sim.imsi);
   }
 

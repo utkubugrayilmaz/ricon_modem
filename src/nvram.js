@@ -12,50 +12,50 @@
 
 import { problem } from "./problems.js";
 
-const IMZA = "ROUTER";
+const SIGNATURE = "ROUTER";
 
 // Ikili yedegi {anahtar: deger} nesnesine cevirir.
 // Doner: { degerler, sayi, problems }  (throw etmez)
 export function parseNvram(buf) {
   const problems = [];
-  const degerler = Object.create(null);
+  const values = Object.create(null);
 
-  if (!buf || buf.length < IMZA.length ||
-      buf.subarray(0, IMZA.length).toString("latin1") !== IMZA) {
+  if (!buf || buf.length < SIGNATURE.length ||
+      buf.subarray(0, SIGNATURE.length).toString("latin1") !== SIGNATURE) {
     problems.push(problem("NVRAM_BAD_HEADER"));
-    return { degerler, sayi: 0, problems };
+    return { values, finiteOrNull: 0, problems };
   }
 
   // Basluk boyutu firmware'e gore degisebilir; imza sonrasindan itibaren
   // dosya sonuna KADAR temiz ayrisan ilk offset'i bul (6..16 araligi).
-  const start = baslangicBul(buf);
+  const start = findStart(buf);
   if (start === -1) {
     problems.push(problem("NVRAM_BAD_HEADER"));
-    return { degerler, sayi: 0, problems };
+    return { values, finiteOrNull: 0, problems };
   }
 
   let off = start;
-  let sayi = 0;
+  let finiteOrNull = 0;
   while (off < buf.length) {
     const kl = buf.readUInt8(off); off += 1;
     const key = buf.subarray(off, off + kl).toString("latin1"); off += kl;
     const vl = buf.readUInt16LE(off); off += 2;
     const val = buf.subarray(off, off + vl).toString("latin1"); off += vl;
-    degerler[key] = val;
-    sayi += 1;
+    values[key] = val;
+    finiteOrNull += 1;
   }
-  return { degerler, sayi, problems };
+  return { values, finiteOrNull, problems };
 }
 
 // Imzadan sonra, dosya sonuna tam oturan ve anahtarlari ASCII olan offset.
-function baslangicBul(buf) {
-  for (let start = IMZA.length; start <= IMZA.length + 10; start += 1) {
-    if (temizAyrisiyorMu(buf, start)) return start;
+function findStart(buf) {
+  for (let start = SIGNATURE.length; start <= SIGNATURE.length + 10; start += 1) {
+    if (parsesCleanly(buf, start)) return start;
   }
   return -1;
 }
 
-function temizAyrisiyorMu(buf, start) {
+function parsesCleanly(buf, start) {
   let off = start;
   let n = 0;
   while (off < buf.length) {
@@ -75,33 +75,33 @@ function temizAyrisiyorMu(buf, start) {
 
 // Iki nvram dokumunun farki — Faz 2/3 icin. Doner:
 //   { eklenen:{k:v}, silinen:{k:v}, degisen:{k:{eski,yeni}} }
-export function diffNvram(eski, yeni) {
-  const eklenen = Object.create(null);
-  const silinen = Object.create(null);
-  const degisen = Object.create(null);
-  for (const k of Object.keys(yeni)) {
-    if (!(k in eski)) eklenen[k] = yeni[k];
-    else if (eski[k] !== yeni[k]) degisen[k] = { eski: eski[k], yeni: yeni[k] };
+export function diffNvram(previous, next) {
+  const added = Object.create(null);
+  const removed = Object.create(null);
+  const changed = Object.create(null);
+  for (const k of Object.keys(next)) {
+    if (!(k in previous)) added[k] = next[k];
+    else if (previous[k] !== next[k]) changed[k] = { previous: previous[k], next: next[k] };
   }
-  for (const k of Object.keys(eski)) {
-    if (!(k in yeni)) silinen[k] = eski[k];
+  for (const k of Object.keys(previous)) {
+    if (!(k in next)) removed[k] = previous[k];
   }
-  return { eklenen, silinen, degisen };
+  return { added, removed, changed };
 }
 
 // Zaman damgasi — sonuc nesnesi "bu okuma ne zaman yapildi" tasir.
 const now = () => new Date().toISOString();
 
 // --- fark: iki nvram nesnesini karsilastir (saf, cihaza gitmez) ---
-export function computeNvramDiff(once, sonra) {
-  const f = diffNvram(once, sonra);
+export function computeNvramDiff(before, after) {
+  const f = diffNvram(before, after);
   return {
-    zaman: now(), komut: "fark",
-    degisen: f.degisen, eklenen: f.eklenen, silinen: f.silinen,
-    ozet: {
-      degisen: Object.keys(f.degisen).length,
-      eklenen: Object.keys(f.eklenen).length,
-      silinen: Object.keys(f.silinen).length,
+    timestamp: now(), command: "fark",
+    changed: f.changed, added: f.added, removed: f.removed,
+    summary: {
+      changed: Object.keys(f.changed).length,
+      added: Object.keys(f.added).length,
+      removed: Object.keys(f.removed).length,
     },
     ok: true, problems: [],
   };

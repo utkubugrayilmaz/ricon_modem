@@ -12,12 +12,12 @@ import {
 } from "../src/device.js";
 import { parseNvram, diffNvram } from "../src/nvram.js";
 
-const fx = (ad) => fileURLToPath(new URL(`./fixtures/${ad}`, import.meta.url));
-const oku = (ad) => readFileSync(fx(ad), "latin1");
+const fx = (name) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+const oku = (name) => readFileSync(fx(name), "latin1");
 
 test("parsePairs: sistem canli ucundaki alanlari cikarir", () => {
   const c = parsePairs(oku("info_live.sample"));
-  assert.equal(c.lan_ip, "192.168.1.1");
+  assert.equal(c.lan_ip, "192.168.1.1", "cihazin KENDI anahtari — cevrilmez");
   assert.equal(c.lan_mac, "00:11:22:33:44:55");
   assert.ok(c.uptime_spe.includes("load average"));
 });
@@ -48,28 +48,28 @@ test("guessOperator: IMSI onekinden operator", () => {
 });
 
 test("simView: ham alanlar okunabilir gorunume eslenir", () => {
-  const ham = parsePairs(oku("internet_live.sample"));
-  const { sim1 } = simView(ham);
+  const raw = parsePairs(oku("internet_live.sample"));
+  const { sim1 } = simView(raw);
   assert.equal(sim1.imei, "860000000000000");
-  assert.equal(sim1.sebeke_tipi, "FDD LTE");
+  assert.equal(sim1.networkType, "FDD LTE");
   // ICCID sonundaki F temizlenmeli, IMSI'den operator turemeli
-  assert.equal(sim1.iccid_temiz, "8991000000000000000");
+  assert.equal(sim1.iccidClean, "8991000000000000000");
 });
 
 test("parseNvram: yedegi anahtar/deger olarak cozer (gercek format basligi)", () => {
   const buf = readFileSync(fx("nvram.sample.bin"));
-  const { degerler, sayi, problems } = parseNvram(buf);
+  const { values, finiteOrNull, problems } = parseNvram(buf);
   assert.equal(problems.length, 0);
-  assert.ok(sayi >= 10, `beklenen >=10 anahtar, gelen ${sayi}`);
-  assert.equal(degerler.et0macaddr, "00:11:22:33:44:55");
-  assert.equal(degerler.snmpd_rocommunity, "public");
-  assert.equal(degerler.telnet_lanport, "5123");
+  assert.ok(finiteOrNull >= 10, `beklenen >=10 anahtar, gelen ${finiteOrNull}`);
+  assert.equal(values.et0macaddr, "00:11:22:33:44:55");
+  assert.equal(values.snmpd_rocommunity, "public");
+  assert.equal(values.telnet_lanport, "5123");
 });
 
 test("parseNvram: bozuk basluk NVRAM_BAD_HEADER verir, throw etmez", () => {
-  const { problems, sayi } = parseNvram(Buffer.from("COPUK123"));
-  assert.equal(sayi, 0);
-  assert.equal(problems[0].kod, "NVRAM_BAD_HEADER");
+  const { problems, finiteOrNull } = parseNvram(Buffer.from("COPUK123"));
+  assert.equal(finiteOrNull, 0);
+  assert.equal(problems[0].code, "NVRAM_BAD_HEADER");
 });
 
 test("diffNvram: degisen/eklenen/silinen ayrimi", () => {
@@ -78,8 +78,8 @@ test("diffNvram: degisen/eklenen/silinen ayrimi", () => {
     { a: "1", b: "X", d: "4" },
   );
   // diffNvram null-prototip nesne doner (prototip guvenligi); icerik kontrol.
-  assert.deepEqual({ ...f.degisen.b }, { eski: "2", yeni: "X" });
-  assert.equal(f.eklenen.d, "4");
-  assert.equal(f.silinen.c, "3");
-  assert.equal(Object.keys(f.degisen).length, 1);
+  assert.deepEqual({ ...f.changed.b }, { previous: "2", next: "X" });
+  assert.equal(f.added.d, "4");
+  assert.equal(f.removed.c, "3");
+  assert.equal(Object.keys(f.changed).length, 1);
 });

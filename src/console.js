@@ -6,11 +6,11 @@
 // kanali: tek anahtara dokunur, digerlerini ezmez.
 //
 // GUVENLIK: varsayilan SALT OKUNUR. `nvram set/unset/commit`, `reboot`, `rm`,
-// `>` gibi yazan komutlar yazmaIzni acikca verilmeden reddedilir; yazma iznini
+// `>` gibi yazan komutlar writeAllowed acikca verilmeden reddedilir; yazma iznini
 // yalnizca provizyon motoru verir. Telnet DUZ METIN'dir — parola sifresiz
 // gider; sadece yerel hazirlama agi icin uygundur, sahaya/WAN'a acilmamali.
 //
-// Tasarim: komut CALISTIRMA (soket) ile CIKTI AYRISTIRMA (saf fonksiyonlar)
+// Tasarim: komut CALISTIRMA (soket) ile CIKTI AYRISTIRMA (saf functions)
 // ayri; ayristirma cihaz olmadan test edilebilir. Katman throw etmez.
 
 import net from "node:net";
@@ -18,8 +18,8 @@ import { MAX_TIMER_MS } from "./settings.js";
 import { problem } from "./problems.js";
 
 const CONSOLE_PORT = 5123;
-const BASLA = "__RCN_BASLA__";
-const BIT = "__RCN_BIT__";
+const START_MARK = "__RCN_BASLA__";
+const END_MARK = "__RCN_BIT__";
 
 // Yazan/tehlikeli komut deseni — salt-okunur modda reddedilir.
 // Not: dosyaya yonlendirme (`> dosya`, `>> dosya`) yazmadir; ama `2>/dev/null`
@@ -35,10 +35,10 @@ export function iacReply(buf) {
   const out = [];
   for (let i = 0; i < buf.length; i += 1) {
     if (buf[i] === 255) { // IAC
-      const komut = buf[i + 1];
-      const opsiyon = buf[i + 2];
-      if (komut === 253) out.push(255, 252, opsiyon);      // DO  -> WONT
-      else if (komut === 251) out.push(255, 254, opsiyon); // WILL-> DONT
+      const command = buf[i + 1];
+      const option = buf[i + 2];
+      if (command === 253) out.push(255, 252, option);      // DO  -> WONT
+      else if (command === 251) out.push(255, 254, option); // WILL-> DONT
       i += 2;
     }
   }
@@ -46,12 +46,12 @@ export function iacReply(buf) {
 }
 
 // Komut ciktisini iki marker ARASINDAN ayiklar. Marker'lar KENDI SATIRINDA
-// aranir; boylece komutun terminal ekosu (ayni satirda "echo BASLA; ...")
+// aranir; boylece komutun terminal ekosu (ayni satirda "echo START_MARK; ...")
 // yanlislikla yakalanmaz.
-export function extractOutput(ham, basla = BASLA, bit = BIT) {
-  const t = (ham || "").replace(/\r/g, "");
-  const b = t.match(new RegExp(`^${basla}\\s*$`, "m"));
-  const e = t.match(new RegExp(`^${bit}\\s*$`, "m"));
+export function extractOutput(raw, begin = START_MARK, endMark = END_MARK) {
+  const t = (raw || "").replace(/\r/g, "");
+  const b = t.match(new RegExp(`^${begin}\\s*$`, "m"));
+  const e = t.match(new RegExp(`^${endMark}\\s*$`, "m"));
   if (!b || !e || e.index < b.index) return null;
   return t.slice(b.index + b[0].length, e.index).replace(/^\n+|\n+$/g, "");
 }
@@ -68,21 +68,21 @@ export function extractOutput(ham, basla = BASLA, bit = BIT) {
 //
 // Dogrulama: cihazda `nvram show | wc -l` = 1587 iken biz 1585 anahtar
 // ayristiriyorduk — fark tam olarak bu devam satirlariydi.
-export function parseNvramShow(metin) {
-  const cikti = Object.create(null);
-  let sonAnahtar = null;
-  for (const satir of (metin || "").split("\n")) {
-    const s = satir.replace(/\r$/, "");
+export function parseNvramShow(text) {
+  const out = Object.create(null);
+  let lastKey = null;
+  for (const line of (text || "").split("\n")) {
+    const s = line.replace(/\r$/, "");
     const i = s.indexOf("=");
     // Anahtar adi bosluk/= icermez; icermiyorsa bu bir DEVAM satiridir.
     if (i > 0 && !/[\s=]/.test(s.slice(0, i))) {
-      sonAnahtar = s.slice(0, i);
-      cikti[sonAnahtar] = s.slice(i + 1);
-    } else if (sonAnahtar !== null && s !== "") {
-      cikti[sonAnahtar] += `\n${s}`;
+      lastKey = s.slice(0, i);
+      out[lastKey] = s.slice(i + 1);
+    } else if (lastKey !== null && s !== "") {
+      out[lastKey] += `\n${s}`;
     }
   }
-  return cikti;
+  return out;
 }
 
 // Konsol kimligini NORMALIZE eder. Iki bicim de gecerli:
@@ -95,10 +95,10 @@ export function parseNvramShow(metin) {
 // kod yazmamisti — iki katmanin SOZLESMESI farkliydi. Sinirda tek yerde
 // normalize etmek, her cagiranin dogru sekli hatirlamasini beklemekten
 // saglam: bir sonraki cagiran da yanlis sekli verse calisir.
-export function konsolKimligi(opts = {}) {
+export function consoleCredentials(opts = {}) {
   return {
-    kullanici: opts.kullanici ?? opts.kimlik?.kullanici ?? null,
-    sifre: opts.sifre ?? opts.kimlik?.sifre ?? "",
+    user: opts.user ?? opts.credentials?.user ?? null,
+    password: opts.password ?? opts.credentials?.password ?? "",
   };
 }
 
@@ -106,135 +106,135 @@ export function konsolKimligi(opts = {}) {
 
 const CONSOLE_RETRIES = 3;       // tek-baglantili modemde gecici timeout olur
 const CONSOLE_RETRY_GAP = 2000;
-const beklet = (ms) => new Promise((r) => setTimeout(r, ms));
+const idle = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Telnet oturumu: giris yapar, komutlari SIRAYLA calistirir. GECICI hatada
 // (timeout/baglanti) yeniden giris yapip TEKRAR dener (tek-baglantili modem
 // ara sira dusuyor). Yazma korumasi retry'dan once, bir kez.
 // Doner: { ok, ciktilar, problems }  (throw etmez)
-export async function runConsole(opts, komutlar) {
+export async function runConsole(opts, commands) {
   // Deneme sayisi CAGRIYA GORE degisebilir. Sebep: port TARAMASI gibi "olu
   // olabilir, hizli vazgec" isleri 3x22 sn beklememeli — 5 adayla carpilinca
   // 5.5 dakika ediyordu (olculdu). Gercek komutlar varsayilan 3 denemede kalir.
-  const denemeSayisi = Number.isInteger(opts.denemeler) && opts.denemeler > 0
-    ? opts.denemeler : CONSOLE_RETRIES;
-  if (!opts.yazmaIzni) {
-    const yazan = komutlar.find((k) => WRITE_PATTERN.test(k));
-    if (yazan) {
-      return { ok: false, ciktilar: {},
-        problems: [problem("WRITE_BLOCKED_READONLY", `konsol: "${yazan}"`)] };
+  const attemptCount = Number.isInteger(opts.attempts) && opts.attempts > 0
+    ? opts.attempts : CONSOLE_RETRIES;
+  if (!opts.writeAllowed) {
+    const writer = commands.find((k) => WRITE_PATTERN.test(k));
+    if (writer) {
+      return { ok: false, outs: {},
+        problems: [problem("WRITE_BLOCKED_READONLY", `konsol: "${writer}"`)] };
     }
   }
   // KIMLIKSIZ DENEME YOK. Kimlik yoksa login'in tek olasi sonucu zaman
   // asimidir; 3 deneme x ~22 sn bunu degistirmez, sadece 2 dakika yer ve
   // sebebi "zaman asimi" diye gosterip GERCEK sebebi (kimlik yok) gizler.
   // Bu tam olarak 2026-08-28'de 143 saniye kaybettiren sessizlikti.
-  if (!konsolKimligi(opts).kullanici) {
-    return { ok: false, ciktilar: {},
-      problems: [problem("CONSOLE_KIMLIK_YOK", opts.host)] };
+  if (!consoleCredentials(opts).user) {
+    return { ok: false, outs: {},
+      problems: [problem("CONSOLE_AUTH_REQUIRED", opts.host)] };
   }
-  let son;
-  for (let deneme = 0; deneme < denemeSayisi; deneme += 1) {
-    son = await _trySession(opts, komutlar);   // her deneme = taze soket + login
-    if (son.ok) return son;
-    if (deneme < denemeSayisi - 1) await beklet(CONSOLE_RETRY_GAP);
+  let last;
+  for (let attempt = 0; attempt < attemptCount; attempt += 1) {
+    last = await _trySession(opts, commands);   // her deneme = taze soket + login
+    if (last.ok) return last;
+    if (attempt < attemptCount - 1) await idle(CONSOLE_RETRY_GAP);
   }
-  return son;   // tum denemeler basarisiz — son sonuc (problems ile)
+  return last;   // tum denemeler basarisiz — son sonuc (problems ile)
 }
 
 // Tek telnet oturumu denemesi (bir soket, bir login, komutlar).
-function _trySession(opts, komutlar) {
+function _trySession(opts, commands) {
   const {
-    host, kaynakIp, port = CONSOLE_PORT,
-    zamanAsimiMs = 20000,
+    host, sourceIp, port = CONSOLE_PORT,
+    timeoutMs = 20000,
   } = opts;
-  const { kullanici, sifre } = konsolKimligi(opts);
-  const ust = Math.min(zamanAsimiMs, MAX_TIMER_MS);
+  const { user, password } = consoleCredentials(opts);
+  const top = Math.min(timeoutMs, MAX_TIMER_MS);
 
   return new Promise((resolve) => {
     const s = new net.Socket();
     let buf = "";
-    const tumu = [];
-    let asama = 0; // 0=login bekle 1=parola bekle 2=prompt bekle 3=komut gonderildi 4=bitti
-    let cozuldu = false;
+    const all = [];
+    let stage = 0; // 0=login bekle 1=parola bekle 2=prompt bekle 3=komut gonderildi 4=bitti
+    let resolved = false;
 
-    const bitir = (sonuc) => {
-      if (cozuldu) return;
-      cozuldu = true;
+    const finish = (result) => {
+      if (resolved) return;
+      resolved = true;
       try { s.destroy(); } catch { /* zaten kapali */ }
-      resolve(sonuc);
+      resolve(result);
     };
 
     // Tek satirda calistirilacak toplu komut: her komut markerlar arasinda.
-    const toplu = komutlar
-      .map((k) => `echo ${BASLA}; ${k}; echo ${BIT}`)
+    const batched = commands
+      .map((k) => `echo ${START_MARK}; ${k}; echo ${END_MARK}`)
       .join("; ") + "\r\n";
-    const beklenenBit = komutlar.length;
+    const expectedEnd = commands.length;
 
-    const zaman = setTimeout(() => bitir({
-      ok: false, ciktilar: {},
-      problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `login/komut zaman asimi (asama ${asama})`)],
-    }), ust);
+    const timestamp = setTimeout(() => finish({
+      ok: false, outs: {},
+      problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `login/komut zaman asimi (asama ${stage})`)],
+    }), top);
 
-    s.setTimeout(ust);
-    const baglanti = { host, port };
-    if (kaynakIp) baglanti.localAddress = kaynakIp;
+    s.setTimeout(top);
+    const connection = { host, port };
+    if (sourceIp) connection.localAddress = sourceIp;
 
-    s.connect(baglanti);
+    s.connect(connection);
     s.on("data", (d) => {
-      const yanit = iacReply(d);
-      if (yanit.length) s.write(yanit);
-      const metin = d.toString("latin1");
-      buf += metin;
-      tumu.push(metin);
+      const response = iacReply(d);
+      if (response.length) s.write(response);
+      const text = d.toString("latin1");
+      buf += text;
+      all.push(text);
 
-      if (asama === 0 && /login:/i.test(buf)) {
-        asama = 1; buf = ""; s.write(`${kullanici}\r\n`);
-      } else if (asama === 1 && /password:/i.test(buf)) {
-        asama = 2; buf = ""; s.write(`${sifre}\r\n`);
-      } else if (asama === 2 && /[#$]\s*$|@.*:.*[#$]/.test(buf)) {
-        asama = 3; buf = ""; s.write(toplu);
-      } else if (asama === 3) {
-        // Tamamlanma sinyali eko'dan BAGIMSIZ: BIT marker'i KENDI SATIRINDA
-        // (gercek `echo BIT` ciktisi) kac kez gorundu? Eko satirinda marker
-        // satir-ortasindadir, ^BIT$ ile eslesmez. Hepsi gelince biter.
-        const t = tumu.join("").replace(/\r/g, "");
-        const tamam = (t.match(new RegExp(`^${BIT}\\s*$`, "mg")) || []).length;
-        if (tamam >= beklenenBit) { asama = 4; clearTimeout(zaman); s.write("exit\r\n"); bitir(sonucCoz()); }
+      if (stage === 0 && /login:/i.test(buf)) {
+        stage = 1; buf = ""; s.write(`${user}\r\n`);
+      } else if (stage === 1 && /password:/i.test(buf)) {
+        stage = 2; buf = ""; s.write(`${password}\r\n`);
+      } else if (stage === 2 && /[#$]\s*$|@.*:.*[#$]/.test(buf)) {
+        stage = 3; buf = ""; s.write(batched);
+      } else if (stage === 3) {
+        // Tamamlanma sinyali eko'dan BAGIMSIZ: END_MARK marker'i KENDI SATIRINDA
+        // (gercek `echo END_MARK` ciktisi) kac kez gorundu? Eko satirinda marker
+        // satir-ortasindadir, ^END_MARK$ ile eslesmez. Hepsi gelince biter.
+        const t = all.join("").replace(/\r/g, "");
+        const done = (t.match(new RegExp(`^${END_MARK}\\s*$`, "mg")) || []).length;
+        if (done >= expectedEnd) { stage = 4; clearTimeout(timestamp); s.write("exit\r\n"); finish(resolveResult()); }
       }
     });
-    s.on("timeout", () => bitir({
-      ok: false, ciktilar: {},
+    s.on("timeout", () => finish({
+      ok: false, outs: {},
       problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, "soket zaman asimi")],
     }));
-    s.on("error", (e) => { clearTimeout(zaman); bitir({
-      ok: false, ciktilar: {},
+    s.on("error", (e) => { clearTimeout(timestamp); finish({
+      ok: false, outs: {},
       problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `${e.code || e.name}: ${e.message}`)],
     }); });
     s.on("close", () => {
-      if (asama >= 3) bitir(sonucCoz());
-      else bitir({ ok: false, ciktilar: {}, problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `baglanti kapandi (asama ${asama})`)] });
+      if (stage >= 3) finish(resolveResult());
+      else finish({ ok: false, outs: {}, problems: [problem("REQUEST_FAILED", `konsol ${host}:${port}`, `baglanti kapandi (asama ${stage})`)] });
     });
 
     // Toplu ciktidan her komutun ciktisini sirayla ayiklar.
-    function sonucCoz() {
-      const tam = tumu.join("");
-      const parcalar = tam.split(BIT);
-      const ciktilar = Object.create(null);
-      // Her komut icin: ilgili BASLA...BIT blogunu bul. Basit ve saglam yol:
+    function resolveResult() {
+      const full = all.join("");
+      const chunks = full.split(END_MARK);
+      const outs = Object.create(null);
+      // Her komut icin: ilgili START_MARK...END_MARK blogunu bul. Basit ve saglam yol:
       // gercek ciktilar eko'dan SONRA gelir; komut sirasina gore son
-      // 'komutlar.length' adet BASLA...BIT blogunu al.
-      const bloklar = [];
-      const re = new RegExp(`^${BASLA}\\s*$([\\s\\S]*?)^${BIT}\\s*$`, "mg");
+      // 'komutlar.length' adet START_MARK...END_MARK blogunu al.
+      const blocks = [];
+      const re = new RegExp(`^${START_MARK}\\s*$([\\s\\S]*?)^${END_MARK}\\s*$`, "mg");
       let m;
-      const t = tam.replace(/\r/g, "");
-      while ((m = re.exec(t)) !== null) bloklar.push(m[1].replace(/^\n+|\n+$/g, ""));
+      const t = full.replace(/\r/g, "");
+      while ((m = re.exec(t)) !== null) blocks.push(m[1].replace(/^\n+|\n+$/g, ""));
       // Son N blok gercek ciktilar (ilk N eko olabilir; eko'da komut metni var
-      // ama BASLA/BIT kendi satirinda degil, o yuzden re zaten sadece gercekleri
+      // ama START_MARK/END_MARK kendi satirinda degil, o yuzden re zaten sadece gercekleri
       // yakalar). Yine de guvenli olsun diye son N'i aliyoruz.
-      const gercek = bloklar.slice(-komutlar.length);
-      komutlar.forEach((k, i) => { ciktilar[k] = gercek[i] ?? null; });
-      return { ok: true, ciktilar, problems: [] };
+      const real = blocks.slice(-commands.length);
+      commands.forEach((k, i) => { outs[k] = real[i] ?? null; });
+      return { ok: true, outs, problems: [] };
     }
   });
 }
@@ -242,34 +242,34 @@ function _trySession(opts, komutlar) {
 // Kolaylik: tam nvram'i CLI'den cekip {anahtar:deger} olarak dondurur.
 export async function consoleNvram(opts) {
   const r = await runConsole(opts, ["nvram show 2>/dev/null"]);
-  if (!r.ok) return { degerler: {}, sayi: 0, problems: r.problems };
-  const degerler = parseNvramShow(r.ciktilar["nvram show 2>/dev/null"]);
-  return { degerler, sayi: Object.keys(degerler).length, problems: [] };
+  if (!r.ok) return { values: {}, finiteOrNull: 0, problems: r.problems };
+  const values = parseNvramShow(r.outs["nvram show 2>/dev/null"]);
+  return { values, finiteOrNull: Object.keys(values).length, problems: [] };
 }
 
 // Kolaylik: kimlik/sistem kesfi (salt okunur).
-export async function consoleRecon(opts) {
-  const komutlar = ["uname -a", "id", "cat /proc/uptime", "nvram show 2>/dev/null | wc -l"];
-  const r = await runConsole(opts, komutlar);
-  return { ...r, komutlar };
+export async function consoleSystem(opts) {
+  const commands = ["uname -a", "id", "cat /proc/uptime", "nvram show 2>/dev/null | wc -l"];
+  const r = await runConsole(opts, commands);
+  return { ...r, commands };
 }
 
 // nvram degeri icin guvenli tirnak (tek tirnak icinde, tek tirnaklari kacir).
-export function shQuote(deger) {
-  return `'${String(deger).replace(/'/g, "'\\''")}'`;
+export function shQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
 // YAZMA: verilen {anahtar: deger} ciftlerini nvram'a yazar + commit eder.
-// SADECE yazmaIzni:true ile calisir (cagiran acikca yazma niyetini belirtir).
+// SADECE writeAllowed:true ile calisir (cagiran acikca yazma niyetini belirtir).
 // Reboot BURADA YAPILMAZ (reboot baglantiyi koparir, marker tamamlanmaz);
 // reboot ayri bir fire-and-forget adimdir (provizyon motoru yonetir).
-// Doner: { ok, problems, yazilan:[anahtarlar] }
-export async function consoleWrite(opts, ciftler) {
-  const anahtarlar = Object.keys(ciftler);
-  if (anahtarlar.length === 0) return { ok: true, problems: [], yazilan: [] };
-  const komutlar = anahtarlar.map((k) => `nvram set ${k}=${shQuote(ciftler[k])}`);
-  komutlar.push("nvram commit && echo NVRAM_COMMIT_OK");
-  const r = await runConsole({ ...opts, yazmaIzni: true }, komutlar);
-  const commitOk = Object.values(r.ciktilar || {}).some((v) => (v || "").includes("NVRAM_COMMIT_OK"));
-  return { ok: r.ok && commitOk, problems: r.problems, yazilan: anahtarlar };
+// Doner: { ok, problems, yazilan:[keys_] }
+export async function consoleWrite(opts, pairs) {
+  const keys = Object.keys(pairs);
+  if (keys.length === 0) return { ok: true, problems: [], written: [] };
+  const commands = keys.map((k) => `nvram set ${k}=${shQuote(pairs[k])}`);
+  commands.push("nvram commit && echo NVRAM_COMMIT_OK");
+  const r = await runConsole({ ...opts, writeAllowed: true }, commands);
+  const commitOk = Object.values(r.outs || {}).some((v) => (v || "").includes("NVRAM_COMMIT_OK"));
+  return { ok: r.ok && commitOk, problems: r.problems, written: keys };
 }
