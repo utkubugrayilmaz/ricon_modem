@@ -1,6 +1,16 @@
 // Pipeline (tak-çalıştır) testleri — saf karar mantığı + guard'lar.
 // Cihaz gerektirmez.
 
+// DIKKAT — TESTLER MAKINEYE SORMAMALI:
+// provisionModem, kaynak IP verilmediginde pcPreflight() ile MAKINENIN AG
+// ARAYUZLERINE bakar. Bu uc test onu vermiyordu ve yalnizca gelistiricinin
+// PC'sinde 192.168.1.x + 5.5.5.x ikincil IP'leri BAGLIYKEN geciyordu.
+// Olculdu (2026-08-31): modem kablosu cikarilinca arayuz dustu, iki ikincil
+// IP de kayboldu ve uc test birden "pc_not_ready" ile kirmizi yandi — kodda
+// hicbir sey degismemisti. Daha kotusu ters yon: kablo takliyken bu testler
+// GECIYOR ve dogruladiklarini sandigimiz seyi dogrulamiyorlar.
+// Cozum: kaynaklari ACIKCA ver, makineye hic sorulmasin.
+
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { nextAction, provisionModem, provisionRecord } from "../src/pipeline.js";
@@ -69,6 +79,7 @@ test("provisionModem: gecersiz telefon -> MSISDN_INVALID, CIHAZA GITMEZ", async 
   const t = Date.now();
   const r = await provisionModem({
     credentials: { user: "u", password: "p" }, profile: { name: "saha", nvram: {} },
+    factorySource: "1.1.1.2", fieldSource: "2.2.2.3",   // makineye SORMA (bkz. basliktaki not)
     phone: "1234",
   });
   assert.equal(r.status, "no_phone");
@@ -124,6 +135,7 @@ test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
   const written = [];
   const r = await provisionModem({
     credentials: { user: "u", password: "p" }, profile: { name: "saha", nvram: {} },
+    factorySource: "1.1.1.2", fieldSource: "2.2.2.3",   // makineye SORMA (bkz. basliktaki not)
     phone: "05350641858",
     identity: { iccid: null, simStatus: "Not Insert", imei: "867", lan_mac: "aa" },
     record: (line) => written.push(line),
@@ -177,6 +189,7 @@ test("okuma BASARILI ve SIM gercekten yoksa: no_sim (teshis korunuyor)", async (
   // Duzeltmenin eski davranisi bozmadiginin kaniti.
   const r = await provisionModem({
     credentials: { user: "u", password: "p" }, profile: { name: "field", nvram: {} },
+    factorySource: "1.1.1.2", fieldSource: "2.2.2.3",   // makineye SORMA (bkz. asagi)
     phone: "05350641858",
     identity: { iccid: null, simStatus: "Not Insert", imei: "867", lan_mac: "aa",
       readOk: true, problems: [] },
