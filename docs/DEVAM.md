@@ -58,7 +58,7 @@ diyordu. Canlı denemeden ÖNCE yakalandı. `atYazanMi()` mode 2'yi ayırıyor.
 
 **d) Arayüz ham İngilizce geliştirici metni basıyordu** — teknisyene
 `New-NetIPAddress -InterfaceAlias Ethernet ...` yazıyordu. 31 sorun kodunun
-Türkçe karşılığı çekirdeğe (`src/report.js` `SORUN_TR`) yazıldı; arayüz artık
+Türkçe karşılığı çekirdeğe (`src/report/report.js` `SORUN_TR`) yazıldı; arayüz artık
 yalnızca `tr` basıyor. Nöbetçi test: çevirisi olmayan kod VE Türkçe metinde
 teknik komut geçmesi kırmızı yapar.
 

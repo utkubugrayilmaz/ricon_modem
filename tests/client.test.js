@@ -5,10 +5,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { Client } from "../src/client.js";
-import { parseArp, parseIpv6Neighbors, guessVendor } from "../src/network.js";
-import { problem, isOk, PROBLEM_CODES } from "../src/problems.js";
-import { stripSecrets } from "../src/report.js";
+import { Client } from "../src/transport/client.js";
+import { parseArp, parseIpv6Neighbors, guessVendor } from "../src/transport/network.js";
+import { problem, isOk, PROBLEM_CODES } from "../src/domain/problems.js";
+import { stripSecrets } from "../src/report/report.js";
 
 function sahteModem(davranis) {
   return new Promise((resolve) => {

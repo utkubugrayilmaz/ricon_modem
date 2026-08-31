@@ -2,7 +2,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dagilim, summarizeMetrics } from "../src/metrics.js";
+import { dagilim, summarizeMetrics } from "../src/report/metrics.js";
 
 test("dagilim: tek sayida medyan ortadaki, cift sayida ortalamasi", () => {
   assert.equal(dagilim([5, 1, 3]).medyan, 3);

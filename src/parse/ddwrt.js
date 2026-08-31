@@ -9,7 +9,7 @@
 // Bazi alanlar (sinyal cubugu) HTML blogu tasir; etiketler temizlenir ki
 // ham deger kullanilabilir olsun.
 
-import { SIM_FIELD_MAP, SIM2_FIELD_MAP, OPERATORS } from "./constants.js";
+import { SIM_FIELD_MAP, SIM2_FIELD_MAP, OPERATORS } from "../domain/constants.js";
 
 // Ham metinden {anahtar::deger} ciftlerini cikarir.
 // Prototip kirlenmesine karsi Object.create(null): cihazdan __proto__ adli

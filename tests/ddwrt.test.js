@@ -9,8 +9,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   parsePairs, cleanIccid, guessOperator, simView,
-} from "../src/ddwrt.js";
-import { parseNvram, diffNvram } from "../src/nvram.js";
+} from "../src/parse/ddwrt.js";
+import { parseNvram, diffNvram } from "../src/parse/nvram.js";
 
 const fx = (ad) => fileURLToPath(new URL(`./fixtures/${ad}`, import.meta.url));
 const oku = (ad) => readFileSync(fx(ad), "latin1");

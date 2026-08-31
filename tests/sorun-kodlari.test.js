@@ -13,15 +13,26 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PROBLEM_CODES } from "../src/problems.js";
-import { SORUN_TR } from "../src/sorun-metni.js";
+import { PROBLEM_CODES } from "../src/domain/problems.js";
+import { SORUN_TR } from "../src/domain/sorun-metni.js";
 
 const SRC = new URL("../src/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 
+// ALT KLASORLERE INER: src/ katmanlara bolundu (domain/transport/parse/
+// device/flow/report). Duz readdir yapan eski surum tasimadan sonra tek bir
+// kaynak dosyasi bile taramiyordu ve test BOS KUMEYLE gecerdi.
 function kaynaklar() {
-  return readdirSync(SRC)
-    .filter((f) => f.endsWith(".js") && f !== "problems.js" && f !== "sorun-metni.js")
-    .map((f) => ({ ad: f, metin: readFileSync(join(SRC, f), "utf8") }));
+  const cikti = [];
+  const yuru = (dizin) => {
+    for (const ad of readdirSync(dizin, { withFileTypes: true })) {
+      if (ad.isDirectory()) { yuru(join(dizin, ad.name)); continue; }
+      if (!ad.name.endsWith(".js")) continue;
+      if (ad.name === "problems.js" || ad.name === "sorun-metni.js") continue;
+      cikti.push({ ad: ad.name, metin: readFileSync(join(dizin, ad.name), "utf8") });
+    }
+  };
+  yuru(SRC);
+  return cikti;
 }
 
 // Kod URETEN cagrilar: dogrudan problem(), karar modullerindeki red(),

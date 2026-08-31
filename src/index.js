@@ -14,54 +14,54 @@
 // Provizyon (Faz 3) — çekirdek dışa aktarımı (paket/CLI/endpoint aynı API).
 export {
   applyProvisioning, planProvisioning, groupPlan, applyPin,
-} from "./provisioning.js";
+} from "./flow/provisioning.js";
 export {
   FIELD_PROFILE, FACTORY_PROFILE, PROFILES, DEVICE_NAME_KEY, SIM_PIN_KEY,
-} from "./profile.js";
+} from "./domain/profile.js";
 export {
   provisionModem, provisionLoop, nextAction, provisionRecord, simPinHedefi,
-} from "./pipeline.js";
+} from "./flow/pipeline.js";
 // Cihaz temel okumalari + PC on-kontrolu — en alt katman. Okuma yolu da
 // yazma yolu da buna bakiyor (aralarinda bagimlilik yok).
 export {
   readIdentity, simTakiliMi, waitForInternet, pcPreflight,
-} from "./cihaz.js";
+} from "./device/cihaz.js";
 // Cihaz DEGERLENDIRME — "ne durumda, ne eksik, tekrar bakmali miyim?"
 // yenidenDenemeKarari PURE: tekrar politikasi cekirdekte, arayuzde degil.
 export {
   assessDevice, provisionEksikleri, yenidenDenemeKarari, degerlendirmeyiIzle,
-} from "./degerlendirme.js";
-export { readSim, normalizePhone, telefonGirdiBicimi, parseSimStatus } from "./sim.js";
+} from "./flow/degerlendirme.js";
+export { readSim, normalizePhone, telefonGirdiBicimi, parseSimStatus } from "./device/sim.js";
 // PIN denemesi kararlari — PURE, TEK YER. nvram yolu, AT yolu ve
 // internet-sonrasi deneme yolu ucu de buraya soruyor.
 export {
   pinDenemesiUygunMu, hakDurumu, hakYakilmisMi, PIN_TOPLAM_VARSAYILAN,
-} from "./pin-karar.js";
+} from "./domain/pin-karar.js";
 // AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
 export {
   readMsisdn, readSimLock, simPinKaldir, simPinKilitle,
   simKilitKaldirmaKarari, simKilidiUygunMu,
   atPortBul, atKomut, atYazanMi, AT_PORT,
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
-} from "./at.js";
+} from "./device/at.js";
 // Konsol katmani — telnet root shell. Kendi komutunu calistirmak isteyen
 // tuketici icin acik: runConsole(opts, ["uname -a"]).
 export {
   runConsole, consoleNvram, consoleRecon, konsolKimligi, parseNvramShow,
-} from "./console.js";
+} from "./transport/console.js";
 // Gosterim sozlugu — UI/rapor icin (motor kullanmaz).
-export { settingLabel } from "./report.js";
+export { settingLabel } from "./report/report.js";
 // Sorun metinleri — kod -> operatore gosterilecek TURKCE. TEK sozluk.
-export { sorunTr, problemleriTurkcelestir, SORUN_TR } from "./sorun-metni.js";
-export { PROBLEM_CODES } from "./problems.js";
+export { sorunTr, problemleriTurkcelestir, SORUN_TR } from "./domain/sorun-metni.js";
+export { PROBLEM_CODES } from "./domain/problems.js";
 // Cihaz OKUMA islemleri (dogrula/oku/kesif/konsol) ve IZLEME. Govdeleri ayri
 // modullerde: bu dosya KAPI, uygulama degil.
 export {
   checkDevice, readDevice, systemView, discoverDevice, readConsole,
-} from "./okuma.js";
-export { watchDevice, kesintileriBul } from "./izleme.js";
+} from "./device/okuma.js";
+export { watchDevice, kesintileriBul } from "./flow/izleme.js";
 // nvram: ikili tam yedek cozumleyici + saf diff.
-export { parseNvram, diffNvram, computeNvramDiff } from "./nvram.js";
+export { parseNvram, diffNvram, computeNvramDiff } from "./parse/nvram.js";
 // Olcum ozeti — PURE, kaydedilmis calistirma satirlarindan istatistik.
-export { summarizeMetrics, dagilim } from "./metrics.js";
-export { SETTING_LABELS } from "./constants.js";
+export { summarizeMetrics, dagilim } from "./report/metrics.js";
+export { SETTING_LABELS } from "./domain/constants.js";

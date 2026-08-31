@@ -7,15 +7,15 @@
 // KURAL (index.js ile ayni): process.env OKUMAZ, argv OKUMAZ, stdout'a
 // YAZMAZ. Girdi `opts`, cikti sonuc nesnesi (throw yok, problems[]).
 
-import { ENDPOINTS, TCP_PORTS } from "./constants.js";
-import { Client, isHostBusy, lockHost, unlockHost } from "./client.js";
-import { parsePairs, simView } from "./ddwrt.js";
-import { parseNvram } from "./nvram.js";
-import { localInterfaces, arpTable, ipv6Neighbors, guessVendor } from "./network.js";
-import { scanPorts, isReachable } from "./scanner.js";
-import { snmpIdentity } from "./snmp.js";
-import { consoleRecon, consoleNvram } from "./console.js";
-import { problem, isOk } from "./problems.js";
+import { ENDPOINTS, TCP_PORTS } from "../domain/constants.js";
+import { Client, isHostBusy, lockHost, unlockHost } from "../transport/client.js";
+import { parsePairs, simView } from "../parse/ddwrt.js";
+import { parseNvram } from "../parse/nvram.js";
+import { localInterfaces, arpTable, ipv6Neighbors, guessVendor } from "../transport/network.js";
+import { scanPorts, isReachable } from "../transport/scanner.js";
+import { snmpIdentity } from "../transport/snmp.js";
+import { consoleRecon, consoleNvram } from "../transport/console.js";
+import { problem, isOk } from "../domain/problems.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (host) => host.split(".").slice(0, 3).join(".") + ".";

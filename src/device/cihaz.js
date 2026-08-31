@@ -8,11 +8,11 @@
 //
 // KURAL (tum cekirdek): process.env/argv okunmaz, stdout'a yazilmaz.
 
-import { Client } from "./client.js";
-import { parsePairs } from "./ddwrt.js";
+import { Client } from "../transport/client.js";
+import { parsePairs } from "../parse/ddwrt.js";
 import { readSim, parseSimStatus } from "./sim.js";
-import { findSourceIp } from "./network.js";
-import { problem } from "./problems.js";
+import { findSourceIp } from "../transport/network.js";
+import { problem } from "../domain/problems.js";
 
 const bildir = (opts, m) => { if (typeof opts.ilerle === "function") opts.ilerle(m); };
 const olayla = (opts, olay) => {

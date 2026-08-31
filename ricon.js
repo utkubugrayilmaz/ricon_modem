@@ -29,8 +29,8 @@
 import { writeFileSync, readFileSync, appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { createInterface } from "node:readline";
-import { DEFAULT_HOST } from "./src/constants.js";
-import { findSourceIp } from "./src/network.js";
+import { DEFAULT_HOST } from "./src/domain/constants.js";
+import { findSourceIp } from "./src/transport/network.js";
 import {
   checkDevice, discoverDevice, readDevice, watchDevice, readConsole, computeNvramDiff,
   applyProvisioning, PROFILES, provisionModem, provisionLoop, pcPreflight, readSim,
@@ -38,8 +38,8 @@ import {
   readMsisdn, readSimLock, simPinKaldir,
   simPinKilitle, atKomut, parseClck,
 } from "./src/index.js";
-import { writeJson, summaryText } from "./src/report.js";
-import { isOk } from "./src/problems.js";
+import { writeJson, summaryText } from "./src/report/report.js";
+import { isOk } from "./src/domain/problems.js";
 
 const argv = process.argv.slice(2);
 const komut = argv[0];

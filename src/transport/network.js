@@ -6,7 +6,7 @@
 
 import os from "node:os";
 import { execFile } from "node:child_process";
-import { OUI_VENDORS } from "./constants.js";
+import { OUI_VENDORS } from "../domain/constants.js";
 
 // Verilen alt agda (or. "192.168.1.") tanimli yerel IPv4 adresini bulur.
 // Kaynak IP olarak kullanilir. Doner: ip | null

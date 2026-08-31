@@ -62,7 +62,7 @@ uygular (zaten kapalıysa dokunmaz). Anahtar: `wl0_net_mode`+`wl_net_mode`
 | LAN ikincil IP sil | `lan_ipaddr_ex1` = `0.0.0.0` | 🟢 nvram (default 192.168.8.1) |
 | LAN class | `lan_cclass` = `5.5.5.` | 🟢 ÇÖZÜLDÜ — **cihaz kendi türetiyor**, profile konmadı |
 
-Tüm bu eşlemeler `src/profile.js` içindeki `FIELD_PROFILE`'a işlendi ve motor
+Tüm bu eşlemeler `src/domain/profile.js` içindeki `FIELD_PROFILE`'a işlendi ve motor
 (`node ricon.js uygula`) bunları uyguluyor. `lan_cclass` bilerek DIŞARIDA:
 LAN IP değişince cihaz onu reboot'ta kendisi güncelliyor (aşağıdaki uçtan uca
 testte gözlemle kesinleşti) — yazmak gereksiz risk.
@@ -172,7 +172,7 @@ nvram adları arayüz etiketleriyle birebir:
 Local DNS, Loopback IP + Mask — bunlar profile hiç girmiyor.
 
 ### Yazma sırası
-`Modem/WAN → DHCP → LAN`, `lan_ipaddr` en sonda (`src/profile.js`
+`Modem/WAN → DHCP → LAN`, `lan_ipaddr` en sonda (`src/domain/profile.js`
 `WRITE_GROUPS`). **Dürüst not:** nvram yazımı sırasızdır, hiçbir değer
 `commit` + reboot olmadan yürürlüğe girmez — sıra sonucu değiştirmez. Yine de
 uygulanıyor çünkü (a) yazma yarıda kesilirse yönetim adresi en son değiştiği

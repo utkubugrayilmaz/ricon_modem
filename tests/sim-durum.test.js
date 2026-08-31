@@ -2,8 +2,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseSimStatus } from "../src/sim.js";
-import { problem } from "../src/problems.js";
+import { parseSimStatus } from "../src/device/sim.js";
+import { problem } from "../src/domain/problems.js";
 
 test("parseSimStatus: PIN kilidi + KALAN DENEME sayilari (canli metin)", () => {
   const d = parseSimStatus("Need verification PIN code (PIN: 3/3, PUK: 10/10)");

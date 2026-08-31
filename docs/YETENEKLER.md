@@ -53,7 +53,7 @@ Standart SSH/telnet/SNMP kapalı. Alttaki OS OpenWrt/Linux. Otomasyon (Faz
 - **Faz 2 ✅** telnet+nvram kanalı `console.js`'e oturdu; arayüzdeki her ayar
   nvram öncesi/sonrası **farkıyla** ilgili anahtara eşlendi
   (`docs/hazirlama-profili.md`).
-- **Faz 3 ✅** "istenen durum" profili (`src/profile.js`) → oku/karşılaştır/
+- **Faz 3 ✅** "istenen durum" profili (`src/domain/profile.js`) → oku/karşılaştır/
   yaz/doğrula motoru + tak-çalıştır pipeline. Sıfır cihazda **tek komutla**
   (`hazirla`) uçtan uca çalıştı, idempotent, yan etkisiz.
 

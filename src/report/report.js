@@ -4,7 +4,7 @@
 // zaten kimlik tasimaz; yine de guvenlik agi olarak temizle() ile ozyinelemeli
 // alan-adi + regex suzgeci uygulanir. Rapor paylasilabilir olmali.
 
-import { SETTING_LABELS } from "./constants.js";
+import { SETTING_LABELS } from "../domain/constants.js";
 
 // Cikti nesnesinden sir tasiyabilecek alanlari ozyinelemeli siler.
 // SIM PIN de sir: nvram anahtar adiyla da gelebilir, alan adiyla da.

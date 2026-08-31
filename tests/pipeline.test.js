@@ -3,13 +3,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { nextAction, provisionModem, provisionRecord } from "../src/pipeline.js";
+import { nextAction, provisionModem, provisionRecord } from "../src/flow/pipeline.js";
 // pcPreflight ve simTakiliMi ALT KATMANDA (cihaz.js): okuma yolu da yazma
 // yolu da onlara bakiyor, pipeline'a ait degiller.
-import { pcPreflight, simTakiliMi } from "../src/cihaz.js";
-import { problem, isOk } from "../src/problems.js";
-import { applyPin } from "../src/provisioning.js";
-import { stripSecrets } from "../src/report.js";
+import { pcPreflight, simTakiliMi } from "../src/device/cihaz.js";
+import { problem, isOk } from "../src/domain/problems.js";
+import { applyPin } from "../src/flow/provisioning.js";
+import { stripSecrets } from "../src/report/report.js";
 
 test("nextAction: saha adresinde + istenen durumda -> zaten_hazir", () => {
   assert.equal(nextAction(false, true, "zaten_istenen_durumda"), "zaten_hazir");

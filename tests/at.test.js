@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
   atTamam, atKabukKomutu, atCevabiAyikla, atYazanMi, atKarismisMi,
-} from "../src/at.js";
+} from "../src/device/at.js";
 
 test("parseCnum: SIM'e yazili numarayi BIZIM kanonik bicime cevirir", () => {
   // Cihazdan gelen gercek bicim

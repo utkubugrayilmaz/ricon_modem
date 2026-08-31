@@ -5,9 +5,9 @@
 //
 // KURAL (index.js ile ayni): process.env/argv okumaz, stdout'a yazmaz.
 
-import { Client } from "./client.js";
-import { parsePairs } from "./ddwrt.js";
-import { problem, isOk } from "./problems.js";
+import { Client } from "../transport/client.js";
+import { parsePairs } from "../parse/ddwrt.js";
+import { problem, isOk } from "../domain/problems.js";
 
 // --- izle: DONEMSEL ornekleme + zaman cizelgesi ---
 //

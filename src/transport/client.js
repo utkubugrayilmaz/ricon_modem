@@ -22,8 +22,8 @@ import {
   REQUEST_RETRIES,
   RETRY_GAP_MS,
   MAX_TIMER_MS,
-} from "./constants.js";
-import { problem } from "./problems.js";
+} from "../domain/constants.js";
+import { problem } from "../domain/problems.js";
 
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 

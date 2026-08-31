@@ -8,7 +8,7 @@
 // ICMP kapali oldugu icin (ping timeout) canlilik TCP ile olculur.
 
 import net from "node:net";
-import { TCP_PORTS, TCP_PROBE_MS } from "./constants.js";
+import { TCP_PORTS, TCP_PROBE_MS } from "../domain/constants.js";
 
 // Tek portun acik olup olmadigina bakar; acilsa banner'i (ilk baytlar) alir.
 // Throw etmez. Doner: { kapi, acik, banner|null }

@@ -18,14 +18,22 @@ const KOK = new URL("../", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "
 
 function metinDosyalari() {
   const cikti = [];
-  for (const dizin of ["src", "tests", "examples", "examples/test-ui", "."]) {
-    const yol = join(KOK, dizin);
-    for (const ad of readdirSync(yol, { withFileTypes: true })) {
-      if (!ad.isFile()) continue;
+  // ALT KLASORLERE INER: src/ 2026-08-31'de katmanlara bolundu
+  // (domain/transport/parse/device/flow/report). Duz readdir yapan eski surum
+  // tasima sonrasi hicbir src dosyasini denetlemiyordu — sessiz kapsam kaybi.
+  const yuru = (dizin) => {
+    for (const ad of readdirSync(join(KOK, dizin), { withFileTypes: true })) {
+      if (ad.isDirectory()) {
+        if (ad.name === "node_modules" || ad.name.startsWith(".")) continue;
+        if (dizin === ".") continue;              // kokte YALNIZCA dosyalar
+        yuru(`${dizin}/${ad.name}`);
+        continue;
+      }
       if (!/\.(js|json|md|html|css)$/.test(ad.name)) continue;
-      cikti.push({ ad: `${dizin}/${ad.name}`, bayt: readFileSync(join(yol, ad.name)) });
+      cikti.push({ ad: `${dizin}/${ad.name}`, bayt: readFileSync(join(KOK, dizin, ad.name)) });
     }
-  }
+  };
+  for (const dizin of ["src", "tests", "examples", "."]) yuru(dizin);
   return cikti;
 }
 

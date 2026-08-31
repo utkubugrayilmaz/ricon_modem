@@ -8,8 +8,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PROBLEM_CODES, problem } from "../src/problems.js";
-import { sorunTr, problemleriTurkcelestir, SORUN_TR } from "../src/sorun-metni.js";
+import { PROBLEM_CODES, problem } from "../src/domain/problems.js";
+import { sorunTr, problemleriTurkcelestir, SORUN_TR } from "../src/domain/sorun-metni.js";
 
 test("her sorun kodunun TURKCE karsiligi var", () => {
   const eksik = PROBLEM_CODES.filter((k) => !SORUN_TR[k]);

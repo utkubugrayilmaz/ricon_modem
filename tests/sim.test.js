@@ -1,7 +1,7 @@
 // SIM modulu testleri — cihaz gerektirmez.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readSim, normalizePhone, telefonGirdiBicimi } from "../src/sim.js";
+import { readSim, normalizePhone, telefonGirdiBicimi } from "../src/device/sim.js";
 
 test("normalizePhone: TR mobil formatlarini 5xxxxxxxxx yapar", () => {
   assert.equal(normalizePhone("05551234567"), "5551234567");

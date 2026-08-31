@@ -28,7 +28,7 @@ import {
   telefonGirdiBicimi, simPinKaldir, readSimLock,
   problemleriTurkcelestir, sorunTr,
 } from "./index.js";
-import { isReachable } from "./scanner.js";
+import { isReachable } from "./transport/scanner.js";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",

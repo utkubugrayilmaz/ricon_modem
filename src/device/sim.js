@@ -9,9 +9,9 @@
 // UI tarafindan GIRDI olarak verilir (opts.telefon) — fallback tasarim.
 // Kesin numara icin: operatorden (Turkcell) ICCID->numara listesi.
 
-import { Client } from "./client.js";
-import { parsePairs, simView } from "./ddwrt.js";
-import { problem, isOk } from "./problems.js";
+import { Client } from "../transport/client.js";
+import { parsePairs, simView } from "../parse/ddwrt.js";
+import { problem, isOk } from "../domain/problems.js";
 
 const now = () => new Date().toISOString();
 const SIM_UC = "/asp/status/Status_Internet.live.asp";

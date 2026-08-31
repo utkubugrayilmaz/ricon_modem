@@ -11,14 +11,14 @@
 // PC ağ notu: PC'de 192.168.1.x VE 5.5.5.x ikincil IP'leri KALICI dururken
 // ağ değiştirmeye gerek yok — araç öncesi/sonrası doğru kaynaktan gider.
 
-import { isReachable } from "./scanner.js";
+import { isReachable } from "../transport/scanner.js";
 import { applyProvisioning, applyPin } from "./provisioning.js";
-import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./profile.js";
-import { normalizePhone } from "./sim.js";
-import { readIdentity, simTakiliMi, waitForInternet, pcPreflight } from "./cihaz.js";
-import { problem } from "./problems.js";
-import { readMsisdn } from "./at.js";
-import { pinDenemesiUygunMu, hakYakilmisMi } from "./pin-karar.js";
+import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "../domain/profile.js";
+import { normalizePhone } from "../device/sim.js";
+import { readIdentity, simTakiliMi, waitForInternet, pcPreflight } from "../device/cihaz.js";
+import { problem } from "../domain/problems.js";
+import { readMsisdn } from "../device/at.js";
+import { pinDenemesiUygunMu, hakYakilmisMi } from "../domain/pin-karar.js";
 
 const now = () => new Date().toISOString();
 const onekAl = (ip) => ip.split(".").slice(0, 3).join(".") + ".";

@@ -198,31 +198,40 @@ terminalden de (`ricon.js numara`) HTTP ucundan da çağrılabilir — endpoint'
 
 | Modül | İş |
 |---|---|
+| **Giris** | *hangi kapidan girilirse ayni cekirdek* |
 | `ricon.js` | İnce CLI — argv + .env + `index` çağrısı |
 | `src/index.js` | **Public API — TEK KAPI.** Uygulama yok, yalnız ne dışa açıldığı (58 satır) |
-| `src/okuma.js` | Cihaz okuma işlemleri: `dogrula` / `oku` / `kesif` / `konsol` |
-| `src/cihaz.js` | ⭐ **En alt katman:** `readIdentity`, `simTakiliMi`, `waitForInternet`, `pcPreflight`. Okuma yolu da yazma yolu da buna bakar |
-| `src/izleme.js` | Dönemsel örnekleme + zaman çizelgesi (canlı alan tespiti) |
-| `src/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |
-| `src/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |
-| `src/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
-| `src/sim.js` | SIM/hücresel okuma (HTTP) + `Status of SIM` çözümleyici |
-| `src/at.js` | ⭐ AT komut katmanı — telefon numarası (`AT+CNUM`), SIM kilidi, PIN kaldırma/açma |
-| `src/pin-karar.js` | ⭐ PIN denemesi kararları — **PURE, TEK YER**. Üç yol (nvram / AT / internet sonrası) da buraya sorar |
-| `src/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + diff |
-| `src/network.js` | Arayüz/kaynak IP, ARP + IPv6 komşu |
-| `src/scanner.js` | Paralel TCP port taraması |
-| `src/snmp.js` | Saf Node SNMPv2c GET |
-| `src/provisioning.js` | Provizyon motoru (oku→planla→yaz→doğrula, idempotent) |
-| `src/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü). Numarayı **SIM'den kendisi okur** |
-| `src/degerlendirme.js` | ⭐ "Ne durumda, ne eksik, **tekrar bakmalı mıyım**?" — tekrar politikası PURE ve çekirdekte |
-| `src/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
-| `src/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
-| `src/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |
-| `src/sorun-metni.js` | Sorun kodu → **operatöre gösterilecek Türkçe**. Tek sözlük; `message`/`check` geliştirici tarafı |
-| `src/metrics.js` | Ölçüm özetleyici (PURE) — süre istatistikleri, karşılaştırma |
-| `src/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
 | `src/server.js` | HTTP endpoint + SSE — çekirdeği **tüketir**, kural eklemez. `staticDir` verilmezse SALT API |
+| **domain/** | *IO YOK — saf kural, sabit, karar* |
+| `src/domain/constants.js` | Tüm sabitler (port/uç/alan/**ayar sözlüğü** haritaları) |
+| `src/domain/profile.js` | `FIELD_PROFILE` (saha) + `FACTORY_PROFILE` (fabrika) |
+| `src/domain/problems.js` | Sorun kataloğu `{kod, severity, message, check}` |
+| `src/domain/sorun-metni.js` | Sorun kodu → **operatöre gösterilecek Türkçe**. Tek sözlük; `message`/`check` geliştirici tarafı |
+| `src/domain/pin-karar.js` | ⭐ PIN denemesi kararları — **PURE, TEK YER**. Üç yol (nvram / AT / internet sonrası) da buraya sorar |
+| **transport/** | *cihazla ve agla konusan kanallar* |
+| `src/transport/client.js` | ⭐ Sıralı HTTP kuyruğu — modemin **tek bağlantılı** sunucusu; kaynak IP, retry, yarım-gövde toleransı |
+| `src/transport/console.js` | Telnet root shell (5123): nvram get/show + yazma (kapılı) + retry |
+| `src/transport/scanner.js` | Paralel TCP port taraması |
+| `src/transport/network.js` | Arayüz/kaynak IP, ARP + IPv6 komşu |
+| `src/transport/snmp.js` | Saf Node SNMPv2c GET |
+| **parse/** | *ham veri → nesne (saf)* |
+| `src/parse/ddwrt.js` | `{anahtar::değer}` ayrıştırıcı + SIM görünümü |
+| `src/parse/nvram.js` | `/nvrambak.bin` ikili tam yedek çözümleyici + diff |
+| **device/** | *cihazdan okuma* |
+| `src/device/at.js` | ⭐ AT komut katmanı — telefon numarası (`AT+CNUM`), SIM kilidi, PIN kaldırma/açma |
+| `src/device/sim.js` | SIM/hücresel okuma (HTTP) + `Status of SIM` çözümleyici |
+| `src/device/cihaz.js` | ⭐ **En alt katman:** `readIdentity`, `simTakiliMi`, `waitForInternet`, `pcPreflight`. Okuma yolu da yazma yolu da buna bakar |
+| `src/device/okuma.js` | Cihaz okuma işlemleri: `dogrula` / `oku` / `kesif` / `konsol` |
+| **flow/** | *akis / orkestrasyon* |
+| `src/flow/degerlendirme.js` | ⭐ "Ne durumda, ne eksik, **tekrar bakmalı mıyım**?" — tekrar politikası PURE ve çekirdekte |
+| `src/flow/provisioning.js` | Provizyon motoru (oku→planla→yaz→doğrula, idempotent) |
+| `src/flow/pipeline.js` | Tak-çalıştır orkestrasyon (algıla→provizyon→retry, döngü). Numarayı **SIM'den kendisi okur** |
+| `src/flow/izleme.js` | Dönemsel örnekleme + zaman çizelgesi (canlı alan tespiti) |
+| **report/** | *cikti ve metrik* |
+| `src/report/report.js` | JSON + insan-okunur çıktı, sır temizleme, `settingLabel` |
+| `src/report/metrics.js` | Ölçüm özetleyici (PURE) — süre istatistikleri, karşılaştırma |
+
+Bagimlilik yonu TEK YON: `flow` → `device` → `transport`/`parse` → `domain`. `domain` hicbir seye bagli degil, `transport` cihaza gider ama karar vermez. Dongu yok.
 | `examples/` | **ÖRNEKLER — ürün değil:** test arayüzü, paket/endpoint kullanımı |
 | `arsiv/` | Repoda değil (gitignore): eski yakalamalar, ekran görüntüleri, ham dökümler |
 

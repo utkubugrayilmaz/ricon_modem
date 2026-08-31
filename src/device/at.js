@@ -22,10 +22,10 @@
 // `yontem: "yok"` dondurup ICCID bildiriyoruz (operator elle girer — bugun
 // zaten oyle yapiyor). Ihtiyac cikarsa kardes calismadan alinir.
 
-import { runConsole } from "./console.js";
+import { runConsole } from "../transport/console.js";
 import { normalizePhone } from "./sim.js";
-import { problem } from "./problems.js";
-import { pinDenemesiUygunMu, hakDurumu, PIN_TOPLAM_VARSAYILAN } from "./pin-karar.js";
+import { problem } from "../domain/problems.js";
+import { pinDenemesiUygunMu, hakDurumu, PIN_TOPLAM_VARSAYILAN } from "../domain/pin-karar.js";
 
 export { PIN_TOPLAM_VARSAYILAN };
 
