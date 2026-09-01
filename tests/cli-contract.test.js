@@ -43,7 +43,7 @@ test("CLI'in varsayilan profili PROFILES'ta GERCEKTEN var", () => {
 
 // Teknisyenin ezberi. Biri sessizce degisirse sahadaki betikler kirilir.
 const COMMANDS = [
-  "verify", "read", "console", "sim", "assess", "msisdn", "sim-lock",
+  "verify", "read", "console", "sim", "assess", "msisdn", "sim-lock-status",
   "sim-pin-disable", "sim-pin-enable", "diff", "apply", "provision",
   "call", "metrics", "metrics-manual", "sim-puk",
 ];
@@ -129,12 +129,56 @@ test("defter dosya yollari + eski adlarin yedegi", () => {
   assert.ok(CLI.includes("data/olcumler.jsonl"), "eski olcum adi yedekte olmali");
 });
 
+// `start`/`prepare-network` artik bin/ricon.js'i DOGRUDAN degil,
+// scripts/network-setup.js uzerinden DOLAYLI cagiriyor (once ag ayarini
+// hazirlayip modemin gercek IP'sini bulan bir sarmalayici — bkz.
+// scripts/network-setup.js basindaki yorum). Guvenceyi bir katman derinde
+// dogruluyoruz: sarmalayicinin GERCEKTEN bin/ricon.js'e "provision" diye
+// dispatch ettigini kontrol ediyoruz, aksi halde ayni "isim gercek komuttan
+// sessizce ayrisir" kusuru bu sefer bir dolayli katmanda tekrarlanabilirdi.
+const NETWORK_SETUP = readFileSync(new URL("../scripts/network-setup.js", import.meta.url), "utf8");
+
 test("npm script'leri GERCEK komutlari cagiriyor", () => {
   for (const [name, line] of Object.entries(PKG.scripts)) {
     if (name === "test") continue;
+    if (/scripts\/network-setup\.js/.test(line)) {
+      assert.ok(/["'`]provision["'`]/.test(NETWORK_SETUP),
+        `${name}: network-setup.js bin/ricon.js'e "provision" diye dispatch etmiyor`);
+      continue;
+    }
     const m = line.match(/bin\/ricon\.js\s+([a-z-]+)/);
     assert.ok(m, `${name}: script bir komut cagirmiyor`);
     assert.ok(COMMANDS.includes(m[1]), `npm run ${name} -> "${m[1]}" diye bir komut yok`);
   }
-  assert.match(PKG.scripts.start, /provision --loop/);
+  assert.match(PKG.scripts.start, /--loop/);
+});
+
+// AD CAKISMASI — bu testin var olma sebebi olculmus bir kusur.
+//
+// `npm run sim-lock` = `sim-pin-enable --apply` (SIM'e kilit koyar, PIN
+// hakki harcar) iken CLI'daki `sim-lock` komutu SALT OKUNURDU ("hicbir sey
+// harcamaz"). Ayni ad iki yerde tam TERS anlam tasiyordu: tezgahtaki
+// teknisyen bildigi adi yaziyor ve okuma sanip YAZMA aliyordu.
+//
+// Ustteki test bunu goremiyordu — o yalnizca "script gercek BIR komut
+// cagiriyor mu" diye bakiyor, adlarin uyusup uyusmadigina bakmiyor.
+//
+// Kural: bir script'in adi, CLI'da var olan BASKA bir komutun adiysa hata.
+// Kendi adiyla ayni komutu cagiran script serbest (`npm run read` -> `read`).
+test("npm script adi, BASKA bir CLI komutunun adini calmiyor", () => {
+  // KARAR (2026-08-31): "sim-lock" adi KILITLEME'ye ayrildi ve yalnizca npm
+  // script'i olarak yasiyor. CLI'a ayni adla salt-okunur bir komut geri
+  // eklenirse cakisma aynen geri gelir — o yuzden burada acikca yasak.
+  assert.ok(!COMMANDS.includes("sim-lock"),
+    "CLI'a 'sim-lock' komutu eklenmis: `npm run sim-lock` KILITLIYOR, ayni ad "
+    + "salt-okunur bir komuta verilemez. Okuma icin 'sim-lock-status' var.");
+
+  for (const [name, line] of Object.entries(PKG.scripts)) {
+    if (name === "test") continue;
+    const m = line.match(/bin\/ricon\.js\s+([a-z-]+)/);
+    if (!COMMANDS.includes(name)) continue;   // script adi bir komut degil: serbest
+    assert.equal(m[1], name,
+      `npm run ${name} -> "${m[1]}" cagiriyor, ama "${name}" ayni zamanda bir CLI `
+      + "komutu. Ayni ad iki farkli sey demek olamaz: ya script'i ya komutu adlandir.");
+  }
 });

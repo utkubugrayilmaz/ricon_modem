@@ -39,6 +39,27 @@ const CATALOG = {
     check: "The modem's web server accepts one connection at a time. Wait for"
       + " the running read to finish, then try again.",
   }),
+  // --- npm start network setup (scripts/network-setup.js, scripts/prepare-modem-network.ps1) ---
+  // Bu ucu cekirdek DEGIL (src/ disinda, PC'nin kendi ag ayarini hazirliyor),
+  // ama operatore giden metin yine de TEK katalogdan gelsin diye buradalar.
+  NOT_ELEVATED: () => ({
+    message: "Administrator privileges are required to change network adapter"
+      + " settings, and the current process was not elevated.",
+    check: "network-setup.js self-relaunches elevated automatically on"
+      + " npm start; this code only fires if prepare-modem-network.ps1 is run"
+      + " directly, bypassing the wrapper.",
+  }),
+  ADAPTER_NOT_FOUND: (adapter) => ({
+    message: `No network adapter named "${adapter}" was found on this PC.`,
+    check: "Set MODEM_ADAPTER_NAME in .env to the adapter's real name"
+      + " (Get-NetAdapter lists them).",
+  }),
+  NETWORK_PREP_FAILED: (detail) => ({
+    message: `Network setup could not finish: ${detail}`,
+    check: "Best-effort recovery was attempted so the adapter should not be"
+      + " left half-configured. Check data/network-setup.log for the full"
+      + " sequence, and Get-NetIPAddress for the adapter's current state.",
+  }),
 
   // --- HTTP / kimlik ---
   // Eskiden PIN_ALREADY_TRIED diye IKINCI bir kod vardi ve kosulu birebir
@@ -108,10 +129,41 @@ const CATALOG = {
       + " read is usually transient. If it persists, power-cycle the modem."
       + " Override with manualConsent/--force only if you are sure of the PIN.",
   }),
-  PROFILE_MISSING: (name) => ({
+  PROFILE_MISSING: (name, valid) => ({
     message: `No profile named "${name}" is configured, so there is nothing to apply.`,
-    check: "Pass --profile with a known name (see settings.js PROFILES), or start"
-      + " the server with a sifirlamaProfil so the reset button has a target.",
+    // Eski metin var olmayan bir "server"a ve Turkce bir tanimlayiciya
+    // (sifirlamaProfil) atif yapiyordu; ikisi de main'de yok. Ayrica bu kod
+    // katalogda DURUYOR ama hic uretilmiyordu — CLI onun yerine katalog
+    // disi bir "ARGS" kodu elle kuruyordu.
+    check: `Pass --profile with a known name${valid ? ` (valid: ${valid})` : ""}.`,
+  }),
+  // CLI KULLANIM HATASI — eksik/gecersiz arguman. Cihazla ilgisi yok.
+  //
+  // Neden katalogda: bu kod bir donem bin/ricon.js icinde ELLE kuruluyordu
+  // (dort yerde) ve katalogda karsiligi olmadigi icin operatore
+  // "Something unexpected happened — Report this code to IT: ARGS" yaziyordu.
+  // Sıradan bir kullanim hatasi, IT'e bildirilecek bir ariza gibi gorunuyordu.
+  ARGS: (what, how) => ({
+    message: what,
+    check: how,
+  }),
+  // KOD HATASI — cihazla ilgisi yok, bizim hatamiz.
+  //
+  // Cekirdek sozlesme geregi throw ETMEZ, bu yuzden cagri yerlerinde
+  // `catch {}` bloklari var ve onlar CIHAZ hatasini yutmak icin konmus.
+  // Ama ayni yutma ReferenceError/TypeError'i da yok ediyordu: readIdentity
+  // bir donem HER cagrida `ReferenceError: isOk is not defined` atiyordu ve
+  // iki cagri yerinde de try/catch bunu sessizce yutuyordu — 223 testin
+  // hicbiri yakalamadi (commit b3ab4ce). Artik yutulmuyor, RAPORLANIYOR.
+  INTERNAL_ERROR: (detail) => ({
+    message: `Internal error (this is a bug, not a device fault): ${detail}`,
+    check: "Report it with the command you ran. The step was skipped;"
+      + " other results in this report are still valid.",
+  }),
+  METRICS_FILE_MISSING: (file) => ({
+    message: `Metric file not found or unreadable: ${file}`,
+    check: "Run `npm start` (or `ricon provision`) a few times first;"
+      + " each finished run appends one line.",
   }),
   NVRAM_BAD_HEADER: () => ({
     message: "The nvram backup did not start with the expected ROUTER header.",
@@ -272,6 +324,18 @@ const WARNING_CODES = new Set(["EMPTY_BODY", "AUTH_REQUIRED",
   // Numara SIM'de yazili degilse bu bir ARIZA degil: operator elle girer.
   "MSISDN_NOT_ON_SIM", "PIN_LOCK_NOT_DISABLED", "MSISDN_MISMATCH"]);
 
+// PROGRAMCI HATASI MI, CIHAZ HATASI MI?
+//
+// Cekirdekteki `catch {}` bloklari cihaz/ag hatasini yutmak icin var —
+// yarim okuma gercek bir sonuctur ve akisi durdurmaz. Ama ReferenceError /
+// TypeError sozlesmenin bir parcasi degil, KOD HATASIDIR; onu ayni sessizlige
+// gomen sey bir kusuru aylarca sakladi (bkz. INTERNAL_ERROR notu).
+//
+// Kullanim:  catch (e) { if (isProgrammerError(e)) problems.push(problem("INTERNAL_ERROR", e.message)); }
+export function isProgrammerError(e) {
+  return e instanceof ReferenceError || e instanceof TypeError || e instanceof SyntaxError;
+}
+
 export const PROBLEM_CODES = Object.freeze(Object.keys(CATALOG));
 
 // Bir problem nesnesi uretir. Bilinmeyen kod patlamaz — kendini tarif eder.
@@ -312,6 +376,12 @@ const OPERATOR_TEXT = {
     whatToDo: "Is the cable in the LAN port, is the modem powered?" },
   DEVICE_BUSY: { title: "Modem is busy",
     whatToDo: "Wait for the running read to finish." },
+  NOT_ELEVATED: { title: "Needs Administrator rights",
+    whatToDo: "It should relaunch itself elevated automatically — accept the prompt." },
+  ADAPTER_NOT_FOUND: { title: "Network adapter not found",
+    whatToDo: "Tell IT: set MODEM_ADAPTER_NAME to the right adapter." },
+  NETWORK_PREP_FAILED: { title: "Network setup could not finish",
+    whatToDo: "Tell IT; see data/network-setup.log for details." },
   REQUEST_FAILED: { title: "Connection broke off",
     whatToDo: "The tool is retrying. If it persists, check the cable." },
   // --- Credentials ---
@@ -323,6 +393,12 @@ const OPERATOR_TEXT = {
   LOCK_STATE_UNKNOWN: { title: "SIM lock state unreadable",
     whatToDo: "No PIN was sent. Retry; if it persists, power cycle the modem." },
   PROFILE_MISSING: { title: "Profile is not defined", whatToDo: "Tell IT." },
+  INTERNAL_ERROR: { title: "Internal tool error",
+    whatToDo: "Not a modem fault. Tell IT which command you ran." },
+  ARGS: { title: "The command was used incorrectly",
+    whatToDo: "Nothing was sent to the modem. Check the command line; `--help` lists it." },
+  METRICS_FILE_MISSING: { title: "No measurements recorded yet",
+    whatToDo: "Provision a few modems first; each finished run records one line." },
   NVRAM_BAD_HEADER: { title: "Backup file not recognised", whatToDo: "Tell IT." },
   PUK_INVALID: { title: "PUK format is wrong", whatToDo: "PUK is 8 digits, new PIN 4-8 digits." },
   PUK_NOT_REQUIRED: { title: "SIM is not PUK locked", whatToDo: "No PUK needed; nothing was sent." },
