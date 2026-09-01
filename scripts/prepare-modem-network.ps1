@@ -90,6 +90,23 @@ function Find-FreeSecondaryIp([string]$SubnetPrefix, [string]$Avoid) {
   throw "could not find a free secondary IP in ${SubnetPrefix}x"
 }
 
+# Bir alt agda BIZIM eklemis olabilecegimiz bir ikincil IP zaten var mi diye
+# bakar (gateway'in kendisi HARIC). Varsa dokunmaz — yoksa Find-FreeSecondaryIp
+# ile yeni bir bos yuva bulup ekler. Bunu ATLAMAK ust uste calistirmada her
+# seferinde YENI bir IP (.100, sonra .101, sonra .102...) eklenmesine yol
+# aciyordu — "bos yuva bul" ile "bu alt agda zaten bir IP'miz var mi" ayni
+# soru degil, ikincisi olmadan idempotentlik BOZULUYOR.
+function Ensure-SubnetSecondary([string]$SubnetPrefix, [string]$Avoid, [int]$PrefixLen, $Added) {
+  $already = Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress.StartsWith($SubnetPrefix) -and $_.IPAddress -ne $Avoid }
+  if ($already) {
+    $warnings.Add("subnet ${SubnetPrefix}x already has a secondary ($($already[0].IPAddress)), skipped")
+    return
+  }
+  $candidate = Find-FreeSecondaryIp $SubnetPrefix $Avoid
+  Ensure-SecondaryIp $candidate $PrefixLen $Added
+}
+
 # ADIM 1 — mevcut STATIK (elle atanmis) adresleri yedekle. DHCP'den gelen
 # gecici bir kirayi ASLA yedeklemeyiz — bu, "makineye ozel baska IP'ler
 # olabilir, onlar kaybolmasin" kuralinin ta kendisi. Hic olmayabilir de
@@ -155,11 +172,12 @@ try {
     }
   }
 
-  # ADIM 5 — kesfedilen alt agda ikincil IP ekle (kira geldiyse).
+  # ADIM 5 — kesfedilen alt agda ikincil IP ekle (kira geldiyse). Alt agda
+  # zaten bir ikincil varsa (onceki bir calistirmadan restore edilmis
+  # olabilir) TEKRAR EKLEMEZ — idempotentlik icin sart.
   if ($leaseAcquired) {
     $subnetPrefix = (($discoveredIp -split '\.')[0..2] -join '.') + "."
-    $discoveredSecondary = Find-FreeSecondaryIp $subnetPrefix $discoveredIp
-    Ensure-SecondaryIp $discoveredSecondary $PrefixLength $secondariesAdded
+    Ensure-SubnetSecondary $subnetPrefix $discoveredIp $PrefixLength $secondariesAdded
   }
 
   # ADIM 6 — HER ZAMAN 5.5.5.100'u de garanti et (provizyon sonu modem
