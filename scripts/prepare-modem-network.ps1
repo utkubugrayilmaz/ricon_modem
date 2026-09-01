@@ -160,8 +160,13 @@ try {
 
   # ADIM 4 — HER DURUMDA statige geri don, DHCP'den kalan gecici adresi at,
   # yedegi geri yukle.
+  #
+  # -PolicyStore ActiveStore SART: onsuz bazen "Inconsistent parameters
+  # PolicyStore PersistentStore and Dhcp Enabled" hatasi ATIYOR (bilinen bir
+  # PowerShell NetTCPIP kusuru) — canli goruldu, script bu hatayla crash
+  # oldu ve adaptoru DHCP modunda YARIM birakti.
   Write-Progress2 "switching '$AdapterName' back to static..."
-  Set-NetIPInterface -InterfaceAlias $AdapterName -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop
+  Set-NetIPInterface -InterfaceAlias $AdapterName -AddressFamily IPv4 -Dhcp Disabled -PolicyStore ActiveStore -ErrorAction Stop
   Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.PrefixOrigin -eq "Dhcp" } |
     ForEach-Object {
@@ -220,7 +225,7 @@ try {
   # sonra hatayi bildir.
   $recoveryError = $null
   try {
-    Set-NetIPInterface -InterfaceAlias $AdapterName -AddressFamily IPv4 -Dhcp Disabled -ErrorAction SilentlyContinue
+    Set-NetIPInterface -InterfaceAlias $AdapterName -AddressFamily IPv4 -Dhcp Disabled -PolicyStore ActiveStore -ErrorAction SilentlyContinue
     foreach ($addr in $backup) {
       try {
         New-NetIPAddress -InterfaceAlias $AdapterName -IPAddress $addr.IPAddress -PrefixLength $addr.PrefixLength `
