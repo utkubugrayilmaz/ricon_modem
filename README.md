@@ -9,7 +9,13 @@ WLAN, LAN IP, Backup Link… ~13 ayar. Araç bunu tek komuta indiriyor.
 ```js
 import { provisionModem } from "ricon-modem";
 
-const result = await provisionModem({ credentials, profile, phone: "5321234567" });
+const result = await provisionModem({
+  credentials,                    // { user, password }
+  profile,                        // PROFILES.field
+  factoryHost: "192.168.1.1",     // modem SIMDI nerede
+  fieldHost: "5.5.5.1",           // provizyondan SONRA nerede olacak
+  phone: "5321234567",            // opsiyonel: verilmezse SIM'den okunur
+});
 ```
 
 ```bash
@@ -65,14 +71,28 @@ node bin/ricon.js --help
 
 ```
 verify · read · console [--nvram] · sim · assess [--watch]
-msisdn · sim-lock · sim-pin-disable · sim-pin-enable
+msisdn · sim-lock-status · sim-pin-disable · sim-pin-enable · sim-puk
 diff <A.json> <B.json> · apply [--apply] · provision [--loop]
 call [<fonksiyon>] · metrics · metrics-manual
 ```
 
-**Yazma varsayılan olarak KAPALI.** `apply`, `sim-pin-disable` ve
-`sim-pin-enable` bayraksız **kuru** çalışır: ne yapacağını söyler, hiçbir şey
-denemez. Gerçek yazma açık `--apply` ister.
+**Yazma varsayılan olarak KAPALI.** `apply`, `sim-pin-disable`,
+`sim-pin-enable` ve `sim-puk` bayraksız **kuru** çalışır: ne yapacağını söyler,
+hiçbir şey denemez. Gerçek yazma açık `--apply` ister.
+
+**Yazan npm script'leri** (bunlar `--apply` içerir, doğrudan yazarlar):
+
+```bash
+npm run sim-lock      # SIM'e PIN kilidi KOYAR   (sim-pin-enable --apply)
+npm run sim-unlock    # PIN kilidini KALDIRIR    (sim-pin-disable --apply)
+npm run sim-state     # salt okunur durum        (sim-lock-status)
+npm run reset:dry     # fabrika profili — KURU
+npm run reset         # fabrika profiline DÖNDÜRÜR (--apply)
+```
+
+> `sim-lock` adı **kilitleme** demektir; salt okunur sorgu `sim-lock-status`
+> (CLI) ya da `npm run sim-state`. Çıplak `node bin/ricon.js sim-lock`
+> çalışmaz — belirsiz olduğu için seçenekleri söyleyip durur.
 
 **Sözleşme:** stdout **her zaman** saf JSON; ilerleme/özet stderr'a; çıkış kodu
 `ok`'tan (0/1). Ortak bayraklar: `--json <dosya>` · `--from-file <dosya>`
@@ -113,11 +133,12 @@ Tek iş yapan çağrılar — aracın tamamını kullanmaya gerek yok:
 | Sadece şunu istiyorum | Çağrı | CLI |
 |---|---|---|
 | Telefon numarası | `readMsisdn(opts)` | `msisdn` |
-| SIM kilidi + kalan hak | `readSimLock(opts)` | `sim-lock` |
+| SIM kilidi + kalan hak | `readSimLock(opts)` | `sim-lock-status` |
 | PIN kilidini kalıcı kaldır | `disableSimPin(opts, pin)` | `sim-pin-disable --apply` |
 | Ne eksik, başlanabilir mi | `assessDevice(opts)` | `assess` |
 | "Ne eksik" kararı (saf, cihazsız) | `provisioningGaps({...})` | — |
-| Kendi kabuk komutum | `runConsole(opts, ["uname -a"])` | `console` |
+| Kendi kabuk komutum | `runConsole(opts, ["uname -a"])` | — (CLI'da yok) |
+| Sistem/nvram konsol raporu | `readConsole(opts)` | `console [--nvram]` |
 
 ## Mimari
 

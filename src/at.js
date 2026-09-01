@@ -22,7 +22,7 @@
 // `yontem: "none"` dondurup ICCID bildiriyoruz (operator elle girer — bugun
 // zaten oyle yapiyor). Ihtiyac cikarsa kardes calismadan alinir.
 
-import { runConsole } from "./console.js";
+import { runConsole, shQuote } from "./console.js";
 import { normalizePhone } from "./device.js";
 import { problem } from "./problems.js";
 
@@ -61,7 +61,7 @@ export function isAtWrite(command) {
 // --- Saf ayristiricilar (cihaz GEREKTIRMEZ, test edilebilir) ---
 
 // +CNUM: SIM'e yazili abone numarasi.
-// Bicim: +CNUM: "alpha","+905350634756",145
+// Bicim: +CNUM: "alpha","+90535XXXXXXX",145
 // Doner: bizim kanonik bicimimizde (5xxxxxxxxx) ya da null. AYRI bir
 // normalize fonksiyonu YAZMIYORUZ — normalizePhone tek dogru kaynak.
 export function parseCnum(answer) {
@@ -128,7 +128,16 @@ export function atShellCommand(port, command, readSec = 3) {
   // geldi. Sonlandiricida durmak bu kaymayi kapatiyor.
   //
   // `case` BusyBox ash'de standart; cihazda dogrulandi.
-  return `exec 3<>${port}; printf '${command}\\r' >&3; `
+  //
+  // TIRNAKLAMA — komut BICIM DIZESI DEGIL, ARGUMAN.
+  // Eskiden `printf '${command}\r'` yaziliyordu ve iki sekilde bozuluyordu:
+  //   1) komutta ' varsa tek tirnak KAPANIYOR, satirin geri kalani kabuga
+  //      baska anlamda gidiyordu;
+  //   2) komutta % varsa printf onu DONUSUM BELIRTECI saniyor —
+  //      `AT+QCFG="%..."` sessizce bozuluyordu.
+  // `printf '%s\r' 'komut'` ikisini de kapatir: bicim sabit, komut arguman.
+  // shQuote ile tek tirnaklar da kacirilir.
+  return `exec 3<>${port}; printf '%s\\r' ${shQuote(command)} >&3; `
     + `while read -t ${readSec} l <&3; do echo "ATL:$l"; `
     + `case "$l" in *OK*|*ERROR*) break;; esac; done; exec 3<&-`;
 }
@@ -230,7 +239,7 @@ export async function readMsisdn(opts) {
 }
 
 // PURE: bu SIM'de PIN kilidi kaldirmaya izin var mi? Kural PAYLASILAN
-// modulde (pin-karar.js) — nvram yolu ve internet-sonrasi deneme yolu da
+// modulde (bu dosya (at.js)) — nvram yolu ve internet-sonrasi deneme yolu da
 // ayni yere soruyor. Burada yalniz YOLA OZGU kapi var: SIM takili mi.
 //
 // Doner: { izin, sebep: kod|null, problems: [] }
@@ -575,32 +584,47 @@ export function canSpendPinAttempt(lock = {}, pin, { manualConsent = false } = {
 //      yanlis PUK SIM'i geri donusu olmadan yok eder; karar insanindir.
 //      manualConsent bu kurali da GECEMEZ.
 // PUK ve yeni PIN hicbir yere (kayit, olay, defter, log) yazilmaz.
+// PURE: PUK denemesine IZIN VAR MI? Karar cihazdan AYRI durur.
+//
+// NEDEN AYRI: PIN tarafinda ayni kararlar saf fonksiyonlara
+// (simUnlockDecision, canSpendPinAttempt, simPinTarget) cikarilmis ve
+// tests/pin-unlock.test.js gerekcesini birebir yaziyor: "Cihazla konusan
+// koda gomulu olsa test edilemezdi." PUK yolu bu kalibi izlemiyordu —
+// dort kapinin dordu de I/O fonksiyonunun icindeydi ve HIC testi yoktu.
+// Oysa buradaki hata PIN'dekinden agir: yanlis PUK SIM'i KALICI OLDURUR.
+//
+// Doner: { eligible, reason, problems }  (PIN kapilariyla ayni bicim)
+export function pukUnblockDecision(lock = {}, puk, newPin, { manualConsent = false } = {}) {
+  // 1) BICIM once: bozuk PUK garantili bosa harcanmis deneme, cihaza HIC gitmemeli.
+  if (!/^\d{8}$/.test(String(puk ?? "")) || !/^\d{4,8}$/.test(String(newPin ?? ""))) {
+    return refuse("PUK_INVALID");
+  }
+  // 2) SIM gercekten PUK kilitli mi? Degilse PUK bosa harcanir.
+  if (lock.lock !== "puk") return refuse("PUK_NOT_REQUIRED", lock.status ?? "unknown");
+  // 3) SON HAK: manualConsent DAHIL hicbir sey gecemez. Burada yanlis PUK
+  //    SIM'i geri donusu olmadan yok eder; karar insanindir.
+  if (lock.pukRemaining != null && lock.pukRemaining <= 1) {
+    return refuse("PUK_LAST_ATTEMPT", lock.pukRemaining);
+  }
+  // 4) Kalan hak okunamadi: bilmeden PUK harcamayiz.
+  if (lock.pukRemaining == null && !manualConsent) return refuse("PIN_REMAINING_UNKNOWN");
+  return allowed();
+}
+
 export async function unblockSimPuk(opts, puk, newPin, { manualConsent = false } = {}) {
   const report = { ok: false, unblocked: false, status: null,
     pukRemaining: null, pinRemaining: null, problems: [] };
-  if (!/^\d{8}$/.test(String(puk ?? "")) || !/^\d{4,8}$/.test(String(newPin ?? ""))) {
-    report.problems.push(problem("PUK_INVALID"));
-    return report;
-  }
+  // Bicim kontrolu cihaza GITMEDEN once: bozuk PUK icin okuma bile yapmayiz.
+  const format = pukUnblockDecision({ lock: "puk", pukRemaining: 10 }, puk, newPin);
+  if (!format.eligible) { report.problems.push(...format.problems); return report; }
+
   const lock = await readSimLock(opts);
   report.status = lock.status;
   report.pukRemaining = lock.pukRemaining;
   report.pinRemaining = lock.pinRemaining;
 
-  if (lock.lock !== "puk") {
-    report.problems.push(problem("PUK_NOT_REQUIRED", lock.status ?? "unknown"));
-    return report;
-  }
-  // SON HAK: manualConsent DAHIL hicbir sey gecemez.
-  if (lock.pukRemaining != null && lock.pukRemaining <= 1) {
-    report.problems.push(problem("PUK_LAST_ATTEMPT", lock.pukRemaining));
-    return report;
-  }
-  if (lock.pukRemaining == null && !manualConsent) {
-    // Kalan hak okunamadi: bilmeden PUK harcamayiz.
-    report.problems.push(problem("PIN_REMAINING_UNKNOWN"));
-    return report;
-  }
+  const gate = pukUnblockDecision(lock, puk, newPin, { manualConsent });
+  if (!gate.eligible) { report.problems.push(...gate.problems); return report; }
 
   const atOptions = { ...opts, atPort: lock.atPort };
   const sent = await atCommand(atOptions, `AT+CPIN="${puk}","${newPin}"`,

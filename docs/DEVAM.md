@@ -1,87 +1,171 @@
-# Kaldığımız yer — 2026-08-31 (v0.2.0)
+# Kaldığımız yer — 2026-08-31 akşamı (denetim turu)
 
-## Bugün ne oldu
+> **Bu tur cihazsız yapıldı.** Modem takılı değildi. Aşağıdaki değişiklikler
+> `npm test` (280 test, hepsi yeşil) ve **sahte telnet modem** ile
+> doğrulandı. **Gerçek modemle sınanacaklar en altta listeli.**
 
-**Sabah:** repo `redbox-device` kalıbına indirildi — düz `src/`, tek kapı
-`index.js`, ince `bin/ricon.js`. UI ve HTTP sunucusu `ui` dalında donduruldu.
+## Ne yapıldı
 
-**Öğleden sonra:** sessizce ölen `npm start` bulundu. `readIdentity` her
-çağrıda `ReferenceError: isOk is not defined` atıyordu; iki çağrı yerinde de
-`try/catch` bunu yutuyordu. 223 testin hiçbiri yakalamamıştı çünkü hiçbiri
-`readIdentity`'yi gerçekten çağırmıyordu → `tests/undefined-names.test.js`.
+Repo baştan sona denetlendi (ölü kod, yanlış kullanım, kullanılmayan
+script). Çıkan kusurlar düzeltildi. Test sayısı **243 → 280**.
 
-Ardından PIN akışı arayüzdeki haline getirildi: kilitli SIM'de artık numara
-değil **PIN** soruluyor, kilit kalkınca numara kendiliğinden geliyor.
+Ayrıntılı bulgu listesi (satır numaralı, gerekçeli):
+`C:\Users\utku\.claude\plans\abi-imdi-repoyu-bi-federated-neumann.md`
 
-**Akşam (v0.2.0):** dil sınırı **tersine çevrildi** — yorumlar dışında hiçbir
-şey Türkçe değil. Bu tur çeviriden ibaret değildi; taramada çıkan gerçek
-kusurlar da düzeltildi.
+### A · Abone verisi maskelendi
 
-## v0.2.0'da neler değişti
+`docs/enes-bulgular/`, `docs/hazirlama-profili.md`, `src/at.js` ve **5 test
+dosyasında** gerçek IMEI / ICCID / IMSI / telefon numarası vardı. Hepsi
+reponun kendi kalıbıyla maskelendi (`8671910XXXXXXXX`,
+`8990XXXXXXXXXXXXXXXF`, `28601XXXXXXXXXX`, `+90535XXXXXXX`); testlerdeki
+numaralar `05321234567` örneğine çevrildi.
 
-| Alan | Değişiklik |
+> ⚠ **YARIM İŞ — bilerek.** Maskeleme yalnızca çalışma ağacını temizler.
+> Değerler `2bd15a0` commit'inde ve **`origin/main` + `origin/enes`
+> üzerinde durmaya devam ediyor.** Geçmişi temizlemek `git filter-repo` +
+> force-push ister; `enes` dalı paylaşıldığı için Enes Talay'ın klonu
+> bozulur. **Ayrıca karar verilecek.** Ayrıca: depo public mi, hâlâ
+> bilinmiyor — public ise maskeleme geçmişi geri almaz.
+
+### B · `sim-lock` ad çakışması (senin kararınla)
+
+`npm run sim-lock` **kilitlemeye devam ediyor** — sunumdaki kullanım korundu.
+Çakışma karşı taraftan çözüldü:
+
+| | Önce | Şimdi |
+|---|---|---|
+| `npm run sim-lock` | kilitler | **aynı** ✓ |
+| CLI `sim-lock` | salt okunur (TERSİ!) | **`sim-lock-status`** |
+| `npm run sim-state` | CLI `sim-lock` | CLI `sim-lock-status` |
+
+Çıplak `node bin/ricon.js sim-lock` artık çalışmıyor; belirsiz olduğu için
+iki seçeneği söyleyip 1 ile çıkıyor. Yeni bekçi: bir npm script'i, CLI'da
+var olan **başka** bir komutun adını taşıyamaz (`cli-contract.test.js`).
+
+### C · Davranış düzeltmeleri
+
+| Ne | Nerede | Neydi |
+|---|---|---|
+| Boolean bayrak artık sonraki sözcüğü yutmuyor | `report.js` `BOOLEAN_FLAGS` | `call --pure normalizePhone` fonksiyon adını yiyordu |
+| `--no-reboot` ters mantığı düzeldi | `bin/ricon.js` | yutulan bayrak reboot'u **açıyordu** |
+| Eksik çıktı artık başarı değil | `console.js` `resolveResult` | hat düşünce `ok:true` + boş çıktı dönüyordu (**sessiz yanlış cevap**) |
+| Zamanlayıcı `finish()` içinde temizleniyor | `console.js` | timeout/close yollarında kalıyordu → paket tüketicisi ~20 sn asılı |
+| `reboot` tek denemede | `provision.js` | `attempts:1` yoktu, asılı kalırsa 3 kez gidiyordu |
+| PUK kararı saf fonksiyona çıktı | `at.js` `pukUnblockDecision` | dört kapı I/O içindeydi, **hiç testi yoktu** |
+| PIN döngüsüne tavan | `pipeline.js` | kalan hak okunamazsa sonsuz sorabiliyordu |
+| `printf '%s\r' 'komut'` | `at.js` | `%` ve `'` içeren AT komutu bozuluyordu |
+| nvram anahtarı doğrulanıyor | `console.js` | değer tırnaklıydı, **anahtar çıplaktı** |
+| `--rounds abc` / `--max 0` artık hata | `bin/ricon.js` | sessizce **sonsuz** döngüye dönüyordu |
+| `SECRET_FIELDS` += `puk`, `newPin` | `report.js` | sim-puk eklenince süzgeç güncellenmemişti |
+
+### D · Bekçi delikleri kapandı
+
+- `problem-codes.test.js` artık **`bin/`'i de tarıyor**. `bin/` katalog dışı
+  `ARGS` ve `METRICS_FILE_MISSING` kodları üretiyordu; operatör sıradan bir
+  kullanım hatası için *"Something unexpected happened — Report this code to
+  IT"* görüyordu. İkisi de katalogda artık.
+- `no-turkish.test.js` sözcük listesi genişledi. Üç Türkçe metin bekçiden
+  geçmişti (`bin/ricon.js` PLAN başlığı, `settings.js` profil açıklaması —
+  bu bir **veri değeri**, `problems.js` içindeki `sifirlamaProfil`).
+  Not: `once` listeye **eklenemez**, İngilizce bir sözcük.
+- Kod hatası artık yutulmuyor: `isProgrammerError` + `INTERNAL_ERROR`.
+  `ReferenceError`/`TypeError` `problems`'a yazılıyor, cihaz hatası eskisi
+  gibi yutuluyor.
+- **CI eklendi** (`.github/workflows/test.yml`). Bugüne kadar testleri koşan
+  hiçbir şey yoktu; kuralları tutan tek şey "npm test yazmayı hatırlayan
+  kişi"ydi.
+
+### E · Ölü kod ve temizlik
+
+- `net.js` POST boru hattı kaldırıldı (`post()` artık **koşulsuz** reddediyor
+  → "bu istemci POST edemez" yapısal garanti).
+- `bin/ricon.js` ulaşılamaz `default: return null` + eşi kaldırıldı.
+- `report.js` köprüsünden `duration`/`interval` (donmuş `ui` dalından kalma).
+- 14 yorum var olmayan dosyaları gösteriyordu (`cihaz.js`, `pin-karar.js`,
+  `scanner.js`, `src/server.js` …) — hepsi düzeltildi.
+- `npm test` artık `"tests/**/*.test.js"`; eskiden `arsiv/` ve `data/` de
+  taranıyordu.
+- Belgeler: `sim-puk` README'ye eklendi, yazan npm script'leri belgelendi,
+  `kesif`/`izle` yetenek listesinden çıkarıldı, `node ricon.js` → `bin/`.
+
+## Bilerek YAPILMAYANLAR
+
+| Ne | Neden |
 |---|---|
-| Komutlar | `hazirla`→`provision`, `degerlendir`→`assess`, `oku`→`read`, `dogrula`→`verify`, `uygula`→`apply`, `calistir`→`call`, `olcum`→`metrics`, `fark`→`diff`, `numara`→`msisdn`, `konsol`→`console`, `sim-kilit`→`sim-lock`, `sim-pin-kaldir/kilitle`→`sim-pin-disable/enable`, `olcum-elle`→`metrics-manual` |
-| Bayraklar | `--dongu`→`--loop`, `--profil`→`--profile`, `--telefon`→`--phone`, `--zorla`→`--force`, `--kaynak-ip`→`--source-ip`, `--kaynak`→`--from-file`, `--tur`→`--rounds`, … |
-| Profiller | `saha`/`fabrika` → `field`/`factory` |
-| `.env` | `MODEM_USER` / `MODEM_PASSWORD` / `MODEM_SOURCE_IP` (eskisi yedekte) |
-| `data/` | `provisioned.jsonl` / `metrics.jsonl` (eskisi yedekte) |
-| Değerler | status/olay/sebep/kaynak enum'ları İngilizce |
-| Metin | operatöre gösterilen her şey İngilizce |
+| Git geçmişi temizliği | Force-push + paylaşılan `enes` dalı. Senin kararın. |
+| Commit / push | İstenmedi. 29 push'lanmamış commit zaten vardı. |
+| `src/util.js` (tekrar eden `now`/`wait`/`notify`/`emitEvent`/`prefixOf`) | CLAUDE.md `src/`'i "her dosya tek konu" diye kilitliyor; bir util grab-bag'i o kuralın karşısına düşer. Ölü ya da yanlış değil, sadece tekrar. **Karar senin.** |
+| `legacy.js` `normalizeLedgerRow` + `LEGACY_LEDGER_KEYS` + `LEGACY_PROFILE` | Sıfır tüketici, ama CLAUDE.md orayı "eski defteri okuyan tek sınır" ilan ediyor. Gelecek bir okuyucu için mi duruyor? **Sorulmadan silinmedi.** |
+| `disableSimPin`'in `persistOff` seçeneği | Hiç kullanılmıyor ama public API'de tutarlı bir seçenek — kazara ölü kod değil. |
+| `--env-file-if-exists` (11 script'te no-op) | `bin/` `.env`'i zaten kendi yüklüyor, ama Node'un öncelik semantiğini cihazsız doğrulayamadım. Zararsız. |
+| `waitForModem` sınırsız döngüsü | Denetimde "sınırsız" diye işaretlemiştim; **yanlıştı** — sonsuz bekleme ürünün asıl döngüsü ("tak → hazır → çıkar"). Sınırlamak işi bozardı. |
 
-**Eski komutlar takma ad DEĞİL:** `ricon hazirla` → `unknown command` + öneri +
-eşleme tablosu, çıkış 1.
+---
 
-## Denetimde çıkan gerçek kusurlar (çeviri değil)
+# 🔧 YARIN TEZGAHTA — modemle sınanacaklar
 
-- **Adım kovaları parçalıydı.** Etiket ayar sayısını içine gömüyordu
-  (`"yazma bitti — 12 ayar"`), kova etikete göre açılıyordu → 23 satırlık
-  defterde 16 kovanın 10'u aynı yazma adımıydı, medyan anlamsızdı. Adımlar
-  yapılandırıldı: `{step:"write_done", count:12}`. Kova 16→8, ölçüm kaybı 0.
-- **`--saf` ölü bayraktı** — yardım tanıtıyor, kod `pure` okuyordu.
-- **`--json` / `--kaynak` `calistir`'da fonksiyona sızıyordu** — destructure
-  hiç üretilmeyen adları arıyordu.
-- **`FLAG_TO_OPTION` "köprü" adını taşıyıp yalnız `calistir`'ı etkiliyordu**;
-  diğer 14 komut argv'ye doğrudan bakıyordu → TEK AYRIŞTIRICI.
-- **`problem-codes` bekçisi sessizce daralmıştı** — regex `red`/`sorunTr`/
-  `hataYolla` arıyordu, üçü de yeniden adlandırılmıştı. 57 yerine 62 kod
-  üretimi var; 5'i denetim dışındaydı.
-- **`kim` alanı hiç okunmuyordu** — normalize edilince ölçüm kaynağı
-  "1 BEYAN" yerine "1 declared · operasyon beyanı" oldu.
-- Yanlış adlar: `verifyPin()` PIN değil planı doğruluyordu · `finiteOrNull`
-  alan adı olarak kullanılmış · `pukText` sayaç tutuyordu · döngü sayacı
-  `kind` adındaydı.
+Sırayla. Her adım bir öncekini varsayıyor.
 
-## Yeni bekçiler
+### 1. Duman testi (yazma yok)
+```bash
+npm run verify                  # erisim + kaynak IP
+npm run read                    # sistem + SIM + ayar + nvram
+npm run sim-state               # YENI AD — salt okunur, hak harcamaz
+node bin/ricon.js sim-lock      # BELIRSIZLIK uyarisi vermeli, exit 1
+```
+- [ ] `sim-state` kilit durumu ve **kalan hakkı** doğru gösteriyor mu?
+- [ ] `read` eskisi gibi tam mı? (nvram anahtar sayısı ~1560)
 
-| Test | Neyi tutuyor |
-|---|---|
-| `no-turkish.test.js` | Yorum dışında Türkçe yok. Gerekçeli 3 allowlist bölgesi |
-| `cli-contract.test.js` | Komut/bayrak/profil/env adları + dispatch ile COMMANDS aynı kümede + npm script'leri gerçek komut çağırıyor + TEK AYRIŞTIRICI |
-| `undefined-names.test.js` | Çağrılan her isim tanımlı/import edilmiş |
-| `surface.test.js` | `src/` düz, 14 dosya, `index.js` hepsini dışa açıyor |
+### 2. Konsol / AT yolu — tırnaklama değişti
+`printf '%s\r' 'komut'` biçimi **canlı modemde ilk kez** koşacak.
+```bash
+node bin/ricon.js console
+node bin/ricon.js call atCommand -- "AT+CNUM"
+node bin/ricon.js call atCommand -- "AT+CPIN?"
+```
+- [ ] AT cevapları geliyor mu? (sahte cihazda geçti ama gerçek BusyBox `printf` farklı olabilir)
+- [ ] `ATL:` satırları düzgün ayıklanıyor mu?
 
-Dördü de bilerek bozulup **kırmızı yandığı doğrulandı**.
+### 3. Eksik çıktı artık `ok:false`
+`consoleNvram` hat koparsa artık **hata** dönüyor (eskiden "0 anahtar" + başarı).
+- [ ] Normal okuma hâlâ `ok:true` mu? (yanlış pozitif üretmediğinden emin ol)
 
-## Cihazın şu anki fiziksel durumu
+### 4. Provizyon — kuru, sonra gerçek
+```bash
+npm run reset:dry               # once KURU
+node bin/ricon.js provision --host 192.168.1.1   # tek modem, kuru
+npm start                       # gercek dongu
+```
+- [ ] Plan tablosu başlığı artık İngilizce: `PLAN — before -> after (* = will change)`
+- [ ] **`reboot` KAÇ KEZ gidiyor?** `attempts:1` eklendi; modem loglarından ya da süreden bak. Eskiden asılı kalırsa ~16 sn sürüyordu.
+- [ ] Reboot sonrası doğrulama eskisi gibi geçiyor mu?
 
-- Konum: **192.168.1.1** (fabrika), SIM takılı, **PIN kilidi yok**
-- Telefon: `5350634830` (AT+CNUM ile cihazdan okundu)
-- İnternet: geliyor · `canStart: true`
+### 5. PIN yolu (PIN kilitli test SIM'i varsa)
+- [ ] Kilitli SIM'de **PIN** soruluyor mu (numara değil)?
+- [ ] Yanlış PIN sonrası kalan hak **cihazdan taze** okunuyor mu?
+- [ ] Son hak korunuyor mu?
+- [ ] Yeni deneme tavanı devreye giriyor mu? (en fazla `pinTotal` kez sorar)
 
-## Sıradaki iş
+### 6. `npm run sim-lock` — SENİN SUNUM KOMUTUN
+- [ ] Hâlâ SIM'e kilit koyuyor mu? (davranışa dokunulmadı, ama doğrula)
+- [ ] `npm run sim-unlock` kilidi kaldırıyor mu?
 
-1. **Canlı `provision` koşusu.** Yeni ölçüm satırının yapılandırılmış
-   adımlarla yazıldığını ve `metrics` özetinde geçmiş satırlarla **aynı
-   kovada** birleştiğini görmek. Cihazsız doğrulanamayan tek şey bu.
-2. **PIN kilitli yol hâlâ canlı doğrulanmadı.** Elde kilitli SIM yok;
-   `sim-pin-enable` ile kilitlemek bir hak yakma riski taşıyor. Birim
-   testleri var, canlı kanıt yok — operatör onayı olmadan denenmemeli.
-3. **Çok modemli seri deneme** (`provision --loop`) sahada denenmedi.
+### 7. PUK — ⚠ EN DİKKATLİ ADIM
+Yanlış PUK SIM'i **kalıcı öldürür**. Karar mantığı saf fonksiyona çıkarıldı
+ve 14 testle kaplandı, ama canlıda ilk kez koşacak.
+- [ ] **Önce `--apply` OLMADAN** koş: ne yapacağını söylemeli.
+- [ ] Kilitli olmayan SIM'de "PUK gerekmez" deyip **hiçbir şey göndermemeli**.
+- [ ] Son hakta `--force` ile bile geçmemeli.
+- [ ] Gerçek PUK denemesi ancak elden çıkarılabilir bir test SIM'iyle.
 
-## Nerede ne var
+### 8. Ölçüm
+```bash
+npm run metrics
+```
+- [ ] Eski `data/metrics.jsonl` satırları hâlâ okunuyor mu? (`legacy.js` sınırı)
 
-- Ürün: `src/` (14 dosya, düz) · sarmalayıcı: `bin/ricon.js`
-- Kalıcı kararlar: `CLAUDE.md` — her oturumda okunur
-- Arayüzlü sürüm: `ui` dalı (dondurulmuş, v0.2.0 öncesi **Türkçe** yüzey)
-- Defterler: `data/provisioned.jsonl` (38 satır) · `data/metrics.jsonl` (23)
+---
+
+**Bir şey ters giderse:** değişikliklerin hepsi çalışma ağacında, commit
+edilmedi. `git diff` tam listeyi verir, `git checkout -- <dosya>` tek tek
+geri alır.

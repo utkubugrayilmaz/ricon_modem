@@ -63,7 +63,7 @@ uygular (zaten kapalıysa dokunmaz). Anahtar: `wl0_net_mode`+`wl_net_mode`
 | LAN class | `lan_cclass` = `5.5.5.` | 🟢 ÇÖZÜLDÜ — **cihaz kendi türetiyor**, profile konmadı |
 
 Tüm bu eşlemeler `src/settings.js` içindeki `FIELD_PROFILE`'a işlendi ve motor
-(`node ricon.js apply`) bunları uyguluyor. `lan_cclass` bilerek DIŞARIDA:
+(`node bin/ricon.js apply`) bunları uyguluyor. `lan_cclass` bilerek DIŞARIDA:
 LAN IP değişince cihaz onu reboot'ta kendisi güncelliyor (aşağıdaki uçtan uca
 testte gözlemle kesinleşti) — yazmak gereksiz risk.
 
@@ -73,7 +73,7 @@ Sıfır (fabrikaya döndürülmüş) cihazda tek komutla tam provizyon **başar�
 çalıştı ve doğrulandı**:
 
 ```
-node ricon.js apply --profile field --apply --new-host 5.5.5.1 --new-source-ip 5.5.5.100
+node bin/ricon.js apply --profile field --apply --new-host 5.5.5.1 --new-source-ip 5.5.5.100
 ```
 
 - Motor 12 anahtarı yazdı → reboot → cihaz **5.5.5.1**'de geldi → geri-oku
@@ -98,7 +98,7 @@ Cihaz araçla fabrikaya döndürüldü (5.5.5.1→192.168.1.1, doğrulama TAMAM)
 **tek komut** ile sıfırdan tam otomatik provizyon:
 
 ```
-node ricon.js provision
+node bin/ricon.js provision
 ```
 
 - Algıla (192.168.1.1) → 11 ayar + LAN IP yaz → reboot → 5.5.5.1'de doğrula →
@@ -118,7 +118,7 @@ Aynı ünitede, tek oturumda, **iki yönde** uçtan uca çalıştırıldı:
    --new-host 192.168.1.1 --new-source-ip 192.168.1.50`)
    12 anahtar default'a alındı → reboot → `192.168.1.1`'de doğrulama
    **TAMAM (15 sn)**. Kullanıcı arayüzden default hali **gözle teyit etti**.
-2. **Fabrika → saha** (`provision --phone 5350641858`)
+2. **Fabrika → saha** (`provision --phone 5321234567`)
    11 ayar + LAN IP → reboot → `5.5.5.1`'de doğrulama **TAMAM**, durum
    **hazir (deneme 1)**, elle müdahale yok.
 3. **Idempotency:** aynı komut tekrar → `zaten_hazir`, cihaza yazma yok.
@@ -126,8 +126,8 @@ Aynı ünitede, tek oturumda, **iki yönde** uçtan uca çalıştırıldı:
 ### Bu testte ilk kez doğrulanan yenilikler
 - **Hazırlama defteri:** her çalıştırma `data/provisioned.jsonl`'e bir satır
   yazdı; kimlik alanları cihazdan **canlı** geldi:
-  `ICCID 8990011626160064930 · IMEI 867191084820421 ·
-  MAC 00:0C:43:43:5F:4E · IMSI 286016661026495 · Turkcell`.
+  `ICCID 8990XXXXXXXXXXXXXXX · IMEI 8671910XXXXXXXX ·
+  MAC 00:0C:43:43:5F:4E · IMSI 28601XXXXXXXXXX · Turkcell`.
 - **Telefon zorunluluğu:** `provision` numarasız başlamıyor (çekirdek kuralı);
   msisdn deftere işlendi.
 - **`verify()` üç durum ayrımı:** 1. ve 2. denemede nvram okunamadı (cihaz

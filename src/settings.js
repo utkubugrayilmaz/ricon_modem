@@ -289,7 +289,7 @@ export const FIELD_PROFILE = {
 // (golden-backup yaklasimi — ileride, pristine yedek gerektirir).
 export const FACTORY_PROFILE = {
   name: "factory",
-  description: "FIELD_PROFILE anahtarlarinin default degerleri (GERCEK factory reset DEGIL)",
+  description: "Default values of the FIELD_PROFILE keys (NOT a real factory reset)",
   nvram: {
     // Modem/WAN Main Link defaults
     w1_wan_proto: "m13gdhcp",  // Connection Type M1-DHCP

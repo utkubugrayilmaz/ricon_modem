@@ -118,7 +118,7 @@ okumak en kesin yol. Bu cihazda açık portlar (`netstat -tln`): 5123 (telnet), 
 PUK: 10/10)". SIM PIN kilitliydi → IMSI boş, sinyal -9999, modül SIM'i okuyamıyor.
 
 **Çözüm:** Web arayüzü Network > Modem sayfasındaki PIN alanına PIN girildi. Sonra
-Status of SIM → "OK", IMSI doldu (286016661025441 → 286=TR, 01=Turkcell).
+Status of SIM → "OK", IMSI doldu (28601XXXXXXXXXX → 286=TR, 01=Turkcell).
 
 **PIN okunabilir mi? — HAYIR (araştırıldı, kesin):** SIM PIN'i modülden/karttan OKUNAMAZ.
 PIN SIM çipinin güvenli alanında tutulur, dışarı verilmez; SIM sadece "doğru/yanlış" der.
@@ -230,11 +230,11 @@ Aşağıdaki tüm çıktılar `exec 3<>` yöntemiyle, modül ANTENLİ ve şebeke
 ```
 ATI          → Quectel / EC200A / Revision: EC200AEUHAR01A30M16
 AT+CGMR      → EC200AEUHAR01A30M16
-AT+CGSN      → 867191084842565                (modül IMEI)
+AT+CGSN      → 8671910XXXXXXXX                (modül IMEI)
 AT+CPIN?     → +CPIN: READY                   (SIM kilidi açık)
-AT+CNUM      → +CNUM: "","+905350634693",145  (telefon no — ANTENLİYKEN)
-AT+QCCID     → +QCCID: 8990011626160054295F   (SIM seri no / ICCID)
-AT+CIMI      → 286016661025431                (IMSI: 286=TR, 01=Turkcell)
+AT+CNUM      → +CNUM: "","+90535XXXXXXX",145  (telefon no — ANTENLİYKEN)
+AT+QCCID     → +QCCID: 8990XXXXXXXXXXXXXXXF   (SIM seri no / ICCID)
+AT+CIMI      → 28601XXXXXXXXXX                (IMSI: 286=TR, 01=Turkcell)
 ```
 
 ### 5.2 Şebeke / Sinyal (antenli, kayıtlı)
@@ -304,9 +304,9 @@ Modül desteklenen komut listesini dökmüyor. Komutlar tek tek test edilerek ke
 
 ## 6. EN KRİTİK BULGU: Numara ↔ Şebeke Kaydı İlişkisi
 
-**Çelişki:** İlk denenen SIM'de `AT+CNUM` → `+CNUM: "","+905350634756",145` (dolu) geldi.
-Başka bir SIM'de (ICCID 8990011626160054295F) `AT+CNUM` → `+CNUM:` (BOŞ) döndü. Aynı boş
-dönen SIM'e sonradan ANTEN takılınca `AT+CNUM` → `+905350634693` (doldu).
+**Çelişki:** İlk denenen SIM'de `AT+CNUM` → `+CNUM: "","+90535XXXXXXX",145` (dolu) geldi.
+Başka bir SIM'de (ICCID 8990XXXXXXXXXXXXXXXF) `AT+CNUM` → `+CNUM:` (BOŞ) döndü. Aynı boş
+dönen SIM'e sonradan ANTEN takılınca `AT+CNUM` → `+90535XXXXXXX` (doldu).
 
 **Açıklama:** Telefon numarası (MSISDN) her SIM çipinde yazılı DEĞİLDİR.
 
@@ -320,7 +320,7 @@ dönen SIM'e sonradan ANTEN takılınca `AT+CNUM` → `+905350634693` (doldu).
 | Durum               | CEREG | QNWINFO        | CNUM          |
 | ------------------- | ----- | -------------- | ------------- |
 | Antensiz            | 0,0   | NO SERVICE     | boş          |
-| Antenli (aynı SIM) | 0,1   | FDD LTE Band 3 | +905350634693 |
+| Antenli (aynı SIM) | 0,1   | FDD LTE Band 3 | +90535XXXXXXX |
 
 **Otomasyon kuralı (ZORUNLU):**
 
@@ -647,6 +647,6 @@ Aynı Cloud Service ayarı hem riski kapatmanın hem fırsatı açmanın anahtar
 | Numara               | `AT+CNUM` (önce CEREG=0,1 bekle)                                                                              |
 | Yedek kimlik         | `AT+QCCID` (ICCID, her zaman)                                                                                  |
 | nvram oku            | `nvram show \| grep -i ANAHTAR`                                                                                 |
-| Test SIM             | no +905350634693 / ICCID 8990011626160054295F / IMSI 286016661025431                                             |
+| Test SIM             | no +90535XXXXXXX / ICCID 8990XXXXXXXXXXXXXXXF / IMSI 28601XXXXXXXXXX                                             |
 | Modül               | Quectel EC200A (EC200AEUHAR01A30M16), GPS YOK                                                                    |
 | Bulut ayarı         | cloud_enable=1, cloud_servip=78.186.62.169 (Closed), m2m_srvip=58.215.16.142 (Çin)                              |

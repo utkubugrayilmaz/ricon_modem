@@ -31,11 +31,12 @@ Standart SSH/telnet/SNMP kapalı. Alttaki OS OpenWrt/Linux. Otomasyon (Faz
 ## Yapabildiklerimiz (araç) ✅
 
 - `verify` — ortam/erişim teşhisi, sorun varsa çözümüyle.
-- `kesif` — port/servis/parmak izi taraması (salt okunur).
 - `read` — yukarıdaki her şeyi tek komutta çeker, JSON + insan-okunur.
-- `izle` — bir alanın gerçekten canlı mı statik mi olduğunu, uyarım altında
-  diff alarak kanıtlar (örn. anten çıkar/tak → sinyal değişiyor mu).
 - Hepsi kaydedilmiş JSON'dan **cihazsız tekrar oynatılabilir** (`--from-file`).
+
+> `kesif` (port/servis taraması) ve `izle` (dönemsel örnekleme) **Faz 1
+> araçlarıydı** ve `main`'den kaldırıldı — modem artık tanınıyor, profil
+> çıkarıldı. İkisi de donmuş `ui` dalında duruyor.
 
 ## Okuyamadıklarımız / sınırlar (dürüstlük bölümü) ⚠️
 

@@ -9,8 +9,16 @@ import { normalizeMetricRow } from "./legacy.js";
 
 // Cikti nesnesinden sir tasiyabilecek alanlari ozyinelemeli siler.
 // SIM PIN de sir: nvram anahtar adiyla da gelebilir, alan adiyla da.
+// SIR SUZGECI. Alanin BUGUN degil HIC tasidigi her adi kapsamali; daraltmak
+// sizinti uretir ve bir kez uretti (`kimlik` -> `credentials` yapildi, suzgec
+// guncellenmedi). Bu yuzden eski Turkce adlar da listede KALIR.
+//
+// `puk` / `newpin` (2026-08-31): sim-puk ozelligi eklendiginde suzgec
+// guncellenmemisti. unblockSimPuk bunlari bugun rapora koymuyor, yani sizinti
+// YOKTU — ama bu suzgecin isi "bugun ne tasiniyor" degil, bir sonraki
+// degisiklikte agin delik olmamasi.
 const SECRET_FIELDS = new Set(["credentials", "password", "sifre", "kimlik",
-  "auth", "authorization", "pin", "m1s1simpin", "m1s2simpin"]);
+  "auth", "authorization", "pin", "newpin", "puk", "m1s1simpin", "m1s2simpin"]);
 const SECRET_PATTERN = /Basic\s+[A-Za-z0-9+/=]+/g;
 
 export function stripSecrets(value) {
@@ -543,9 +551,31 @@ export const FLAG_TO_OPTION = Object.freeze({
   "manual-n": "manualN",
   "modem-count": "modemCount",
   "no-reboot": "noReboot",
-  "duration": "durationSec",
-  "interval": "intervalSec",
+  // `duration`/`interval` KALDIRILDI (2026-08-31): donmus `ui` dalindaki
+  // `izle` komutundan kalmaydi. main'de hicbir komut okumuyordu — koprude
+  // duran olu satir, var olmayan bir bayragi varmis gibi gosteriyordu.
 });
+
+// DEGERSIZ (boolean) BAYRAKLAR — kendinden sonraki sozcugu YUTMAZLAR.
+//
+// Ayristirici eskiden boolean kavrami tasimiyordu: her bayrak `--` ile
+// baslamayan bir sonraki sozcugu deger sanip yiyordu. Olculdu (2026-08-31):
+//   call --pure normalizePhone -- 05321234567
+//     -> { pure: "normalizePhone" }, bare: []
+// yani hem fonksiyon adi kayboluyor hem `--pure` sessizce yok sayiliyordu
+// (`flags.pure === true` artik yanlis). `--pure` README ve CLAUDE.md'de
+// belgeli bir bayrak.
+//
+// Cogu yerde sonuc GUVENLI tarafa dusuyordu (`flags.apply === true` yanlis
+// olur -> kuru calisir), ama `--no-reboot` TERS okunuyordu
+// (`flags.noReboot !== true` -> dize -> reboot ACILIR) ve saha cihazi
+// operatorun "yeniden baslatma" demesine ragmen yeniden baslardi.
+//
+// Adlar KOPRUDEN GECMIS hallerdir (--force -> manualConsent).
+export const BOOLEAN_FLAGS = new Set([
+  "apply", "declared", "help", "loop", "manualConsent",
+  "noReboot", "nvram", "pure", "watch",
+]);
 
 export function parseArgv(argv = []) {
   const separator = argv.indexOf("--");
@@ -567,6 +597,7 @@ export function parseArgv(argv = []) {
     // Once koprude ara; yoksa --iki-kelime -> ikiKelime.
     const name = FLAG_TO_OPTION[rawText]
       ?? rawText.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+    if (BOOLEAN_FLAGS.has(name)) { flags[name] = true; continue; }
     const nextItem = beforeSeparator[i + 1];
     if (nextItem !== undefined && !nextItem.startsWith("--")) { flags[name] = nextItem; i += 1; }
     else flags[name] = true;

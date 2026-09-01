@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { provisioningGaps } from "../src/index.js";
 
 const full = { modemUp: true, simPresent: true, simLockInfo: { lock: null },
-  phone: "05350641858", pin: null };
+  phone: "05321234567", pin: null };
 
 test("her sey tamam -> eksik YOK, baslatilabilir", () => {
   assert.deepEqual(provisioningGaps(full), []);

@@ -161,6 +161,12 @@ function _trySession(opts, commands) {
     const finish = (result) => {
       if (resolved) return;
       resolved = true;
+      // ZAMANLAYICI BURADA TEMIZLENIR — dagitilmis clearTimeout cagrilariyla
+      // degil. Eskiden yalnizca basari ve hata yollarinda temizleniyordu;
+      // "timeout" ve "close" yollarinda makro zamanlayici AYAKTA KALIYORDU
+      // ve Node'un olay dongusunu ~20 sn acik tutuyordu. CLI process.exit
+      // ile kurtuluyordu, ama paketi import eden tuketici ASILI KALIYORDU.
+      clearTimeout(timestamp);
       try { s.destroy(); } catch { /* zaten kapali */ }
       resolve(result);
     };
@@ -200,17 +206,17 @@ function _trySession(opts, commands) {
         // satir-ortasindadir, ^END_MARK$ ile eslesmez. Hepsi gelince biter.
         const t = all.join("").replace(/\r/g, "");
         const done = (t.match(new RegExp(`^${END_MARK}\\s*$`, "mg")) || []).length;
-        if (done >= expectedEnd) { stage = 4; clearTimeout(timestamp); s.write("exit\r\n"); finish(resolveResult()); }
+        if (done >= expectedEnd) { stage = 4; s.write("exit\r\n"); finish(resolveResult()); }
       }
     });
     s.on("timeout", () => finish({
       ok: false, outs: {},
       problems: [problem("REQUEST_FAILED", `console ${host}:${port}`, "socket timeout")],
     }));
-    s.on("error", (e) => { clearTimeout(timestamp); finish({
+    s.on("error", (e) => finish({
       ok: false, outs: {},
       problems: [problem("REQUEST_FAILED", `console ${host}:${port}`, `${e.code || e.name}: ${e.message}`)],
-    }); });
+    }));
     s.on("close", () => {
       if (stage >= 3) finish(resolveResult());
       else finish({ ok: false, outs: {}, problems: [problem("REQUEST_FAILED", `console ${host}:${port}`, `connection closed (stage ${stage})`)] });
@@ -219,7 +225,6 @@ function _trySession(opts, commands) {
     // Toplu ciktidan her komutun ciktisini sirayla ayiklar.
     function resolveResult() {
       const full = all.join("");
-      const chunks = full.split(END_MARK);
       const outs = Object.create(null);
       // Her komut icin: ilgili START_MARK...END_MARK blogunu bul. Basit ve saglam yol:
       // gercek ciktilar eko'dan SONRA gelir; komut sirasina gore son
@@ -234,6 +239,20 @@ function _trySession(opts, commands) {
       // yakalar). Yine de guvenli olsun diye son N'i aliyoruz.
       const real = blocks.slice(-commands.length);
       commands.forEach((k, i) => { outs[k] = real[i] ?? null; });
+      // EKSIK CIKTI BASARI DEGILDIR.
+      //
+      // Toplu satir gonderildikten SONRA hat duserse (reboot, tek-baglantili
+      // modemin dusmesi) buraya marker hic gelmeden gelinir — cunku "close"
+      // yolu stage>=3'te resolveResult() cagiriyor. Eskiden burasi kosulsuz
+      // ok:true donuyordu: cagiran `outs[komut] === null` ile "basarili"
+      // bir sonuc aliyor, consoleNvram bunu "0 anahtar" diye okuyordu.
+      // Yani hat kopmasi SESSIZ bir yanlis cevaba donusuyordu.
+      // (2026-08-31, sahte cihazla olculdu: dusen baglanti ok:true donuyordu.)
+      if (real.length < commands.length) {
+        return { ok: false, outs,
+          problems: [problem("REQUEST_FAILED", `console ${host}:${port}`,
+            `incomplete output: ${real.length}/${commands.length} commands returned`)] };
+      }
       return { ok: true, outs, problems: [] };
     }
   });
@@ -259,6 +278,16 @@ export function shQuote(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
+// nvram ANAHTARI gecerli mi? Deger tirnaklanabilir, anahtar tirnaklanamaz —
+// `nvram set ANAHTAR=deger` biciminde anahtar kabuga CIPLAK gidiyor. Icinde
+// `;` ya da `$(` olan bir anahtar komut satirini bolerdi.
+//
+// Bugun anahtarlar settings.js'teki sabit profillerden geliyor, ama
+// applyProvisioning public bir export: profil nesnesi disaridan da gelebilir
+// ve o zaman bu tek koruma olur. Gercek nvram anahtarlari zaten bu kumede.
+const NVRAM_KEY = /^[A-Za-z0-9_.:-]+$/;
+export const isValidNvramKey = (key) => NVRAM_KEY.test(String(key ?? ""));
+
 // YAZMA: verilen {anahtar: deger} ciftlerini nvram'a yazar + commit eder.
 // SADECE writeAllowed:true ile calisir (cagiran acikca yazma niyetini belirtir).
 // Reboot BURADA YAPILMAZ (reboot baglantiyi koparir, marker tamamlanmaz);
@@ -267,6 +296,15 @@ export function shQuote(value) {
 export async function consoleWrite(opts, pairs) {
   const keys = Object.keys(pairs);
   if (keys.length === 0) return { ok: true, problems: [], written: [] };
+  // BOZUK ANAHTAR CIHAZA HIC GITMEZ. Tek bir kotu anahtar butun toplu satiri
+  // bolecegi icin hicbiri gonderilmez — yarim yazilmis bir nvram, hic
+  // yazilmamis olandan kotudur.
+  const bad = keys.filter((k) => !isValidNvramKey(k));
+  if (bad.length) {
+    return { ok: false, written: [],
+      problems: [problem("ARGS", `Invalid nvram key(s): ${bad.join(", ")}`,
+        "nvram keys may contain letters, digits, and _ . : - only.")] };
+  }
   const commands = keys.map((k) => `nvram set ${k}=${shQuote(pairs[k])}`);
   commands.push("nvram commit && echo NVRAM_COMMIT_OK");
   const r = await runConsole({ ...opts, writeAllowed: true }, commands);

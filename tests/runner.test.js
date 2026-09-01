@@ -90,6 +90,40 @@ test("argvAyikla: degersiz bayrak true, ayrac yoksa konumsal yok", () => {
   assert.deepEqual(r.positionals, []);
 });
 
+// DEGERSIZ BAYRAK KENDINDEN SONRAKINI YUTMAZ.
+//
+// Olculmus kusur (2026-08-31, canli):
+//   call --pure normalizePhone -- 05321234567
+// `--pure` bir sonraki sozcugu deger sanip yiyordu; sonuc
+// { pure: "normalizePhone" } ve bare:[] oluyordu. CLI da fonksiyon adi
+// bulamayip TUM YUZEYI listeliyor, ustelik `flags.pure === true` yanlis
+// oldugu icin bayragi da yok sayiyordu. Iki hata birden, tek sessizlik.
+test("argvAyikla: boolean bayrak kendinden SONRAKI sozcugu YUTMAZ", () => {
+  const r = parseArgv(["--pure", "normalizePhone"]);
+  assert.equal(r.flags.pure, true, "--pure true olmali, dize degil");
+  assert.deepEqual(r.bare, ["normalizePhone"], "fonksiyon adi bare'de kalmali");
+});
+
+test("argvAyikla: --apply konumsali yutmaz (kuru/gercek karari bozulmasin)", () => {
+  const r = parseArgv(["--apply", "dosya.json"]);
+  assert.equal(r.flags.apply, true);
+  assert.deepEqual(r.bare, ["dosya.json"]);
+});
+
+test("argvAyikla: --no-reboot yutmaz (TERS bayrak, kaza tehlikeli tarafa dusmesin)", () => {
+  // Bu bayrak `!(flags.noReboot === true)` ile okunuyor. Yutulup dize
+  // olsaydi eski `!== true` ifadesinde reboot ACILIRDI.
+  const r = parseArgv(["--no-reboot", "5.5.5.1"]);
+  assert.equal(r.flags.noReboot, true);
+  assert.deepEqual(r.bare, ["5.5.5.1"]);
+});
+
+test("argvAyikla: degerli bayrak hala degerini aliyor (boolean listesi tasmasin)", () => {
+  const r = parseArgv(["--phone", "05321234567", "--host", "5.5.5.1"]);
+  assert.deepEqual(r.flags, { phone: "05321234567", host: "5.5.5.1" });
+  assert.deepEqual(r.bare, []);
+});
+
 test("argvAyikla: `--` sonrasi bayrak GIBI gorunen sey konumsaldir", () => {
   // AT komutlari ve nvram degerleri tire ile baslayabilir; ayrac sonrasi
   // hicbir sey bayrak olarak yorumlanmamali.

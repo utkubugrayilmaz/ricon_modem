@@ -27,7 +27,11 @@ import * as core from "../src/index.js";
 import {
   writeJson, summaryText, planRows, planText, callByName, parseArgv,
 } from "../src/report.js";
-import { isOk, localizeProblems } from "../src/problems.js";
+// `problem` de buradan: CLI'in urettigi sorunlar da KATALOGDAN gelmeli.
+// Eskiden bin/ elle `{ code: "ARGS", ... }` kuruyordu; katalogda karsiligi
+// olmadigi icin operator ekraninda "Something unexpected happened — Report
+// this code to IT: ARGS" cikiyordu. Siradan bir kullanim hatasi, ariza gibi.
+import { isOk, localizeProblems, problem } from "../src/problems.js";
 
 const argv = process.argv.slice(2);
 const command = argv[0];
@@ -44,6 +48,28 @@ const { flags, positionals, bare } = parseArgv(argv.slice(1));
 const progress = (m) => process.stderr.write(`[${command}] ${m}\n`);
 // IP -> /24 oneki. Kaynak IP turetmek icin; iki komut da ayni seyi kullaniyor.
 const prefixOf = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
+
+// Sayisal bayrak. Doner: sayi | undefined (verilmedi) | null (GECERSIZ).
+//
+// Eskiden `Number(flags.maxRounds) || Infinity` yaziliyordu ve IKI ayri
+// girdi sessizce SONSUZ dongue donusuyordu: `--rounds 0` ve `--rounds abc`
+// (NaN). Ikisi de `|| Infinity` dalina dusuyor — operator "bir tur bak"
+// ya da "iki modem hazirla" derken arac hic durmuyordu. Ayni tuzak
+// `--max` ve `--internet-wait` icin de vardi.
+//
+// Gecersiz girdi artik SESSIZ DEGIL: cagiran ARGS uretip duruyor.
+function numericFlag(raw) {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// Gecersiz sayisal bayrak icin standart sonuc nesnesi.
+const numericFlagError = (commandName, flagName, rule = "a positive number") => ({
+  timestamp: new Date().toISOString(), command: commandName, ok: false,
+  problems: [problem("ARGS", `${flagName} must be ${rule}.`,
+    `Give ${rule}, or omit ${flagName} to use the default.`)],
+});
 
 // .env'i KENDIMIZ de yukle.
 //
@@ -297,7 +323,7 @@ function streamWatcher() {
         stamp({ step: STEP.plan });
         // Arayuzdeki iki panelin (once/sonra) terminal karsiligi: ham nvram
         // anahtari degil, sozlukten gelen ad/sayfa/deger.
-        process.stderr.write("\n  PLAN — once -> sonra (* = degisecek)\n"
+        process.stderr.write("\n  PLAN — before -> after (* = will change)\n"
           + planText(planRows(o.planObj)) + "\n\n");
         break;
       case "writing": stamp({ step: "write_start", count: o.keys?.length ?? 0 }); break;
@@ -329,7 +355,7 @@ function streamWatcher() {
 }
 
 // provisionModem sonucunu OLCUM satirina cevirir (data/olcumler.jsonl).
-// Sema: src/report/metrics.js — summarizeMetrics'in bekledigi alanlar.
+// Sema: src/report.js — summarizeMetrics'in bekledigi alanlar.
 //
 // Bu is neden CEKIRDEKTE DEGIL: olcum bir rapor kaygisi, provizyonun degil.
 // Cekirdek yalnizca `totalSec`'i bildiriyor; satiri kuran, dosyaya yazan ve
@@ -401,9 +427,11 @@ async function runCommand() {
       // bakilacagina retryDecision karar veriyor — burada politika YOK.
       // Ayni yetenegi arayuz de kullaniyor; kural: her yetenek her tuketiciden.
       if (flags.watch !== true) return assessDevice(assessOptions);
+      const rounds = numericFlag(flags.maxRounds);
+      if (rounds === null) return numericFlagError("assess", "--rounds");
       return watchAssessment({
         ...assessOptions,
-        maxRounds: Number(flags.maxRounds) || Infinity,
+        maxRounds: rounds ?? Infinity,
         event: (o) => progress(`modem=${o.modem.location ?? "none"}`
           + ` phone=${o.phone.number ?? "-"} missing=[${o.missing}]`
           + ` retry=${o.retry.retry ? `${o.retry.afterSec} s (${o.retry.reason})` : "no"}`),
@@ -414,7 +442,13 @@ async function runCommand() {
     case "msisdn": return { timestamp: new Date().toISOString(), command: "msisdn",
       modemIp: opts.host, ...(await withDerivedOk(readMsisdn(opts))) };
     // SADECE SIM kilidi (salt okunur): durum + KALAN HAK. Hicbir sey harcamaz.
-    case "sim-lock": return { timestamp: new Date().toISOString(), command: "sim-lock",
+    //
+    // ADI NEDEN `sim-lock` DEGIL: `npm run sim-lock` KILIT KOYUYOR
+    // (sim-pin-enable --apply). Ayni ad iki yerde tam TERS anlam tasiyinca
+    // tezgahtaki teknisyen bildigi adi yazip yazma islemi aliyordu.
+    // "sim-lock" artik her yerde TEK sey demek: kilitle. Salt okunur sorgu
+    // kendi acik adini aldi. (Karar 2026-08-31; bkz. CLAUDE.md)
+    case "sim-lock-status": return { timestamp: new Date().toISOString(), command: "sim-lock-status",
       modemIp: opts.host, ...(await withDerivedOk(readSimLock(opts))) };
     // SIM PIN kilidini KALICI kaldir. `uygula` ile ayni sozlesme: bayraksiz
     // KURU calisir (yalniz durumu bildirir), gercek deneme --uygula ister.
@@ -492,9 +526,8 @@ async function runCommand() {
       const [before, after] = bare;
       if (!before || !after) {
         return { timestamp: new Date().toISOString(), command: "diff", ok: false,
-          problems: [{ code: "ARGS", severity: "error",
-            message: "diff <before.json> <after.json> is required",
-            check: "Give two nvram JSON files." }] };
+          problems: [problem("ARGS", "diff <before.json> <after.json> is required",
+            "Give two nvram JSON files.")] };
       }
       return computeNvramDiff(nvramFromFile(before), nvramFromFile(after));
     }
@@ -503,9 +536,8 @@ async function runCommand() {
       const profile = PROFILES[profileName];
       if (!profile) {
         return { timestamp: new Date().toISOString(), command: "apply", ok: false,
-          problems: [{ code: "ARGS", severity: "error",
-            message: `Unknown profile: ${profileName}`,
-            check: `Valid: ${Object.keys(PROFILES).join(", ")}` }] };
+          problems: [problem("PROFILE_MISSING", profileName,
+            Object.keys(PROFILES).join(", "))] };
       }
       // --new-host verilip --new-source-ip verilmediyse kaynagi ONEKTEN TURET.
       // Cekirdek bunu yapamaz (makineye bakmak CLI'in isi) ve turetilmezse
@@ -517,7 +549,11 @@ async function runCommand() {
       return applyProvisioning({
         ...opts,
         apply: flags.apply === true,   // yoksa DRY-RUN (kuru)
-        reboot: flags.noReboot !== true,
+        // TERS BAYRAK: `--no-reboot` verildiyse reboot KAPALI. Ifade
+        // bilerek `=== true` uzerinden kuruluyor; `!== true` yazilirsa
+        // bayragin true DISINDA her degeri (dize, sayi) reboot'u ACAR —
+        // yani kaza hep TEHLIKELI tarafa duser. Digerleri de `=== true`.
+        reboot: !(flags.noReboot === true),
         newHost: flags.newHost,
         newSourceIp,
         event: streamWatcher(),
@@ -534,9 +570,12 @@ async function runCommand() {
         : (Number.isFinite(dk) && dk > 0 ? Math.round(dk * 60) : null);
       if (!totalSeconds) {
         return { timestamp: new Date().toISOString(), command: "metrics-manual", ok: false,
-          problems: [{ code: "ARGS", severity: "error",
-            message: "Manual duration is required.",
-            check: "Give it as --dk 15.5 (minutes) or --sn 930 (seconds)." }] };
+          // Mesaj OLMAYAN bayraklari soyluyordu (`--dk` / `--sn`, v0.2.0
+          // oncesi adlar). Kod flags.minutes/flags.seconds okuyor, HELP de
+          // oyle diyor: mesaji harfiyen uygulayan operator AYNI HATAYI
+          // tekrar aliyordu — cikissiz bir dongu.
+          problems: [problem("ARGS", "Manual duration is required.",
+            "Give it as --minutes 15.5 or --seconds 930.")] };
       }
       const line = {
         timestamp: new Date().toISOString(),
@@ -558,15 +597,12 @@ async function runCommand() {
       // --elle-dk: elle surecin suresi (KARSILASTIRMA TABANI). Bu bir olcum ya
       // da beyandir; hangisi oldugunu --elle-kaynak ile ACIKCA soyle.
       const file = flags.record || METRICS_FILE;
-      let lines = [];
+      let lines;
       try {
         lines = readJsonl(file);
       } catch {
         return { timestamp: new Date().toISOString(), command: "metrics", ok: false,
-          problems: [{ code: "METRICS_FILE_MISSING", severity: "error",
-            message: `Metric file not found or unreadable: ${file}`,
-            check: "Run `npm start` (or `ricon provision`) a few times first;"
-              + " each finished run appends one line." }] };
+          problems: [problem("METRICS_FILE_MISSING", file)] };
       }
       const manualMin = Number(flags.manualMinutes);
       return summarizeMetrics(lines, {
@@ -579,7 +615,7 @@ async function runCommand() {
     // Cekirdegin HERHANGI bir export'unu adiyla cagirir. Yeni bir yetenek
     // eklendiginde buraya `case` yazmak GEREKMEZ — src/index.js'e eklenen her
     // sey aninda terminalden erisilebilir olur. Karar/ayristirma saf ve
-    // test edilebilir: src/cli/cagirici.js.
+    // test edilebilir: src/report.js.
     case "call": {
       const name = bare[0] ?? null;
       // opts'a karismayan CLI bayraklari: fonksiyona gitmemeli.
@@ -598,8 +634,14 @@ async function runCommand() {
       const profile = PROFILES[profileName];
       if (!profile) {
         return { timestamp: new Date().toISOString(), command: "provision", ok: false,
-          problems: [{ code: "ARGS", severity: "error",
-            message: `Unknown profile: ${profileName}`, check: `Valid: ${Object.keys(PROFILES).join(", ")}` }] };
+          problems: [problem("PROFILE_MISSING", profileName,
+            Object.keys(PROFILES).join(", "))] };
+      }
+      // 0 GECERLI (dogrulamayi kapatir), ama NaN ve degersiz bayrak degil.
+      const internetWaitRaw = flags.internetWaitSec;
+      const internetWait = internetWaitRaw === undefined ? 150 : Number(internetWaitRaw);
+      if (internetWaitRaw === true || !Number.isFinite(internetWait) || internetWait < 0) {
+        return numericFlagError("provision", "--internet-wait", "zero or a positive number");
       }
       const fieldHost = flags.fieldHost || profile.nvram.lan_ipaddr || "5.5.5.1";
       // Fabrika oneki .env'deki MODEM_HOST'tan turer (varsayilan 192.168.1.1);
@@ -613,10 +655,12 @@ async function runCommand() {
         factoryHost: opts.host, factorySource: on.factorySource,
         fieldHost, fieldSource: on.fieldSource,
         credentials: opts.credentials, profile,
-        attempts: Number(flags.attempts) || 3,
-        // Internet dogrulamasi (SIM calisiyor mu). 0 = kapat.
-        internetWaitSec: flags.internetWaitSec !== undefined
-          ? Number(flags.internetWaitSec) : 150,
+        attempts: numericFlag(flags.attempts) ?? 3,
+        // Internet dogrulamasi (SIM calisiyor mu). 0 = KAPAT — bu yuzden
+        // numericFlag kullanilmiyor (o sifiri gecersiz sayar).
+        // Degersiz `--internet-wait` eskiden Number(true) === 1 saniye
+        // oluyordu: dogrulama acik gorunup pratikte hic beklemiyordu.
+        internetWaitSec: internetWait,
         record: lineWriter(flags.record || LEDGER_FILE),
         askPhone,          // dongu: her modem icin sorar
         askPin,            // SIM kilitliyse PIN sorar, cekirdek kaldirir
@@ -628,10 +672,12 @@ async function runCommand() {
       if (cycle) {
         // Sabit --telefon dongude ANLAMSIZ (her cihazin SIM'i farkli);
         // numara her modemde o modemin SIM'inden okunuyor.
+        const maxModems = numericFlag(flags.maxModems);
+        if (maxModems === null) return numericFlagError("provision", "--max");
         return provisionLoop({
           ...provisionOptions,
           metricsRecord: (r) => writeMetrics(metricsRow(r, provisionOptions.event.steps())),
-          maxModems: Number(flags.maxModems) || Infinity,
+          maxModems: maxModems ?? Infinity,
         });
       }
       // Tek modem: --telefon VERMEK ARTIK ZORUNLU DEGIL. Cekirdek numarayi
@@ -640,21 +686,40 @@ async function runCommand() {
       // cekirdek MSISDN_INVALID der (sessizce yeniden sormaz).
       return provisionAndMeasure(provisionOptions, { phone: flags.phone }, writeMetrics);
     }
-    default: return null;
+    // ULASILAMAZ: main() COMMANDS.has ile kapiyi zaten tutuyor ve
+    // cli-contract.test.js dispatch ile COMMANDS'in ayni kumede oldugunu
+    // dogruluyor. Yine de sessizce `null` DONMEZ: eskiden oyleydi ve o
+    // durumda main() `report.ok` okumaya calisip patlardi.
+    default:
+      return { timestamp: new Date().toISOString(), command, ok: false,
+        problems: [problem("ARGS", `Command "${command}" has no handler.`,
+          "This is a bug: the command is listed but not implemented.")] };
   }
 }
 
 const COMMANDS = new Set(["verify", "read", "console", "sim",
-  "assess", "msisdn", "sim-lock", "sim-pin-disable", "sim-pin-enable",
+  "assess", "msisdn", "sim-lock-status", "sim-pin-disable", "sim-pin-enable",
   "diff", "apply", "provision", "call", "metrics", "metrics-manual",
   "sim-puk"]);
+
+// BELIRSIZ ADLAR: tek bir dogru karsiligi OLMAYAN eski adlar. Yeniden
+// adlandirma tablosundan ayri durmalari sart — orada "sunu demek istedin"
+// denir, burada denemez: `sim-lock` yazan biri ya durumu OKUMAK ya da kilidi
+// KOYMAK istiyordur ve ikisi arasindaki fark bir PIN hakki.
+// Sessizce birini secmek, yanlis secildiginde geri alinamaz.
+const AMBIGUOUS = Object.freeze({
+  "sim-lock": [
+    ["sim-lock-status", "read the lock state and attempts left (burns nothing)"],
+    ["sim-pin-enable", "put the PIN lock ON (writes; needs --apply)"],
+  ],
+});
 
 // v0.2.0'da yeniden adlandirilan komutlar. Takma ad DEGIL: eski adi yazana
 // dogrusunu soyleyip 1 ile cikiyoruz. Sessizce calistirmak, tezgahtaki
 // ezberin yanlis kalmasini uzatirdi.
 const RENAMED_IN_0_2_0 = Object.freeze({
   dogrula: "verify", oku: "read", konsol: "console", degerlendir: "assess",
-  numara: "msisdn", "sim-kilit": "sim-lock",
+  numara: "msisdn", "sim-kilit": "sim-lock-status",
   "sim-pin-kaldir": "sim-pin-disable", "sim-pin-kilitle": "sim-pin-enable",
   fark: "diff", uygula: "apply", hazirla: "provision", calistir: "call",
   olcum: "metrics", "olcum-elle": "metrics-manual",
@@ -668,7 +733,7 @@ const HELP = "Usage: node --env-file=.env bin/ricon.js <command>   (or: npm star
   + "  assess                       device state + WHAT IS MISSING (phone included, ~5 s)\n"
   + "         [--watch] [--rounds N]  keep re-checking BY ITSELF until nothing is missing\n"
   + "  msisdn                       the SIM phone number ONLY (AT+CNUM)\n"
-  + "  sim-lock                     lock state + ATTEMPTS LEFT only (burns nothing)\n"
+  + "  sim-lock-status              lock state + ATTEMPTS LEFT only (burns nothing)\n"
   + "  sim-pin-disable --pin 1234   remove the SIM PIN lock PERMANENTLY\n"
   + "         [--apply]             without it DRY: reports the state only\n"
   + "         [--force]             try even on a SIM with a burnt attempt (if sure)\n"
@@ -715,6 +780,15 @@ async function main() {
     || flags.help === true;
   if (helpAsked) { process.stderr.write(HELP); return 0; }
   if (!COMMANDS.has(command)) {
+    // BELIRSIZ ad: iki gecerli karsiligi var, biri okuyor digeri YAZIYOR.
+    // Tahmin etmiyoruz — secenekleri gosterip duruyoruz.
+    const choices = AMBIGUOUS[command];
+    if (choices) {
+      process.stderr.write(`"${command}" is ambiguous now. Did you mean:\n`
+        + choices.map(([name, what]) => `  ${name.padEnd(18)}${what}\n`).join("")
+        + `\nNote: \`npm run ${command}\` still locks the SIM (sim-pin-enable --apply).\n\n`);
+      return 1;
+    }
     // Eski Turkce adi yazdiysa DOGRUSUNU soyle. Sessiz bir "unknown command"
     // teknisyeni yazim hatasi aramaya gonderirdi; sorun yazim degil, surum.
     const renamed = RENAMED_IN_0_2_0[command];
@@ -753,7 +827,7 @@ async function main() {
   return report.ok ? 0 : 1;
 }
 
-main().then((code) => { if (code !== null) process.exit(code); }).catch((e) => {
+main().then((code) => process.exit(code)).catch((e) => {
   process.stderr.write(`Unexpected error: ${e?.stack || e}\n`);
   process.exit(1);
 });

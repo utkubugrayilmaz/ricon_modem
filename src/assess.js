@@ -12,8 +12,8 @@
 import { isReachable } from "./net.js";
 import { normalizePhone } from "./device.js";
 import { readMsisdn, readSimLock, isSimLockEligible } from "./at.js";
-import { problem, isOk } from "./problems.js";
-// Alt katman: OKUMA yolu da YAZMA yolu da buraya bakiyor (bkz. cihaz.js).
+import { problem, isProgrammerError, isOk } from "./problems.js";
+// Alt katman: OKUMA yolu da YAZMA yolu da buraya bakiyor (bkz. device.js).
 import { readIdentity, isSimPresent, pcPreflight } from "./device.js";
 
 const now = () => new Date().toISOString();
@@ -85,7 +85,14 @@ export async function assessDevice(opts) {
 
   if (location && credentials) {
     let k = null;
-    try { k = await readIdentity({ ...location, credentials }); } catch { /* kismi sonuc gecerli */ }
+    // Cihaz/ag hatasi yutulur (yarim okuma gercek bir sonuctur), ama KOD
+    // hatasi yutulmaz — bu satir bir donem `ReferenceError: isOk is not
+    // defined` sakliyordu ve 223 test kacirmisti (commit b3ab4ce).
+    try {
+      k = await readIdentity({ ...location, credentials });
+    } catch (e) {
+      if (isProgrammerError(e)) report.problems.push(problem("INTERNAL_ERROR", e.message));
+    }
     if (k) {
       report.identity = { iccid: k.iccid, imei: k.imei, imsi: k.imsi,
         lan_mac: k.lan_mac, operator: k.operator };

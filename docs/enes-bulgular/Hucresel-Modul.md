@@ -52,11 +52,11 @@ Modül bazen (özellikle antensiz/şebekesizken) resetlenir ve AT'ye geçici cev
 |---|---|---|---|
 | `ATI` | Quectel / EC200A / Revision: EC200AEUHAR01A30M16 | Üretici + model + revizyon | Hayır |
 | `AT+CGMR` | EC200AEUHAR01A30M16 | Firmware sürümü | Hayır |
-| `AT+CGSN` | 867191084842565 | **Modül IMEI** (donanım kimliği) | Hayır |
+| `AT+CGSN` | 8671910XXXXXXXX | **Modül IMEI** (donanım kimliği) | Hayır |
 | `AT+CPIN?` | +CPIN: READY | SIM kilit durumu (READY / SIM PIN) | Hayır |
-| `AT+CNUM` | +CNUM: "","+905350634693",145 | **Telefon numarası (MSISDN)** | **Bazı SIM'lerde EVET** (bkz. §6) |
-| `AT+QCCID` | +QCCID: 8990011626160054295F | **SIM seri no (ICCID)** | Hayır — her zaman çalışır |
-| `AT+CIMI` | 286016661025431 | **IMSI** (286=TR, 01=Turkcell) | Hayır |
+| `AT+CNUM` | +CNUM: "","+90535XXXXXXX",145 | **Telefon numarası (MSISDN)** | **Bazı SIM'lerde EVET** (bkz. §6) |
+| `AT+QCCID` | +QCCID: 8990XXXXXXXXXXXXXXXF | **SIM seri no (ICCID)** | Hayır — her zaman çalışır |
+| `AT+CIMI` | 28601XXXXXXXXXX | **IMSI** (286=TR, 01=Turkcell) | Hayır |
 
 **Otomasyon notu:** ICCID, IMSI, IMEI şebekeye ihtiyaç duymadan her zaman okunur. Telefon numarası ise özel durum (§6).
 
@@ -141,7 +141,7 @@ Bu, test sürecinin en önemli keşfi ve otomasyonun en hassas noktası.
 
 **Doğrulanmış senaryo:**
 - Antensiz modem: `+CEREG: 0,0` (kayıt yok) → `+CNUM:` boş
-- Aynı karta anten takıldı: `+CEREG: 0,1` (kayıtlı) → `+CNUM: "","+905350634693",145` doldu
+- Aynı karta anten takıldı: `+CEREG: 0,1` (kayıtlı) → `+CNUM: "","+90535XXXXXXX",145` doldu
 
 **Otomasyon kuralı (ZORUNLU):**
 1. Önce `AT+CPIN?` → READY olmalı.
@@ -184,7 +184,7 @@ Sahadaki modemler antenli ve şebekeye bağlı olacağı için gerçek kullanım
 | Port açma yöntemi | `exec 3<>/dev/ttyUSBX` |
 | Numara komutu | `AT+CNUM` (şebeke kaydı sonrası) |
 | Yedek kimlik | `AT+QCCID` (ICCID, her zaman) |
-| Test SIM numarası | +905350634693 |
-| Test SIM ICCID | 8990011626160054295F |
-| Test SIM IMSI | 286016661025431 |
+| Test SIM numarası | +90535XXXXXXX |
+| Test SIM ICCID | 8990XXXXXXXXXXXXXXXF |
+| Test SIM IMSI | 28601XXXXXXXXXX |
 | Operatör | Turkcell (MCC/MNC 28601), LTE Band 3 |

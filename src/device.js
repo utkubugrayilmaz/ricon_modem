@@ -1,7 +1,7 @@
 // Cihaz TEMEL OKUMALARI ve PC on-kontrolu — en alt orkestrasyon katmani.
 //
-// Neden ayri: bunlar hem OKUMA yolunun (degerlendirme.js) hem YAZMA yolunun
-// (pipeline.js) ihtiyaci. Ikisi de pipeline.js'te dururken degerlendirme.js
+// Neden ayri: bunlar hem OKUMA yolunun (assess.js) hem YAZMA yolunun
+// (pipeline.js) ihtiyaci. Ikisi de pipeline.js'te dururken assess.js
 // pipeline.js'i import etmek zorunda kaliyordu — yani "yalniz okuyan" modul
 // "cihazi degistiren" module bagimliydi. Katman yonu tersti; simdi ikisi de
 // buraya bakiyor ve aralarinda bagimlilik yok.

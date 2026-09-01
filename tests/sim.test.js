@@ -29,17 +29,17 @@ test("readSim: kimliksiz AUTH_REQUIRED (cihaza gitmez)", async () => {
 // 05xxxxxxxxx bekliyor. Donusum bir KARAR sayilir ve cekirdekte durur:
 // arayuz "basina 0 ekle" gibi bir kural TASIMAZ, hazir degeri gosterir.
 test("telefonGirdiBicimi: kanonik numara ekranin bekledigi 11 haneye cevrilir", () => {
-  assert.equal(phoneInputFormat("5350634747"), "05350634747");
+  assert.equal(phoneInputFormat("5321234567"), "05321234567");
 });
 
 test("telefonGirdiBicimi: her girdi bicimi once normalize edilir", () => {
-  for (const raw of ["+905350634747", "0535 063 47 47", "0535-063-4747", "05350634747"]) {
-    assert.equal(phoneInputFormat(raw), "05350634747", `girdi: ${raw}`);
+  for (const raw of ["+905321234567", "0532 123 45 67", "0532-123-4567", "05321234567"]) {
+    assert.equal(phoneInputFormat(raw), "05321234567", `girdi: ${raw}`);
   }
 });
 
 test("telefonGirdiBicimi: gecersiz/bos -> bos string (ekran alani temiz kalir)", () => {
-  for (const raw of [null, undefined, "", "1234", "0535063474"]) {
+  for (const raw of [null, undefined, "", "1234", "0532123456"]) {
     assert.equal(phoneInputFormat(raw), "", `girdi: ${raw}`);
   }
 });

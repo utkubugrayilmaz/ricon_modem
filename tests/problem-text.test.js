@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PROBLEM_CODES, problem } from "../src/problems.js";
-import { problemText, localizeProblems, OPERATOR_TEXT } from "../src/problems.js";
+import { problemText, localizeProblems, OPERATOR_TEXT, isProgrammerError } from "../src/problems.js";
 
 test("her sorun kodunun TURKCE karsiligi var", () => {
   const missing = PROBLEM_CODES.filter((k) => !OPERATOR_TEXT[k]);
@@ -63,4 +63,28 @@ test("localizeProblems: operator metnini EKLER, gelistirici metnini KORUR", () =
   assert.ok(c[0].message.length > 0, "message korunur (gunluk/gelistirici tarafi)");
   assert.equal(c[1].operator.title, "SIM is PIN locked");
   assert.deepEqual(localizeProblems(), [], "bos girdi patlamaz");
+});
+
+// KOD HATASI SESSIZ KALMAZ.
+//
+// Cekirdekteki `catch {}` bloklari CIHAZ hatasini yutmak icin var. Ama ayni
+// yutma ReferenceError'i da yok ediyordu: readIdentity bir donem her cagrida
+// `ReferenceError: isOk is not defined` atiyordu, iki cagri yerinde de
+// try/catch bunu sessizce yutuyordu ve 223 testin hicbiri yakalamadi
+// (commit b3ab4ce). Ayrim artik kodda ve burada sabitleniyor.
+test("isProgrammerError: kod hatasini cihaz hatasindan AYIRIR", () => {
+  for (const e of [new ReferenceError("x"), new TypeError("y"), new SyntaxError("z")]) {
+    assert.equal(isProgrammerError(e), true, `${e.name} kod hatasi sayilmali`);
+  }
+  for (const e of [new Error("ETIMEDOUT"), Object.assign(new Error("x"), { code: "ECONNRESET" })]) {
+    assert.equal(isProgrammerError(e), false, "cihaz/ag hatasi yutulmaya devam etmeli");
+  }
+});
+
+test("INTERNAL_ERROR katalogda ve operator metni var", () => {
+  const p = problem("INTERNAL_ERROR", "isOk is not defined");
+  assert.equal(p.code, "INTERNAL_ERROR");
+  assert.match(p.message, /isOk is not defined/);
+  assert.equal(p.severity, "error");
+  assert.ok(OPERATOR_TEXT.INTERNAL_ERROR, "operator metni olmali");
 });

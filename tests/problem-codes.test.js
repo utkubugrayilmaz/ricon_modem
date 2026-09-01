@@ -13,10 +13,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PROBLEM_CODES } from "../src/problems.js";
 import { OPERATOR_TEXT } from "../src/problems.js";
 
-const SRC = new URL("../src/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+const SRC = fileURLToPath(new URL("../src/", import.meta.url));
+// BIN DE TARANIR. Bekci bir donem YALNIZCA src/'i tariyordu ve tam da bu
+// yuzden bin/ricon.js dort yerde katalog disi bir "ARGS" kodu, bir yerde
+// "METRICS_FILE_MISSING" kodu ELLE kuruyordu. Ikisi de katalogda yoktu,
+// yani localizeProblems() genel yedege dusuyor ve operatore siradan bir
+// kullanim hatasi icin "Something unexpected happened — Report this code
+// to IT: ARGS" yaziliyordu. Testin var olma sebebi (UYDURMA KOD) aynen
+// gerceklesmisti; bekci sadece yanlis yere bakiyordu.
+const BIN = fileURLToPath(new URL("../bin/", import.meta.url));
 
 // ALT KLASORLERE INER: src/ katmanlara bolundu (domain/transport/parse/
 // device/flow/report). Duz readdir yapan eski surum tasimadan sonra tek bir
@@ -32,6 +41,7 @@ function kaynaklar() {
     }
   };
   yuru(SRC);
+  yuru(BIN);
   return out;
 }
 

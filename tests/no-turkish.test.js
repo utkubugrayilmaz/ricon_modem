@@ -80,6 +80,16 @@ const TURKISH_WORDS = new RegExp("\\b(" + [
   "basarili", "basarisiz", "sorun", "sorunlar", "sistem", "cihaz", "ayar",
   "elle", "sifirlama", "sifre", "kullanici", "yapilacak", "gerekli",
   "bilinmeyen", "gecerli", "yazilamadi", "belirtilmedi", "sayfasiz",
+  // 2026-08-31 denetiminde bekciden GECMIS uc gercek Turkce metin vardi;
+  // uculu de operatore gidiyordu. Eksik olan sozcukler:
+  //   bin/ricon.js  "PLAN — once -> sonra (* = degisecek)"
+  //   settings.js   FACTORY_PROFILE.description (JSON ciktisina giden VERI)
+  //   problems.js   "...start the server with a sifirlamaProfil..."
+  "sonra", "degisecek", "degerleri", "anahtarlarinin", "sifirlamaprofil",
+  // DIKKAT — "once" LISTEYE EKLENEMEZ: Ingilizce bir sozcuk ("read once").
+  // Dosyanin yukarisindaki "sure" tuzaginin aynisi. Bu yuzden ASCII sozcuk
+  // listesi tek basina yeterli bir bekci DEGIL; Turkce metni asil engelleyen
+  // sey, operatore giden her dizenin katalogdan (problems.js) gelmesi.
 ].join("|") + ")(?![a-z])", "i");
 
 // NOT: sag sinir \b DEGIL, (?![a-z]). Sebep olculdu (2026-08-31):
@@ -87,6 +97,11 @@ const TURKISH_WORDS = new RegExp("\\b(" + [
 // \bkullanici\b hic eslesmiyordu; problems.js'te uc bayat degisken adi
 // bekciden GECTI ve operatore hala "Set MODEM_KULLANICI / MODEM_SIFRE"
 // deniyordu — oysa o adlar v0.2.0'da degismisti.
+//
+// AYNI SINIRIN IKINCI DELIGI (2026-08-31): regex `i` bayrakli oldugu icin
+// (?![a-z]) BUYUK harfi de reddediyor; yani camelCase icindeki Turkce
+// sozcuk ("sifirlamaProfil") sag sinira takilip ESLESMIYORDU. Bu yuzden
+// listeye kucuk harfli tam hali ("sifirlamaprofil") ayrica eklendi.
 
 // --- ALLOWLIST: bilerek Turkce kalan, GEREKCELI uc bolge ------------------
 //

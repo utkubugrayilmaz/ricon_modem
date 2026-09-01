@@ -125,7 +125,7 @@ test("provisionRecord: PURE — sabit sema, telefon normalize edilmis gelir", ()
 });
 
 test("simTakiliMi: ICCID varsa takili, yoksa degil", () => {
-  assert.equal(isSimPresent({ iccid: "8990011626160064930" }), true);
+  assert.equal(isSimPresent({ iccid: "8990011626160000001" }), true);
   assert.equal(isSimPresent({ iccid: null, simStatus: "Not Insert" }), false);
   assert.equal(isSimPresent({}), false);
   assert.equal(isSimPresent(), false);
@@ -136,7 +136,7 @@ test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
   const r = await provisionModem({
     credentials: { user: "u", password: "p" }, profile: { name: "saha", nvram: {} },
     factorySource: "1.1.1.2", fieldSource: "2.2.2.3",   // makineye SORMA (bkz. basliktaki not)
-    phone: "05350641858",
+    phone: "05321234567",
     identity: { iccid: null, simStatus: "Not Insert", imei: "867", lan_mac: "aa" },
     record: (line) => written.push(line),
   });
@@ -148,7 +148,7 @@ test("provisionModem: SIM YOKSA cihaza hic gitmeden reddeder", async () => {
   assert.equal(written.length, 1);
   assert.equal(written[0].status, "no_sim");
   assert.equal(written[0].iccid, null);
-  assert.equal(written[0].phone, "5350641858");
+  assert.equal(written[0].phone, "5321234567");
 });
 
 
@@ -172,7 +172,7 @@ test("okuma BASARISIZSA 'SIM yok' DEMEZ", async () => {
   const written = [];
   const r = await provisionModem({
     credentials: { user: "u", password: "p" }, profile: { name: "field", nvram: {} },
-    phone: "05350641858",
+    phone: "05321234567",
     factorySource: null, fieldSource: null,   // cihaza gitmesin
     identity: { iccid: null, imei: null, simStatus: null, lan_mac: null,
       readOk: false,
@@ -190,7 +190,7 @@ test("okuma BASARILI ve SIM gercekten yoksa: no_sim (teshis korunuyor)", async (
   const r = await provisionModem({
     credentials: { user: "u", password: "p" }, profile: { name: "field", nvram: {} },
     factorySource: "1.1.1.2", fieldSource: "2.2.2.3",   // makineye SORMA (bkz. asagi)
-    phone: "05350641858",
+    phone: "05321234567",
     identity: { iccid: null, simStatus: "Not Insert", imei: "867", lan_mac: "aa",
       readOk: true, problems: [] },
   });
@@ -252,7 +252,7 @@ test("provisionRecord: PIN'in KENDISI kayda GIRMEZ, sadece denendi mi", () => {
     result: { pinAttempt: { attempted: true, pin: PIN }, pin: PIN },
     identity: { iccid: "8990", pin: PIN, m1s1simpin: PIN },
     internet: { up: false, durationSec: 150, pin: PIN },
-    phone: "05350641858",
+    phone: "05321234567",
   });
   assert.equal(k.pinAttempted, true, "sadece 'denendi mi' bilgisi tasinir");
   assert.ok(!JSON.stringify(k).includes(PIN), "PIN degeri kayitta HIC gorunmemeli");
@@ -262,10 +262,28 @@ test("provisionRecord: PIN'in KENDISI kayda GIRMEZ, sadece denendi mi", () => {
 });
 
 test("stripSecrets: PIN alanlari ciktidan silinir", () => {
-  const temiz = stripSecrets({ m1s1simpin: "1234", pin: "5678", phone: "5350641858" });
+  const temiz = stripSecrets({ m1s1simpin: "1234", pin: "5678", phone: "5321234567" });
   assert.equal(temiz.m1s1simpin, undefined);
   assert.equal(temiz.pin, undefined);
-  assert.equal(temiz.phone, "5350641858", "telefon sir DEGIL, kalir");
+  assert.equal(temiz.phone, "5321234567", "telefon sir DEGIL, kalir");
+});
+
+test("stripSecrets: PUK ve YENI PIN de silinir", () => {
+  // sim-puk eklendiginde suzgec guncellenmemisti. Bugun unblockSimPuk
+  // bunlari rapora koymuyor (yani sizinti yoktu), ama suzgecin isi
+  // "bugun ne tasiniyor" degil — bir sonraki degisiklikte delik olmamak.
+  // Ayni kusur bir kez yasandi: `kimlik` -> `credentials` yeniden
+  // adlandirmasinda suzgec guncellenmeyince alan ciktiya sizdi.
+  const temiz = stripSecrets({ puk: "12345678", newPin: "4321", iccid: "8990X" });
+  assert.equal(temiz.puk, undefined, "PUK ciktiya YAZILAMAZ");
+  assert.equal(temiz.newPin, undefined, "yeni PIN ciktiya YAZILAMAZ");
+  assert.equal(temiz.iccid, "8990X", "ICCID sir degil, kalir");
+});
+
+test("stripSecrets: ic ice nesnelerde de PUK silinir", () => {
+  const temiz = stripSecrets({ komut: { puk: "12345678", ok: 1 } });
+  assert.equal(temiz.komut.puk, undefined);
+  assert.equal(temiz.komut.ok, 1);
 });
 
 test("provisionRecord: sahaya_hazir uc degerli — 'ok' tek basina YANILTICI", () => {

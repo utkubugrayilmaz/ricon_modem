@@ -4,7 +4,7 @@
 //
 // KURAL (tum cekirdek icin): process.env OKUNMAZ, argv OKUNMAZ, stdout'a
 // YAZILMAZ. Girdi acikca `opts` ile gelir, cikti bir sonuc nesnesidir —
-// throw yok, problems[] var. Tuketiciler: ricon.js (CLI), src/server.js
+// throw yok, problems[] var. Tuketiciler: ricon.js (CLI), bin/ricon.js
 // (HTTP), ya da baska bir Node projesi (paket olarak import).
 //
 // opts (ortak): { host, sourceIp, kimlik:{kullanici,sifre}|null }
@@ -40,7 +40,7 @@ export {
 // AT katmani — modulun kendisiyle konusma (telefon numarasi, SIM kilidi).
 export {
   readMsisdn, readSimLock, disableSimPin, enableSimPin, unblockSimPuk,
-  simUnlockDecision, isSimLockEligible,
+  simUnlockDecision, isSimLockEligible, pukUnblockDecision,
   findAtPort, atCommand, isAtWrite, AT_PORT,
   parseCnum, parseCpin, parsePinCounter, parseClck, parseCcid,
 } from "./at.js";

@@ -16,15 +16,15 @@ import { applyProvisioning, applyPin } from "./provision.js";
 import { DEVICE_NAME_KEY, SIM_PIN_KEY } from "./settings.js";
 import { normalizePhone } from "./device.js";
 import { readIdentity, isSimPresent, waitForInternet, pcPreflight } from "./device.js";
-import { problem } from "./problems.js";
-import { readMsisdn, disableSimPin, isSimLockEligible, readSimLock } from "./at.js";
+import { problem, isProgrammerError } from "./problems.js";
+import { readMsisdn, disableSimPin, isSimLockEligible, readSimLock, PIN_ATTEMPTS_DEFAULT } from "./at.js";
 import { canSpendPinAttempt, isAttemptBurned } from "./at.js";
 
 const now = () => new Date().toISOString();
 const prefixOf = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const notify = (opts, m) => { if (typeof opts.progress === "function") opts.progress(m); };
-// Yapilandirilmis olay (UI canli guncellemesi) — provisioning.js'teki ile ayni
+// Yapilandirilmis olay (UI canli guncellemesi) — provision.js'teki ile ayni
 // sozlesme: opsiyonel, tuketicinin isi, dinleyici hatasi akisi kesmez.
 const emitEvent = (opts, event) => {
   if (typeof opts.event !== "function") return;
@@ -94,7 +94,7 @@ export function simPinTarget(simLockInfo, pin, { manualConsent = false } = {}) {
   if (!simLockInfo?.lock) return { target: undefined, problems };          // 1, 2
 
   if (simLockInfo.lock === "pin" && pin) {
-    // DENEME KARARI PAYLASILAN MODULDE (pin-karar.js): bicim, son hak, yanmis
+    // DENEME KARARI PAYLASILAN MODULDE (at.js): bicim, son hak, yanmis
     // hak. AT yolu ve internet-sonrasi deneme yolu da ayni yere soruyor.
     const k = canSpendPinAttempt(simLockInfo, pin, { manualConsent });
     if (k.eligible) return { target: String(pin), problems: k.problems };   // 3
@@ -238,7 +238,11 @@ async function finishRecord({ report, location, readyIdentity, credentials, phon
     try {
       notify(opts, "reading device identity (for the ledger)");
       identity = await readIdentity({ ...location, credentials });
-    } catch { /* kimlik okunamadi: kayit yine tutulur, alanlar null */ }
+    } catch (e) {
+      // Cihaz hatasi yutulur (kayit yine tutulur, alanlar null); KOD hatasi
+      // yutulmaz — bkz. problems.js INTERNAL_ERROR notu.
+      if (isProgrammerError(e)) report.problems.push(problem("INTERNAL_ERROR", e.message));
+    }
   }
   report.identity = identity;
   if (location && credentials) emitEvent(opts, { kind: "identity", identity: identity });
@@ -317,7 +321,7 @@ export async function provisionModem(opts) {
   // KAYNAK IP OLMADAN YOKLAMA YAPILMAZ. Sebebi olculdu: kaynak baglanmadan
   // yapilan TCP connect bazi aglarda HER adrese basarili donuyor, yani
   // "modem var" diyip olmayan cihazdan kimlik okumaya calisiyor ve sonunda
-  // "SIM yok" gibi YANLIS TESHIS uretiyor (bkz. scanner.js isReachable).
+  // "SIM yok" gibi YANLIS TESHIS uretiyor (bkz. net.js isReachable).
   // Cagiran kaynagi vermediyse burada turetiyoruz; turetemiyorsak durup
   // gercek sebebi soyluyoruz.
   let factorySrc = factorySource;
@@ -402,7 +406,10 @@ export async function provisionModem(opts) {
       notify(opts, `identity / SIM check (${location.host})`);
       try {
         identityBefore = await readIdentity({ ...location, credentials });
-      } catch { identityBefore = null; }
+      } catch (e) {
+        identityBefore = null;
+        if (isProgrammerError(e)) report.problems.push(problem("INTERNAL_ERROR", e.message));
+      }
     }
     // OKUMA BASARISIZ ile "SIM YOK" AYNI SEY DEGIL.
     //
@@ -463,7 +470,7 @@ export async function provisionModem(opts) {
     // dogrusu kilidi SIM'den kaldirmak. Kalkinca numara zaten kendiliginden
     // gelir ve SIM her cihazda acik acilir (saklanacak sir kalmaz).
     //
-    // Bu, arayuzun akisinin ta kendisi (bkz. `ui` dali, app.js pinKilidiIste
+    // Bu, arayuzun akisinin ta kendisi (bkz. `ui` dali, bin/ricon.js pinKilidiIste
     // -> /api/pin-kaldir -> yeniden degerlendirme). Orada arayuze gomuluydu;
     // burada CEKIRDEKTE, yani CLI de HTTP ucu de ayni yolu aliyor.
     //
@@ -485,7 +492,19 @@ export async function provisionModem(opts) {
       // yakildiysa arac kendi kendine tekrar denemez" kurali otomatige
       // karsiydi; burada her denemeyi INSAN tetikliyor.
       let lock = identityBefore.sim;
-      for (;;) {
+      // DENEME TAVANI. Döngü insan tetikli (her tur `askPin` bekliyor), ama
+      // kalan hak OKUNAMAZSA `attemptState` bilerek "izin" veriyor
+      // (PIN_REMAINING_UNKNOWN) — sayacı bildirmeyen bir modül yüzünden her
+      // SIM'i kilitlemek yanlış olurdu. Bunun bedeli şu: sayaç hep null
+      // kalırsa SON HAK koruması hiç devreye giremez ve operatör üç hakkı da
+      // yakabilir. Tavan o deliği kapatıyor — bir SIM'de zaten `pinTotal`
+      // kadar hak var, daha fazlasını sormanın anlamı yok.
+      const pinTries = lock.pinTotal ?? PIN_ATTEMPTS_DEFAULT;
+      for (let tried = 0; ; tried += 1) {
+        if (tried >= pinTries) {
+          report.problems.push(problem("PIN_ATTEMPT_BURNED", 0, pinTries));
+          break;
+        }
         const gate = isSimLockEligible(lock, { manualConsent: true });
         emitEvent(opts, { kind: "pin_lock", lock: lock.lock,
           pinRemaining: lock.pinRemaining, eligible: gate.eligible ?? true,
@@ -521,7 +540,11 @@ export async function provisionModem(opts) {
             // devreye girmez ve operator uc hakki da yakabilir.
             // (2026-08-31 canli: yanlis PIN sonrasi ekranda yine 3/3 yazdi.)
             let fresh = null;
-            try { fresh = await readSimLock({ ...location, credentials }); } catch { /* okunamadi */ }
+            try {
+              fresh = await readSimLock({ ...location, credentials });
+            } catch (e) {
+              if (isProgrammerError(e)) report.problems.push(problem("INTERNAL_ERROR", e.message));
+            }
             const remaining = fresh?.pinRemaining
               // Okunamazsa TEMKINLI DAVRAN: bir eksilt. Fazla saymak
               // korumayi gecirtir, eksik saymak yalnizca erken durdurur.
@@ -549,7 +572,9 @@ export async function provisionModem(opts) {
               notify(opts, `lock cleared — reading identity (${round}/${SIM_UNLOCK_READS})`);
               try {
                 identityBefore = await readIdentity({ ...location, credentials });
-              } catch { /* kismi sonuc gecerli */ }
+              } catch (e) {
+                if (isProgrammerError(e)) report.problems.push(problem("INTERNAL_ERROR", e.message));
+              }
               if (identityBefore?.sim?.ready) break;
               if (round < SIM_UNLOCK_READS) await wait(SIM_UNLOCK_GAP_MS);
             }

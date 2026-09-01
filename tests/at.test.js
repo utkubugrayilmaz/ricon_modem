@@ -11,11 +11,11 @@ import {
 
 test("parseCnum: SIM'e yazili numarayi BIZIM kanonik bicime cevirir", () => {
   // Cihazdan gelen gercek bicim
-  assert.equal(parseCnum('+CNUM: "","+905350634756",145\nOK'), "5350634756");
+  assert.equal(parseCnum('+CNUM: "","+905321234567",145\nOK'), "5321234567");
   // Alpha alani dolu olabilir
-  assert.equal(parseCnum('+CNUM: "Hat","+905350634756",145'), "5350634756");
+  assert.equal(parseCnum('+CNUM: "Hat","+905321234567",145'), "5321234567");
   // 0 ile baslayan yerel bicim
-  assert.equal(parseCnum('+CNUM: "","05350634756",129'), "5350634756");
+  assert.equal(parseCnum('+CNUM: "","05321234567",129'), "5321234567");
 });
 
 test("parseCnum: bos/gecersiz -> null (uydurmaz)", () => {
@@ -27,8 +27,8 @@ test("parseCnum: bos/gecersiz -> null (uydurmaz)", () => {
 });
 
 test("parseCnum: birden fazla satirdan ILK GECERLI olani alir", () => {
-  const c = '+CNUM: "","",145\n+CNUM: "","+905350634756",145\nOK';
-  assert.equal(parseCnum(c), "5350634756");
+  const c = '+CNUM: "","",145\n+CNUM: "","+905321234567",145\nOK';
+  assert.equal(parseCnum(c), "5321234567");
 });
 
 test("parseCpin: kilit durumu", () => {
@@ -52,9 +52,9 @@ test("parseClck: PIN sorgusu acik mi", () => {
 });
 
 test("parseCcid: sondaki dolgu F atilir", () => {
-  assert.equal(parseCcid("+CCID: 8990011626160064930F\nOK"), "8990011626160064930");
-  assert.equal(parseCcid("+ICCID: 8990011626160064930\nOK"), "8990011626160064930");
-  assert.equal(parseCcid("8990011626160064930F"), "8990011626160064930");
+  assert.equal(parseCcid("+CCID: 8990011626160000001F\nOK"), "8990011626160000001");
+  assert.equal(parseCcid("+ICCID: 8990011626160000001\nOK"), "8990011626160000001");
+  assert.equal(parseCcid("8990011626160000001F"), "8990011626160000001");
   assert.equal(parseCcid("OK"), null);
 });
 
@@ -69,23 +69,43 @@ test("atKabukKomutu: portu ACIK TUTAN bicim (DTR dusmesin)", () => {
   const k = atShellCommand("/dev/ttyUSB0", "AT+CNUM", 3);
   assert.match(k, /exec 3<>\/dev\/ttyUSB0/, "port tek fd ile acik tutulur");
   // String.raw: kacis karisikligi olmasin. Kabuga giden metin TAM olarak bu.
-  assert.ok(k.includes(String.raw`printf 'AT+CNUM\r' >&3`),
+  // Komut printf'in BICIM dizesi degil ARGUMANI: bicim sabit '%s\r'.
+  assert.ok(k.includes(String.raw`printf '%s\r' 'AT+CNUM' >&3`),
     "komut sonu CR (\\r) SART — \\n yetmiyor");
   assert.match(k, /read -t 3 l <&3/, "okuma ayni fd'den");
   assert.match(k, /exec 3<&-/, "fd kapatilir");
+});
+
+// Komut printf'e BICIM DIZESI olarak verilirse iki sekilde bozulur; ikisi de
+// gercek AT komutlarinda olabilecek karakterler.
+test("atKabukKomutu: % iceren komut BICIM BELIRTECI sanilmaz", () => {
+  // `printf 'AT+QCFG="%band"\r'` -> printf %b'yi donusum belirteci sayar ve
+  // komut cihaza BOZUK gider. Sessiz: AT hata dondurur, sebebi gorunmez.
+  const k = atShellCommand("/dev/ttyUSB0", 'AT+QCFG="%band"', 3);
+  assert.ok(k.includes(String.raw`printf '%s\r' 'AT+QCFG="%band"'`),
+    "% komutun ICINDE kalmali, bicim dizesinde degil");
+});
+
+test("atKabukKomutu: tek tirnak iceren komut tirnagi KAPATMAZ", () => {
+  // Eskiden `printf 'AT+X='tirnak''` olurdu: tirnak kapanir, satirin geri
+  // kalani kabuga bambaska bir anlamda giderdi.
+  const k = atShellCommand("/dev/ttyUSB0", "AT+X='q'", 3);
+  assert.ok(k.includes(String.raw`'AT+X='\''q'\'''`), `kacirilmamis tirnak: ${k}`);
+  // Kabuk acisindan tirnak sayisi DENGELI olmali.
+  assert.equal((k.match(/'/g) || []).length % 2, 0, "tek tirnaklar dengeli degil");
 });
 
 test("atCevabiAyikla: kabuk gurultusunu atar, yalniz ATL: satirlarini alir", () => {
   const raw = [
     "exec 3<>/dev/ttyUSB0; printf ...",   // kabuk yankisi
     "ATL:",
-    "ATL:+CNUM: \"\",\"+905350634756\",145",
+    "ATL:+CNUM: \"\",\"+905321234567\",145",
     "ATL:",
     "ATL:OK",
     "root@Router:/#",                      // prompt
   ].join("\n");
   const c = extractAtAnswer(raw);
-  assert.equal(parseCnum(c), "5350634756");
+  assert.equal(parseCnum(c), "5321234567");
   assert.ok(!c.includes("exec 3<>"), "kabuk yankisi ciktiya karismaz");
   assert.ok(!c.includes("root@"), "prompt ciktiya karismaz");
 });
@@ -152,5 +172,5 @@ test("atKarismisMi: tek sonlandirici temiz, ikisi KARISMIS", () => {
 
 test("atKarismisMi: OK gecen METIN sonlandirici sayilmaz", () => {
   // "+CNUM: \"OK hat\",..." gibi bir deger yanlislikla terminator olmasin.
-  assert.equal(isAtGarbled('+CNUM: "OK hat","+905350634747",145\n\nOK'), false);
+  assert.equal(isAtGarbled('+CNUM: "OK hat","+905321234567",145\n\nOK'), false);
 });

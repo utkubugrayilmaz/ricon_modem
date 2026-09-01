@@ -4,8 +4,8 @@ Her satır **web arayüzünde ayar değiştir → nvram öncesi/sonrası diff** 
 **kanıtlandı**. Yöntem: nvram kararlı (hiç değişmeden iki görüntü = 0 diff),
 o yüzden bir ayar değişince çıkan diff %100 o ayarın karşılığı.
 
-Kaynak araç: `node ricon.js console --nvram --json ...` (önce/sonra) +
-`node ricon.js diff once.json sonra.json`.
+Kaynak araç: `node bin/ricon.js console --nvram --json ...` (önce/sonra) +
+`node bin/ricon.js diff once.json sonra.json`.
 
 Durum işareti: 🟢 diff ile doğrulandı · ⏳ henüz haritalanmadı.
 

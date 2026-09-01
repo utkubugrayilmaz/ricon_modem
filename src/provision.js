@@ -51,7 +51,7 @@ export function planProvisioning(current, profile) {
 
 // PURE: planı YAZMA SIRASINA göre gruplar (Modem/WAN -> DHCP -> LAN).
 // Gruplanmamış anahtar "Other" grubuna düşer ve LAN'dan ÖNCE yazılır — yönetim
-// adresi her zaman en sonda kalsın. Neden sıra: profile.js WRITE_GROUPS notu.
+// adresi her zaman en sonda kalsın. Neden sıra: settings.js WRITE_GROUPS notu.
 // Doner: [{ ad, ciftler:{k:{mevcut,hedef}} }]  (boş gruplar atlanır)
 export function groupPlan(changing) {
   const remaining = new Set(Object.keys(changing));
@@ -145,7 +145,7 @@ export async function applyProvisioning(opts, profile) {
     report.written[group.name] = y.written;
     if (!y.ok) {
       // Yönetim adresi grubunda kaldıysa cihaz HALA eski adreste — sıranın
-      // sebebi tam bu (bkz. profile.js WRITE_GROUPS).
+      // sebebi tam bu (bkz. settings.js WRITE_GROUPS).
       report.status = changesManagementAddress(group.pairs)
         ? "lan_write_error" : "write_error";
       report.failedGroup = group.name;
@@ -260,9 +260,18 @@ export async function applyPin(opts, pin) {
 }
 
 // Reboot gönder, cevap bekleme (bağlantı kopar). Hata yutulur.
+//
+// `attempts: 1` ZORUNLU. Yoksa CONSOLE_RETRIES=3 geçerli oluyor ve reboot
+// başarısız sayıldığı için 2. ile 3. denemeler AÇILMAKTA OLAN modeme
+// gidiyor — hem ~16 sn blokluyor (3×4 sn + 2×2 sn) hem de "fire-and-forget"
+// adını yalanlıyor. Modem hattı temiz koparırsa eksik çıktı, asılı kalırsa
+// zaman aşımı oluyor; ikisi de "başarısız" ve ikisi de yeniden denenirdi.
 async function rebootFireForget(consoleOptions) {
   try {
-    await runConsole({ ...consoleOptions, writeAllowed: true, timeoutMs: 4000 }, ["reboot"]);
+    await runConsole(
+      { ...consoleOptions, writeAllowed: true, timeoutMs: 4000, attempts: 1 },
+      ["reboot"],
+    );
   } catch { /* reboot baglantiyi koparir; beklenen */ }
 }
 
@@ -307,7 +316,7 @@ async function verifyPlanSettled(opts, profile, mainOptions, rebootWasSent = fal
   // — saniyede bir yoklayip cihaz TCP'ye cevap verdigi anda nvram'a gidiyoruz.
   // Reboot suresi cihazin kendi isi; kazanc yoklama granulasyonundan geliyor.
   while (Date.now() - t0 < UPPER_BOUND_MS) {
-    // Kaynak IP yoksa yoklama guvenilir degil (bkz. scanner.js uyarisi):
+    // Kaynak IP yoksa yoklama guvenilir degil (bkz. net.js uyarisi):
     // o durumda gecidi atla, dogrudan konsola git — eski davranis.
     const up = opts.sourceIp ? await isReachable(opts.host, opts.sourceIp) : true;
     if (!up) {

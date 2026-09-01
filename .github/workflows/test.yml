@@ -1,0 +1,35 @@
+# Testler her push ve PR'da kosar.
+#
+# NEDEN VAR: bu repodaki testlerin cogu birer BEKCI — dil sinirini
+# (no-turkish), CLI sozlesmesini (cli-contract), problem katalogunu
+# (problem-codes), src/ yuzeyini (surface) ve tanimsiz adlari
+# (undefined-names) tutuyorlar. CLAUDE.md'nin kendi cumlesi:
+# "Kurali test tutmuyorsa kural yoktur."
+#
+# Ama 2026-08-31'e kadar bu testleri kosan hicbir sey yoktu: ne workflow,
+# ne git hook. Yani kurallari tutan sey "npm test yazmayi hatirlayan kisi"
+# idi — ve tam bu yuzden uc Turkce metin ile iki uydurma problem kodu
+# bekcilerden gecip main'e girdi.
+#
+# Cihaz GEREKTIRMEZ: butun testler sahte HTTP/telnet sunuculariyla calisir
+# (tests/fake-device.js), agdan hicbir sey istemez.
+
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # package.json "engines" >=24 diyor; ayni surumde kosalim.
+          node-version: '24'
+      # Bagimlilik YOK (package.json'da ne dependencies ne devDependencies)
+      # — bu yuzden npm ci/install adimi da yok. Eklenirse buraya gelir.
+      - run: npm test

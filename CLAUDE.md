@@ -158,6 +158,7 @@ npm test                              # cihaz gerektirmez
 npm start                             # provision --loop (tak -> hazir -> cikar)
 node bin/ricon.js call                # cagrilabilir tum yuzeyi listeler
 node bin/ricon.js call readSimLock --host 5.5.5.1
+node bin/ricon.js sim-lock-status     # salt okunur kilit durumu (hak harcamaz)
 node bin/ricon.js call normalizePhone -- 05321234567
 node bin/ricon.js metrics             # kaydedilmis surelerden metrik ozeti
 ```
@@ -178,6 +179,25 @@ node bin/ricon.js metrics             # kaydedilmis surelerden metrik ozeti
   denemek isterse önü kesilmez. Geçilemeyen tek kural son hak — orada yanlış
   PIN SIM'i PUK'a kilitler.
 - **Provizyon HTTP formu değil, telnet + nvram üzerinden yazar** (`console.js`).
+- **`sim-lock` = KİLİTLEME. Geri çevirme.** `npm run sim-lock` bilerek
+  `sim-pin-enable --apply` çağırır ve gerçekten kilit koyar — sahibi bu komutu
+  sunumda böyle kullandı, beklenti "sim-lock dediğimde kilitlemeli". Bir dönem
+  CLI'da **aynı adla salt okunur** bir komut vardı; iki yerde tam ters anlam,
+  tezgahta okuma sanıp yazma almak demekti. Çözüm karşı taraftan geldi: salt
+  okunur sorgu artık **`sim-lock-status`**, çıplak `sim-lock` ise belirsizlik
+  uyarısı verip 1 ile çıkar. `cli-contract.test.js` iki şeyi birden tutuyor —
+  bir npm script'i CLI'daki *başka* bir komutun adını taşıyamaz, ve
+  `sim-lock` CLI komutu olarak geri eklenemez. (Karar 2026-08-31.)
+- **`catch` cihaz hatasını yutar, KOD hatasını yutmaz.** `isProgrammerError`
+  (`problems.js`) ile ayrılır; `ReferenceError`/`TypeError` `INTERNAL_ERROR`
+  olarak `problems`'a yazılır. Sebep ölçülmüş: `readIdentity` her çağrıda
+  `ReferenceError` atıyordu ve iki çağrı yerindeki `catch {}` bunu sakladı,
+  223 testin hiçbiri görmedi (`b3ab4ce`).
+- **Operatöre giden her metin katalogdan gelir** (`problems.js`). `bin/` bir
+  dönem `{ code: "ARGS", ... }` nesnelerini elle kuruyordu; katalogda
+  karşılığı olmadığı için operatör sıradan bir kullanım hatası için
+  *"Something unexpected happened — Report this code to IT"* görüyordu.
+  `problem-codes.test.js` artık `bin/`'i de tarıyor.
 - **Dosyaları kabuk yönlendirmesiyle (`>`) yazma.** Konsol kodlaması araya
   girip cp1252 baytı sızdırıyor; `tests/encoding.test.js` tam bunun için var
   ve bu kazı bir kez yaşandı.

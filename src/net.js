@@ -18,9 +18,9 @@
 // node:http request'e localAddress verebiliyoruz, fetch veremiyor. Kaynak IP
 // (MODEM_SOURCE_IP) verilince oradan cikariz.
 //
-// Guvenlik: salt-okunur modda (varsayilan) yalnizca GET'e izin verilir;
-// POST/PUT/DELETE reddedilir. Not: provizyon HTTP formu DEGIL telnet+nvram
-// uzerinden yazar (console.js) — bu istemci pratikte hep salt-okunur kalir.
+// Guvenlik: bu istemci YALNIZCA GET yapar; post() kosulsuz reddeder ve baska
+// bir metot yolu yoktur. Provizyon HTTP formu DEGIL telnet+nvram uzerinden
+// yazar (console.js), yani istemcinin yazma yetenegine hic ihtiyaci yok.
 
 import http from "node:http";
 import net from "node:net";
@@ -43,14 +43,13 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const busyHosts = new Set();
 
 export class Client {
-  // opts: { host, sourceIp, kimlik:{kullanici,sifre}|null, readOnly:true,
+  // opts: { host, sourceIp, credentials:{user,password}|null,
   //         requestGapMs, timeoutMs }
   constructor(opts = {}) {
     this.host = opts.host;
     this.port = opts.port || 80;
     this.sourceIp = opts.sourceIp || undefined;
     this.credentials = opts.credentials || null;
-    this.readOnly = opts.readOnly !== false; // varsayilan true
     this.requestGapMs = validMs(opts.requestGapMs, REQUEST_GAP_MS);
     this.timeoutMs = validMs(opts.timeoutMs, REQUEST_TIMEOUT_MS);
     this._queue = Promise.resolve(); // sirali zincir
@@ -59,29 +58,37 @@ export class Client {
 
   // GET — sirali kuyruga eklenir. Doner: { ok, kod, govde, problems, yol }
   get(path) {
-    return this._enqueue("GET", path, null);
+    return this._enqueue(path);
   }
 
-  // POST — yalnizca yazma modunda. Salt-okunurda reddedilir.
-  post(path, body, contentType = "application/x-www-form-urlencoded") {
-    if (this.readOnly) {
-      return Promise.resolve({
-        ok: false, code: null, body: null, path,
-        problems: [problem("WRITE_BLOCKED_READONLY", path)],
-      });
-    }
-    return this._enqueue("POST", path, { body, contentType });
+  // POST — HER ZAMAN reddedilir. Bu bir mod degil, YAPISAL bir garanti.
+  //
+  // Eskiden `readOnly` bayragina bagliydi ve false olsaydi gercek bir POST
+  // atacakti — ama `readOnly:false` HICBIR cagirici tarafindan verilmiyordu.
+  // Yani POST boru hatti (gövde, Content-Type, Content-Length, httpMethod
+  // parametresi) bastan sona ULASILAMAZ koddu: tek bir olu giris dort katman
+  // olu konfigurasyon tasiyordu.
+  //
+  // Kosulu kaldirmak garantiyi guclendiriyor: bu istemci modeme POST EDEMEZ.
+  // Yazma zaten HTTP formuyla degil telnet + nvram ile yapiliyor
+  // (bkz. console.js) — CLAUDE.md'deki "bilinen tuzaklar" maddesi.
+  post(path) {
+    return Promise.resolve({
+      ok: false, code: null, body: null, path,
+      problems: [problem("WRITE_BLOCKED_READONLY", path)],
+    });
   }
 
   // Istegi kuyruga ekler; onceki istek bittikten sonra, aralik bekleyerek calisir.
-  _enqueue(httpMethod, path, extras) {
+  // Yalnizca GET: yukaridaki POST kapisi hicbir zaman buraya inmiyor.
+  _enqueue(path) {
     const job = async () => {
       const elapsed = Date.now() - this._lastRequestEndedAt;
       if (this._lastRequestEndedAt && elapsed < this.requestGapMs) {
         await wait(this.requestGapMs - elapsed);
       }
       try {
-        return await this._requestWithRetry(httpMethod, path, extras);
+        return await this._requestWithRetry(path);
       } finally {
         this._lastRequestEndedAt = Date.now();
       }
@@ -92,10 +99,10 @@ export class Client {
     return result;
   }
 
-  async _requestWithRetry(httpMethod, path, extras) {
+  async _requestWithRetry(path) {
     let lastError = null;
     for (let attempt = 0; attempt < REQUEST_RETRIES; attempt += 1) {
-      const r = await this._request(httpMethod, path, extras);
+      const r = await this._request(path);
       if (r.transportError) {
         lastError = r.transportError;
         if (attempt < REQUEST_RETRIES - 1) await wait(RETRY_GAP_MS);
@@ -111,7 +118,7 @@ export class Client {
 
   // Tek HTTP istegi (node:http, Connection: close, localAddress, Basic auth).
   // Throw etmez — { kod, govde, transportError } doner.
-  _request(httpMethod, path, extras) {
+  _request(path) {
     return new Promise((resolve) => {
       const headers = { Connection: "close" };
       if (this.credentials) {
@@ -120,19 +127,13 @@ export class Client {
         ).toString("base64");
         headers.Authorization = `Basic ${t}`;
       }
-      let bodyBuffer = null;
-      if (extras && extras.body != null) {
-        bodyBuffer = Buffer.from(extras.body);
-        headers["Content-Type"] = extras.contentType;
-        headers["Content-Length"] = bodyBuffer.length;
-      }
 
       const request = http.request(
         {
           host: this.host,
           port: this.port,
           path: path,
-          method: httpMethod,
+          method: "GET",
           headers: headers,
           localAddress: this.sourceIp,
           timeout: this.timeoutMs,
@@ -152,7 +153,6 @@ export class Client {
       );
       request.on("timeout", () => request.destroy(new Error("timeout")));
       request.on("error", (e) => resolve({ transportError: `${e.code || e.name}: ${e.message}` }));
-      if (bodyBuffer) request.write(bodyBuffer);
       request.end();
     });
   }
@@ -203,7 +203,8 @@ function validMs(value, fallback) {
 // ======================================================================
 
 export function findSourceIp(prefix) {
-  for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+  // `name` KULLANILMIYOR: yalniz adresler geziliyor.
+  for (const addresses of Object.values(os.networkInterfaces())) {
     for (const a of addresses || []) {
       if (a.family === "IPv4" && !a.internal && a.address.startsWith(prefix)) {
         return a.address;
