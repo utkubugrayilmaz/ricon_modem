@@ -61,12 +61,13 @@ Standart SSH/telnet/SNMP kapalı. Alttaki OS OpenWrt/Linux. Otomasyon (Faz
 ### Yapabildiklerimize eklenenler ✅
 - `sunucu` — tarayıcı arayüzü: telefon girişi → kurulum öncesi/sonrası
   karşılaştırma ekranı, canlı güncellenen. Çekirdeğin üçüncü tüketicisi
-  (terminal · npm paketi · HTTP/UI); arayüzde iş mantığı YOK.
+  (terminal · npm paketi · HTTP/UI); arayüzde iş mantığı YOK. **`main`'den
+  kaldırıldı, donmuş `ui` dalında duruyor** (bkz. `kesif`/`izle` notu).
 - Hazırlama defteri (`data/provisioned.jsonl`) — her modem için bir satır:
   telefon + ICCID/IMEI/IMSI/MAC/operatör + durum.
 - `apply` — provizyonu apply (varsayılan KURU/dry-run; gerçek yazma
   `--apply` ister). `--profile factory` ile bizim dokunduğumuz ayarları
-  default'a geri alır (**gerçek factory reset değil** — bkz. `profile.js`).
+  default'a geri alır (**gerçek factory reset değil** — bkz. `src/settings.js`).
 - `provision` — tak-çalıştır: algıla → provizyon → reboot → yeni adreste
   doğrula → başarıya kadar retry. `--loop` ile seri (tak/çıkar) akış.
 - `sim` — SIM/hücresel özet; `--phone` ile MSISDN dışarıdan verilir.
