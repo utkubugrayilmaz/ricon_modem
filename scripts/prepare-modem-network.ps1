@@ -122,9 +122,19 @@ $secondariesAdded = New-Object System.Collections.Generic.List[string]
 
 try {
   # ADIM 2 — DHCP'ye gec (bugun canli dogrulanmis komut).
+  #
+  # NETSH TUHAFLIGI: adaptor zaten DHCP modundaysa netsh "DHCP is already
+  # enabled on this interface." diyip exit code 1 DONUYOR — bu gercek bir
+  # hata DEGIL, sadece "zaten oyleyim" demek. Exit code'a gore throw etmek
+  # bunu FATAL SANIYORDU ve script hicbir sey yapmadan (statige geri
+  # DONMEDEN) crash oluyordu — canli goruldu. Cikti metnine bakip sadece
+  # GERCEKTEN beklenmeyen bir hata varsa dur.
   Write-Progress2 "switching '$AdapterName' to DHCP..."
-  netsh interface ip set address name="$AdapterName" source=dhcp | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw "netsh source=dhcp failed with exit code $LASTEXITCODE" }
+  $netshOutput = (netsh interface ip set address name="$AdapterName" source=dhcp 2>&1 | Out-String).Trim()
+  if ($netshOutput) { Write-Progress2 "netsh: $netshOutput" }
+  if ($LASTEXITCODE -ne 0 -and $netshOutput -notmatch "already enabled") {
+    throw "netsh source=dhcp failed with exit code ${LASTEXITCODE}: $netshOutput"
+  }
 
   # ADIM 3 — kirayi bekle (169.254.* APIPA gercek kira SAYILMAZ).
   $deadline = (Get-Date).AddSeconds($DhcpTimeoutSec)
