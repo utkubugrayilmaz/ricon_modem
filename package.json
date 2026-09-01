@@ -18,8 +18,9 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --test",
-    "start": "node --env-file-if-exists=.env bin/ricon.js provision --loop",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "start": "node --env-file-if-exists=.env scripts/network-setup.js --loop",
+    "prepare-network": "node --env-file-if-exists=.env scripts/network-setup.js --no-provision",
     "provision": "node --env-file-if-exists=.env bin/ricon.js provision",
     "assess": "node --env-file-if-exists=.env bin/ricon.js assess",
     "read": "node --env-file-if-exists=.env bin/ricon.js read",
@@ -30,7 +31,7 @@
     "reset:dry": "node --env-file-if-exists=.env bin/ricon.js apply --host 5.5.5.1 --profile factory --new-host 192.168.1.1",
     "reset": "node --env-file-if-exists=.env bin/ricon.js apply --host 5.5.5.1 --profile factory --new-host 192.168.1.1 --apply",
     "sim-unlock": "node --env-file-if-exists=.env bin/ricon.js sim-pin-disable --apply",
-    "sim-state": "node --env-file-if-exists=.env bin/ricon.js sim-lock"
+    "sim-state": "node --env-file-if-exists=.env bin/ricon.js sim-lock-status"
   },
   "license": "UNLICENSED",
   "private": true
