@@ -12,7 +12,11 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { DEFAULT_HOST } from "../src/index.js";
+import { DEFAULT_HOST, findSourceIp, isReachable } from "../src/index.js";
+// `problem`/`problemText` dogrudan problems.js'den: index.js'in genel
+// API'si degil, bin/ricon.js'in de yaptigi gibi CLI/arac katmaninin kendi
+// araci (bkz. bin/ricon.js'in ayni importu).
+import { problem, problemText } from "../src/problems.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,16 +61,40 @@ function relaunchElevated(argv) {
   execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { stdio: "inherit" });
 }
 
-function runPrepareScript(adapter, timeoutSec) {
+// Bilinen fabrika adresleri: .1 = DEFAULT_HOST (birincil LAN IP), .8.1 =
+// FACTORY_PROFILE.nvram.lan_ipaddr_ex1 (src/settings.js) — modemin fabrika
+// durumunda zaten tasidigi IKINCI bir LAN IP, uydurma bir deger degil.
+// Once bunlar dogrudan yoklanir; DHCP kesfi sadece ikisi de cevap vermezse
+// devreye giren bir GUVENLIK AGI'dir (bkz. plan: tiered fast path).
+const FACTORY_CANDIDATES = ["192.168.1.1", "192.168.8.1"];
+const prefixOf = (ip) => ip.split(".").slice(0, 3).join(".") + ".";
+
+// Bilgisayarda ZATEN o alt agda bir ikincil IP varsa (onceki bir
+// calistirmadan kalmis olabilir) modemi doğrudan yoklar — DHCP'ye hic
+// GEREK KALMAZ. Kaynak IP yoksa o adayi ATLAR (hata degil, sadece "henuz
+// test edecek bir şeyimiz yok" — src/net.js'in "kaynak IP olmadan yoklama
+// YAPMA" kuraliyla ayni sebep).
+async function findDirectHost() {
+  for (const candidate of FACTORY_CANDIDATES) {
+    const sourceIp = findSourceIp(prefixOf(candidate));
+    if (!sourceIp) continue;
+    if (await isReachable(candidate, sourceIp)) return candidate;
+  }
+  return null;
+}
+
+function runPrepareScript(adapter, timeoutSec, knownHost) {
   const psPath = path.join(__dirname, "prepare-modem-network.ps1");
-  // stderr'i de YAKALA (inherit degil) — pencere anlik kapansa bile
-  // prepare-modem-network.ps1'in ilerleme satirlari kalici log'a yazilsin.
-  const res = spawnSync("powershell.exe", [
+  const args = [
     "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
     "-File", psPath,
     "-AdapterName", adapter,
     "-DhcpTimeoutSec", String(timeoutSec),
-  ], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  ];
+  if (knownHost) args.push("-KnownHost", knownHost);
+  // stderr'i de YAKALA (inherit degil) — pencere anlik kapansa bile
+  // prepare-modem-network.ps1'in ilerleme satirlari kalici log'a yazilsin.
+  const res = spawnSync("powershell.exe", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
   for (const line of (res.stderr || "").split("\n")) {
     if (line.trim()) log(`ps1: ${line.trim()}`);
@@ -86,13 +114,20 @@ function runPrepareScript(adapter, timeoutSec) {
   }
 }
 
-const FAILURE_HINTS = {
-  NOT_ELEVATED: "Re-run as Administrator.",
-  ADAPTER_NOT_FOUND: "Set MODEM_ADAPTER_NAME to the correct adapter name (see `Get-NetAdapter`).",
-  SEQUENCE_ERROR: "Check the adapter by hand: Get-NetIPAddress -InterfaceAlias <adapter>",
-};
+// Basarisizligi OPERATOR METNIYLE bildirir — src/problems.js KATALOGUNDAN
+// (bin/ricon.js'in streamWatcher/localizeProblems ile yaptigi ayni sey).
+// Boylece bu betiğin ürettiği hata da projenin geri kalanıyla AYNI
+// tek kaynaktan gelir, ad-hoc bir string tablosundan degil.
+function reportFailure(reason, detail, adapter) {
+  const p = reason === "ADAPTER_NOT_FOUND" ? problem(reason, adapter)
+    : reason === "NETWORK_PREP_FAILED" ? problem(reason, detail)
+    : problem(reason);
+  const t = problemText(p.code);
+  log(`FAILED: ${p.message}`);
+  log(`${t.title} — ${t.whatToDo}`);
+}
 
-function main() {
+async function main() {
   if (process.platform !== "win32") {
     log("this script is Windows-only.");
     process.exit(1);
@@ -109,19 +144,24 @@ function main() {
   const adapter = process.env.MODEM_ADAPTER_NAME || "Ethernet";
   const timeoutSec = Number(process.env.MODEM_DHCP_TIMEOUT_SEC) || 15;
 
-  const result = runPrepareScript(adapter, timeoutSec);
+  const directHost = await findDirectHost();
+  if (directHost) log(`direct check hit: modem answers at ${directHost} already — skipping the DHCP dance`);
+
+  const result = runPrepareScript(adapter, timeoutSec, directHost);
   if (!result.ok) {
-    log(`FAILED (${result.reason}): ${result.message}`);
-    if (FAILURE_HINTS[result.reason]) log(FAILURE_HINTS[result.reason]);
+    reportFailure(result.reason, result.message, adapter);
     process.exit(1);
   }
-  log(`adapter ready — ${result.leaseAcquired ? `modem found at ${result.discoveredHost}` : "no lease, using known-convention fallback"}`);
+  log(`adapter ready — ${result.directHit ? `modem found directly at ${result.discoveredHost}`
+    : result.leaseAcquired ? `modem found at ${result.discoveredHost}` : "no lease, using known-convention fallback"}`);
   if (result.warnings?.length) result.warnings.forEach((w) => log(`warning: ${w}`));
 
   const hostIdx = argv.indexOf("--host");
   const explicitHost = hostIdx !== -1 ? argv[hostIdx + 1] : null;
-  const host = explicitHost || (result.leaseAcquired ? result.discoveredHost : DEFAULT_HOST);
-  log(`using host ${host} (${explicitHost ? "explicit --host" : result.leaseAcquired ? "discovered via DHCP" : "fallback default"})`);
+  const host = explicitHost || (result.leaseAcquired || result.directHit ? result.discoveredHost : DEFAULT_HOST);
+  const hostSource = explicitHost ? "explicit --host"
+    : result.directHit ? "direct check" : result.leaseAcquired ? "discovered via DHCP" : "fallback default";
+  log(`using host ${host} (${hostSource})`);
 
   const noProvision = argv.includes("--no-provision");
   const forwardArgs = argv.filter((a) => a !== "--no-provision");
@@ -138,9 +178,7 @@ function main() {
   process.exit(child.status ?? 1);
 }
 
-try {
-  main();
-} catch (e) {
+main().catch((e) => {
   log(`unexpected error: ${e?.stack || e}`);
   process.exit(1);
-}
+});

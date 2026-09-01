@@ -18,7 +18,11 @@ param(
   [string]$AdapterName = "Ethernet",
   [int]$DhcpTimeoutSec = 15,
   [string]$FieldSecondaryIp = "5.5.5.100",
-  [int]$PrefixLength = 24
+  [int]$PrefixLength = 24,
+  # Verilirse (network-setup.js'in kendi hizli dogrudan-yoklama adimi zaten
+  # modemi bulmus demektir — bkz. FACTORY_CANDIDATES): DHCP'ye HIC GECILMEZ,
+  # backup/restore YAPILMAZ. Sadece eksik ikincil IP'ler (varsa) eklenir.
+  [string]$KnownHost = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -98,6 +102,51 @@ function Find-FreeSecondaryIp([string]$SubnetPrefix, [string]$Avoid, $DesiredLis
     return $candidate
   }
   throw "could not find a free secondary IP in ${SubnetPrefix}x"
+}
+
+# HIZLI YOL: -KnownHost verildiyse (network-setup.js'in kendi dogrudan
+# yoklamasi zaten modemi bulmus), DHCP'ye HIC GECMEDEN, adaptoru DOKUNMADAN
+# sadece eksik ikincil IP'leri tamamlar ve cikar. Live sorgu burada GUVENLI
+# — bu yolda DHCP'ye hic gecilmedigi icin adaptorun durumu hep gercek durum.
+function Ensure-SubnetSecondaryDirect([string]$SubnetPrefix, [string]$Avoid, [int]$PrefixLen, $Added) {
+  $already = Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress.StartsWith($SubnetPrefix) -and $_.IPAddress -ne $Avoid }
+  if ($already) {
+    $warnings.Add("subnet ${SubnetPrefix}x already has a secondary ($($already[0].IPAddress)), skipped")
+    return
+  }
+  for ($i = 100; $i -le 250; $i++) {
+    $candidate = "$SubnetPrefix$i"
+    if ($candidate -eq $Avoid) { continue }
+    $taken = Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -IPAddress $candidate -ErrorAction SilentlyContinue
+    if (-not $taken) { Ensure-SecondaryIp $candidate $PrefixLen $Added; return }
+  }
+  throw "could not find a free secondary IP in ${SubnetPrefix}x"
+}
+
+if ($KnownHost) {
+  $secondariesAdded = New-Object System.Collections.Generic.List[string]
+  try {
+    Write-Progress2 "known host $KnownHost given directly (already reachable) - skipping the DHCP dance"
+    $subnetPrefix = (($KnownHost -split '\.')[0..2] -join '.') + "."
+    Ensure-SubnetSecondaryDirect $subnetPrefix $KnownHost $PrefixLength $secondariesAdded
+    if (-not $KnownHost.StartsWith("5.5.5.")) {
+      $already5 = Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -IPAddress $FieldSecondaryIp -ErrorAction SilentlyContinue
+      if ($already5) { $warnings.Add("$FieldSecondaryIp already present, skipped") }
+      else { Ensure-SecondaryIp $FieldSecondaryIp $PrefixLength $secondariesAdded }
+    }
+    Write-ResultAndExit @{
+      ok = $true; adapter = $AdapterName
+      leaseAcquired = $false; discoveredHost = $KnownHost; fallbackUsed = $false; directHit = $true
+      secondariesAdded = @($secondariesAdded); restoredAddresses = @(); warnings = @($warnings)
+      timestamp = (Get-Date).ToString("o")
+    } 0
+  } catch {
+    Write-ResultAndExit @{
+      ok = $false; reason = "NETWORK_PREP_FAILED"; adapter = $AdapterName
+      message = $_.Exception.Message; recoveryAttempted = $false; restoredAddresses = @()
+    } 12
+  }
 }
 
 # ADIM 1 — mevcut STATIK (elle atanmis) adresleri yedekle. DHCP'den gelen
@@ -251,7 +300,7 @@ try {
     $recoveryError = $_.Exception.Message
   }
   Write-ResultAndExit @{
-    ok = $false; reason = "SEQUENCE_ERROR"; adapter = $AdapterName
+    ok = $false; reason = "NETWORK_PREP_FAILED"; adapter = $AdapterName
     message = $_.Exception.Message
     recoveryAttempted = $true; recoveryError = $recoveryError
     restoredAddresses = $backup
