@@ -78,33 +78,26 @@ function Ensure-SecondaryIp([string]$Ip, [int]$PrefixLen, [System.Collections.Ge
   }
 }
 
-# Kesfedilen alt agda BOS bir adres bulur (.100'den baslar), gateway'in
-# kendisiyle (.1) ya da halihazirda arayuzde olan bir adresle CAKISMAZ.
-function Find-FreeSecondaryIp([string]$SubnetPrefix, [string]$Avoid) {
+# Prefix uzunlugunu (24) noktali maskeye (255.255.255.0) cevirir — netsh
+# "static" alt komutu PrefixLength degil dotted mask ister.
+function ConvertTo-Mask([int]$PrefixLen) {
+  $bits = ("1" * $PrefixLen).PadRight(32, "0")
+  $octets = for ($i = 0; $i -lt 32; $i += 8) { [Convert]::ToInt32($bits.Substring($i, 8), 2) }
+  return ($octets -join ".")
+}
+
+# Kesfedilen alt agda, $DesiredList'te henuz OLMAYAN bos bir adres bulur
+# (.100'den baslar), gateway'in kendisiyle (.1) cakismaz. Canli (henuz
+# uygulanmamis) durumu Get-NetIPAddress ile degil, $DesiredList ile
+# kontrol eder — bu asamada adaptor hala DHCP modunda, live sorgu yaniltir.
+function Find-FreeSecondaryIp([string]$SubnetPrefix, [string]$Avoid, $DesiredList) {
   for ($i = 100; $i -le 250; $i++) {
     $candidate = "$SubnetPrefix$i"
     if ($candidate -eq $Avoid) { continue }
-    $taken = Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -IPAddress $candidate -ErrorAction SilentlyContinue
-    if (-not $taken) { return $candidate }
+    if ($DesiredList | Where-Object { $_.IPAddress -eq $candidate }) { continue }
+    return $candidate
   }
   throw "could not find a free secondary IP in ${SubnetPrefix}x"
-}
-
-# Bir alt agda BIZIM eklemis olabilecegimiz bir ikincil IP zaten var mi diye
-# bakar (gateway'in kendisi HARIC). Varsa dokunmaz — yoksa Find-FreeSecondaryIp
-# ile yeni bir bos yuva bulup ekler. Bunu ATLAMAK ust uste calistirmada her
-# seferinde YENI bir IP (.100, sonra .101, sonra .102...) eklenmesine yol
-# aciyordu — "bos yuva bul" ile "bu alt agda zaten bir IP'miz var mi" ayni
-# soru degil, ikincisi olmadan idempotentlik BOZULUYOR.
-function Ensure-SubnetSecondary([string]$SubnetPrefix, [string]$Avoid, [int]$PrefixLen, $Added) {
-  $already = Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress.StartsWith($SubnetPrefix) -and $_.IPAddress -ne $Avoid }
-  if ($already) {
-    $warnings.Add("subnet ${SubnetPrefix}x already has a secondary ($($already[0].IPAddress)), skipped")
-    return
-  }
-  $candidate = Find-FreeSecondaryIp $SubnetPrefix $Avoid
-  Ensure-SecondaryIp $candidate $PrefixLen $Added
 }
 
 # ADIM 1 — mevcut STATIK (elle atanmis) adresleri yedekle. DHCP'den gelen
@@ -158,54 +151,67 @@ try {
     Write-Progress2 "no DHCP lease within ${DhcpTimeoutSec}s (modem's DHCP is likely off) - falling back to known conventions"
   }
 
-  # ADIM 4 — HER DURUMDA statige geri don, DHCP'den kalan gecici adresi at,
-  # yedegi geri yukle.
+  # ADIM 4 — hedef son durumu ONCEDEN (bellekte) hesapla: yedek + gerekiyorsa
+  # kesfedilen alt agda bir ikincil + HER ZAMAN 5.5.5.100 + (kira gelmediyse)
+  # 192.168.1.100. Statik "Manual" olarak eklenecek TUM adresler burada.
   #
-  # -PolicyStore ActiveStore SART: onsuz bazen "Inconsistent parameters
-  # PolicyStore PersistentStore and Dhcp Enabled" hatasi ATIYOR (bilinen bir
-  # PowerShell NetTCPIP kusuru) — canli goruldu, script bu hatayla crash
-  # oldu ve adaptoru DHCP modunda YARIM birakti.
-  Write-Progress2 "switching '$AdapterName' back to static..."
-  Set-NetIPInterface -InterfaceAlias $AdapterName -AddressFamily IPv4 -Dhcp Disabled -PolicyStore ActiveStore -ErrorAction Stop
-  Get-NetIPAddress -InterfaceAlias $AdapterName -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.PrefixOrigin -eq "Dhcp" } |
-    ForEach-Object {
-      try { Remove-NetIPAddress -InputObject $_ -Confirm:$false -ErrorAction Stop }
-      catch { $warnings.Add("could not remove stale DHCP address $($_.IPAddress): $($_.Exception.Message)") }
-    }
+  # Set-NetIPInterface -Dhcp Disabled canli olarak "Inconsistent parameters
+  # PolicyStore PersistentStore and Dhcp Enabled" hatasi verdi (bilinen bir
+  # PowerShell NetTCPIP kusuru, -PolicyStore ActiveStore ile de duzelmedi).
+  # Onun yerine DHCP'ye gecerken KANITLANMIS olan netsh'i statige donerken
+  # de kullaniyoruz: netsh'in "static" alt komutu DHCP'yi kapatmakla ilk
+  # adresi atamayi TEK adimda yapar, guvenilir.
+  $desired = @()
+  foreach ($b in $backup) { $desired += @{ IPAddress = $b.IPAddress; PrefixLength = $b.PrefixLength; IsNew = $false } }
 
-  foreach ($addr in $backup) {
-    try {
-      New-NetIPAddress -InterfaceAlias $AdapterName -IPAddress $addr.IPAddress -PrefixLength $addr.PrefixLength `
-        -ErrorAction Stop | Out-Null
-    } catch {
-      if ($_.Exception.Message -match "already exists|Duplicate") {
-        $warnings.Add("restore: $($addr.IPAddress)/$($addr.PrefixLength) already present")
-      } else {
-        throw
-      }
-    }
-  }
-
-  # ADIM 5 — kesfedilen alt agda ikincil IP ekle (kira geldiyse). Alt agda
-  # zaten bir ikincil varsa (onceki bir calistirmadan restore edilmis
-  # olabilir) TEKRAR EKLEMEZ — idempotentlik icin sart.
   if ($leaseAcquired) {
     $subnetPrefix = (($discoveredIp -split '\.')[0..2] -join '.') + "."
-    Ensure-SubnetSecondary $subnetPrefix $discoveredIp $PrefixLength $secondariesAdded
+    $hasSubnetSecondary = [bool]($desired | Where-Object { $_.IPAddress.StartsWith($subnetPrefix) -and $_.IPAddress -ne $discoveredIp })
+    if (-not $hasSubnetSecondary) {
+      $candidate = Find-FreeSecondaryIp $subnetPrefix $discoveredIp $desired
+      $desired += @{ IPAddress = $candidate; PrefixLength = $PrefixLength; IsNew = $true }
+    }
   }
-
-  # ADIM 6 — HER ZAMAN 5.5.5.100'u de garanti et (provizyon sonu modem
-  # oraya cekiliyor). Kesfedilen alt ag zaten 5.5.5.0/24 ise tekrar etme.
-  $needsFieldSecondary = -not ($leaseAcquired -and $discoveredIp.StartsWith("5.5.5."))
-  if ($needsFieldSecondary) {
-    Ensure-SecondaryIp $FieldSecondaryIp $PrefixLength $secondariesAdded
+  $hasFieldSecondary = [bool]($desired | Where-Object { $_.IPAddress -eq $FieldSecondaryIp })
+  if (-not $hasFieldSecondary) {
+    $desired += @{ IPAddress = $FieldSecondaryIp; PrefixLength = $PrefixLength; IsNew = $true }
   }
-
-  # ADIM 7 — kira gelmediyse: bugunku ELLE kurulumun ayniyla devam (fabrika
-  # + saha ikincil IP'leri). Bu bir HATA degil, guvenlik agi.
   if (-not $leaseAcquired) {
-    Ensure-SecondaryIp "192.168.1.100" $PrefixLength $secondariesAdded
+    $hasFactoryFallback = [bool]($desired | Where-Object { $_.IPAddress -eq "192.168.1.100" })
+    if (-not $hasFactoryFallback) {
+      $desired += @{ IPAddress = "192.168.1.100"; PrefixLength = $PrefixLength; IsNew = $true }
+    }
+  }
+
+  # ADIM 5 — netsh ile DHCP'yi kapat + $desired'in ILKINI ata (tek adimda).
+  Write-Progress2 "switching '$AdapterName' back to static..."
+  $primary = $desired[0]
+  $primaryMask = ConvertTo-Mask $primary.PrefixLength
+  $netshStaticOutput = (netsh interface ip set address name="$AdapterName" static $($primary.IPAddress) $primaryMask 2>&1 | Out-String).Trim()
+  if ($netshStaticOutput) { Write-Progress2 "netsh: $netshStaticOutput" }
+  if ($LASTEXITCODE -ne 0) {
+    throw "netsh static set failed with exit code ${LASTEXITCODE}: $netshStaticOutput"
+  }
+  if ($primary.IsNew) { $secondariesAdded.Add($primary.IPAddress) }
+
+  # ADIM 6 — geri kalanini New-NetIPAddress ile ekle (idempotent: zaten
+  # varsa hata SAYMAZ).
+  for ($i = 1; $i -lt $desired.Count; $i++) {
+    $item = $desired[$i]
+    if ($item.IsNew) {
+      Ensure-SecondaryIp $item.IPAddress $item.PrefixLength $secondariesAdded
+    } else {
+      try {
+        New-NetIPAddress -InterfaceAlias $AdapterName -IPAddress $item.IPAddress -PrefixLength $item.PrefixLength `
+          -ErrorAction Stop | Out-Null
+      } catch {
+        if ($_.Exception.Message -match "already exists|Duplicate") {
+          $warnings.Add("restore: $($item.IPAddress)/$($item.PrefixLength) already present")
+        } else {
+          throw
+        }
+      }
+    }
   }
 
   Write-ResultAndExit @{
@@ -225,13 +231,22 @@ try {
   # sonra hatayi bildir.
   $recoveryError = $null
   try {
-    Set-NetIPInterface -InterfaceAlias $AdapterName -AddressFamily IPv4 -Dhcp Disabled -PolicyStore ActiveStore -ErrorAction SilentlyContinue
-    foreach ($addr in $backup) {
-      try {
-        New-NetIPAddress -InterfaceAlias $AdapterName -IPAddress $addr.IPAddress -PrefixLength $addr.PrefixLength `
-          -ErrorAction Stop | Out-Null
-      } catch {}
+    if ($backup.Count -gt 0) {
+      # netsh "static" DHCP'yi kapatir + ilk yedegi tek adimda atar (bkz.
+      # ADIM 5 — Set-NetIPInterface burada da GUVENILMEZ).
+      $first = $backup[0]
+      $firstMask = ConvertTo-Mask $first.PrefixLength
+      netsh interface ip set address name="$AdapterName" static $($first.IPAddress) $firstMask 2>&1 | Out-Null
+      for ($i = 1; $i -lt $backup.Count; $i++) {
+        try {
+          New-NetIPAddress -InterfaceAlias $AdapterName -IPAddress $backup[$i].IPAddress -PrefixLength $backup[$i].PrefixLength `
+            -ErrorAction Stop | Out-Null
+        } catch {}
+      }
     }
+    # Yedek YOKTU: adaptoru zorla statige cekmenin elimizde verecek gercek
+    # bir adresi yok, DHCP modunda birakmak APIPA'ya dusse bile netsh'in
+    # ihtiyac duydugu bir adres uydurmaktan daha guvenli.
   } catch {
     $recoveryError = $_.Exception.Message
   }
