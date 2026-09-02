@@ -109,16 +109,16 @@ test("TEK AYRISTIRICI: CLI argv'ye dogrudan bakmiyor", () => {
   assert.ok(!/\bflag\("--/.test(body), 'flag("--...") kalmis: ikinci ayristirici');
 });
 
-test(".env adlari: yeni ad okunur, ESKISI yedek olarak okunur", () => {
+test(".env adlari: YALNIZCA Ingilizce okunur, eski Turkce adlar kodda YOK", () => {
   for (const v of ["MODEM_HOST", "MODEM_USER", "MODEM_PASSWORD", "MODEM_SOURCE_IP"]) {
     assert.ok(CLI.includes(v), `${v} CLI'da gecmiyor`);
   }
-  // Yedek gerekli: .env gitignore'da, her makinede ayri durur ve repo
-  // guncellemesiyle yeniden adlanmaz.
-  const m = CLI.match(/const ENV_FALLBACK = Object\.freeze\(\{([\s\S]*?)\}\)/);
-  assert.ok(m, "ENV_FALLBACK bulunamadi");
-  for (const old of ["MODEM_KULLANICI", "MODEM_SIFRE", "MODEM_KAYNAK_IP"]) {
-    assert.ok(m[1].includes(old), `${old} yedegi yok`);
+  // Eskiden ENV_FALLBACK ile Turkce adlar yedek olarak okunuyordu; sahibin
+  // karariyla kaldirildi (2026-09-02): kod .env adi CEVIRMEZ, .env dosyasini
+  // Ingilizce adlarla duzeltmek kullanicinin isi. Geri eklenirse bu test
+  // kirmizi yansin — ayni ozellik bir kez sessizce geri gelmisti.
+  for (const old of ["MODEM_KULLANICI", "MODEM_SIFRE", "MODEM_KAYNAK_IP", "ENV_FALLBACK"]) {
+    assert.ok(!CLI.includes(old), `${old} hala CLI'da: .env adi cevirisi kaldirildi`);
   }
 });
 

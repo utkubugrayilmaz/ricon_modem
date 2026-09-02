@@ -76,7 +76,7 @@ harf ve ASCII'ye katlanmış Türkçe sözcük.
 |---|---|
 | `report.js` `SECRET_FIELDS` | Sır süzgeci. Alanın *bugün* değil *hiç* taşıdığı her adı kapsamalı; daraltmak sızıntı üretir ve bir kez üretti (`kimlik`→`credentials` yapıldı, süzgeç güncellenmedi) |
 | `src/legacy.js` | Eski defter satırlarını okumak için **var**. Türkçe anahtar ve değerleri taşıması onun işi |
-| `bin/ricon.js` `ENV_FALLBACK`, `LEGACY_FILES`, `RENAMED_IN_0_2_0` | `.env` ve `data/` gitignore'da — her makinede ayrı durur, repo güncellemesiyle yeniden adlanmaz |
+| `bin/ricon.js` `LEGACY_FILES`, `RENAMED_IN_0_2_0` | `data/` gitignore'da — her makinede ayrı durur, repo güncellemesiyle yeniden adlanmaz. (`.env` için aynı gerekçeyle duran `ENV_FALLBACK` 2026-09-02'de sahibin kararıyla kaldırıldı: kod `.env` adı çevirmez, dosyayı İngilizce adlarla düzeltmek kullanıcının işi) |
 
 ### Yeniden adlandırma yapacaksan
 

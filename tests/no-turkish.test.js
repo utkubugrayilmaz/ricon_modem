@@ -111,12 +111,13 @@ const TURKISH_WORDS = new RegExp("\\b(" + [
 //    `credentials` yapti, suzgec guncellenmedi, kimlik nesnesi suzulmez oldu).
 // 2) src/legacy.js — eski defter satirlarini okumak icin VAR. Turkce
 //    anahtarlari ve degerleri tasimasi onun isi.
-// 3) bin/ricon.js ENV_FALLBACK + LEGACY_FILES — teknisyenlerin .env'i ve
-//    data/ dosyalari gitignore'da; repo guncellemesiyle yeniden adlanmiyor.
+// 3) bin/ricon.js LEGACY_FILES — teknisyenlerin data/ dosyalari gitignore'da;
+//    repo guncellemesiyle yeniden adlanmiyor. (.env icin ayni gerekceyle
+//    duran ENV_FALLBACK 2026-09-02'de sahibin karariyla KALDIRILDI: kod
+//    .env adi cevirmez — bkz. cli-contract.test.js ".env adlari" testi.)
 const ALLOWED = [
   { file: "report.js", pattern: /const SECRET_FIELDS = new Set\(\[[\s\S]*?\]\);/ },
   { file: "legacy.js", pattern: /[\s\S]*/ },
-  { file: "ricon.js", pattern: /const ENV_FALLBACK = Object\.freeze\(\{[\s\S]*?\}\);/ },
   { file: "ricon.js", pattern: /const LEGACY_FILES = Object\.freeze\(\{[\s\S]*?\}\);/ },
   { file: "ricon.js", pattern: /const RENAMED_IN_0_2_0 = Object\.freeze\(\{[\s\S]*?\}\);/ },
   { file: "ricon.js", pattern: /"renamed in v0\.2\.0[\s\S]*?--from-file[^;]*;/ },

@@ -93,27 +93,13 @@ function loadDotEnv(file = ".env") {
 }
 loadDotEnv();
 
-// v0.2.0'da yeniden adlandirilan .env degiskenleri. Eski ad hala OKUNUR:
-// tezgahtaki ve teknisyenlerdeki .env dosyalari repo ile birlikte
-// guncellenmiyor (gitignore'da, herkesin kendi makinesinde). Sessizce
-// calismamak icin bir kez uyariyoruz.
-const ENV_FALLBACK = Object.freeze({
-  MODEM_USER: "MODEM_KULLANICI",
-  MODEM_PASSWORD: "MODEM_SIFRE",
-  MODEM_SOURCE_IP: "MODEM_KAYNAK_IP",
-});
-const envWarned = new Set();
-function envVar(name) {
-  const value = process.env[name];
-  if (value !== undefined && value !== "") return value;
-  const old = ENV_FALLBACK[name];
-  const legacy = old ? process.env[old] : undefined;
-  if (legacy !== undefined && legacy !== "" && !envWarned.has(old)) {
-    envWarned.add(old);
-    process.stderr.write(`[env] ${old} is deprecated, rename it to ${name} in .env\n`);
-  }
-  return legacy;
-}
+// .env adlari YALNIZCA Ingilizce okunur. v0.2.0 sonrasi bir donem eski
+// Turkce adlar da bir yedek tablosuyla okunuyordu; sahibin
+// karariyla kaldirildi (2026-09-02): kod .env adi CEVIRMEZ, dosyayi
+// duzeltmek kullanicinin isi. Eski adla gelen deger artik gorulmez —
+// kimlik bos kalir ve arac bunu acikca soyler (AUTH_REQUIRED).
+// Bekci: cli-contract.test.js ".env adlari" testi eski adlarin geri
+// gelmedigini dogruluyor.
 
 // .env -> opts. Cekirdek (src/) process.env OKUMAZ; okuma burada.
 function optionsFromEnv() {
@@ -124,10 +110,10 @@ function optionsFromEnv() {
   const prefix = host.split(".").slice(0, 3).join(".") + ".";
   // --host verildiyse .env'deki KAYNAK_IP baska alt aga ait olabilir; yok say
   // ve dogru kaynagi onekten bul (yanlis arayuzden cikip cihazi kaybetmeyelim).
-  const sourcePick = flags.sourceIp || (hostFlag ? "" : envVar("MODEM_SOURCE_IP"));
+  const sourcePick = flags.sourceIp || (hostFlag ? "" : process.env.MODEM_SOURCE_IP);
   const sourceIp = (sourcePick || "").trim() || findSourceIp(prefix) || undefined;
-  const user = (envVar("MODEM_USER") || "").trim();
-  const password = envVar("MODEM_PASSWORD") || "";
+  const user = (process.env.MODEM_USER || "").trim();
+  const password = process.env.MODEM_PASSWORD || "";
   const credentials = user ? { user, password } : null;
   return { host, sourceIp, credentials, progress };
 }
