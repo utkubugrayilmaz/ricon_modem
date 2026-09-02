@@ -172,6 +172,35 @@ node bin/ricon.js metrics             # kaydedilmis surelerden metrik ozeti
 - **Kaynak IP vermeden yoklama yapma.** Ölçüldü (kurumsal ağ): kaynak IP
   bağlanmadan yapılan connect bu makinede **her** adrese "başarılı" dönüyor.
   Kaynaksız çağrı "her cihaz ayakta" der ve teşhis çöker.
+- **DHCP kirasını route tablosundan okuma.** `readGateway` bir dönem default
+  route'un gateway'ini "modem bulundu" sayıyordu. İki ayrı yerden çöktü:
+  makinenin kendi statik gateway'i kira sanıldı (7.7.7.1'de hiçbir cihaz
+  yoktu), sonra da NM profilindeki `ipv4.ignore-auto-routes = yes` yüzünden
+  DHCP'nin verdiği route **hiç kurulmadı** — kira 3 saniyede geldiği hâlde
+  (`dhcp4: new lease, address=2.2.2.101`) araç 15 saniye bekleyip "cevap yok"
+  dedi. Windows'ta aynı ölçüt çalışıyordu çünkü Windows route'u her zaman
+  kurar. Artık `readLease` üç kanıta bakıyor: **nmcli DHCP4 seçenekleri** →
+  `dynamic` bayraklı adres → route (son çare). Modem adayı da tek değer değil
+  sıralı liste: `routers` → `dhcp_server_identifier` → alt ağın `.1`'i, ve
+  `network-setup.js` bunları **yoklayarak doğruluyor**. (2026-09-02)
+- **`nmcli device modify` UÇUCUDUR.** Profil dosyasına yazmaz. Kablo çıkınca
+  (`carrier-changed → unavailable`) eklenen tüm adresler silinir ve kablo geri
+  takılınca NM yalnızca kayıtlı profili getirir — ölçüldü, `5.5.5.100` ve
+  `192.168.1.100` geri gelmedi ve tak-çıkar döngüsü ikinci modemde çöktü. Son
+  adres kümesi artık `persistAddresses` ile **etkin profile** yazılıyor
+  (`/etc/NetworkManager/system-connections/`), yani yeniden başlatmayı da
+  atlatıyor. Yalnız `ipv4.addresses`'e **ekleme** yapılır: `method`, `gateway`,
+  `dns` dokunulmaz — özellikle `method`, çünkü profil `auto` ise onu `manual`a
+  çevirmek operatörün kurumsal bağlantısını koparır.
+- **Linux'ta `sudo` GEREKMEZ (NM yönetimindeki arayüzde).** polkit
+  `network-control` için `allow_active=yes` veriyor; dağıtımın kuralı
+  (`/usr/share/polkit-1/rules.d/org.freedesktop.NetworkManager.rules`)
+  `settings.modify.system`'i de `sudo`/`netdev` grubundaki **aktif yerel**
+  oturuma açıyor. Yani hem keşif hem kalıcı profil yazma parolasız. Araç bir
+  dönem her koşuda koşulsuz `sudo` ile yeniden başlıyordu ve bu gereksizdi.
+  Kapı artık `needsElevation(adapter)`: NM yönetmiyorsa (çıplak `ip`/`dhclient`)
+  root hâlâ şart. SSH'ta `subject.local` false olur ve polkit reddeder — o
+  durum ayrı bir kod: `NETWORK_PERMISSION_DENIED`.
 - **Modemin web sunucusu tek bağlantılı.** Tüm HTTP `net.js`'teki sıralı
   kuyruğun arkasından geçer. Başka hiçbir modül doğrudan istek atmaz.
 - **PIN: son hakkı insan bile yakamaz.** "Bir hak yakıldıysa bir daha deneme"

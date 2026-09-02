@@ -60,6 +60,13 @@ const CATALOG = {
       + " left half-configured. Check data/network-setup.log for the full"
       + " sequence, and Get-NetIPAddress for the adapter's current state.",
   }),
+  NETWORK_PERMISSION_DENIED: (detail) => ({
+    message: `The system refused the network change: ${detail}`,
+    check: "On Linux, NetworkManager changes are allowed without a password"
+      + " only for an active local session (polkit allow_active). Over SSH or"
+      + " with no seat the request is refused; run it on the machine's own"
+      + " screen, or as root.",
+  }),
 
   // --- HTTP / kimlik ---
   // Eskiden PIN_ALREADY_TRIED diye IKINCI bir kod vardi ve kosulu birebir
@@ -382,6 +389,8 @@ const OPERATOR_TEXT = {
     whatToDo: "Tell IT: set MODEM_ADAPTER_NAME to the right adapter." },
   NETWORK_PREP_FAILED: { title: "Network setup could not finish",
     whatToDo: "Tell IT; see data/network-setup.log for details." },
+  NETWORK_PERMISSION_DENIED: { title: "Network change was not permitted",
+    whatToDo: "Run it on the machine's own screen, not a remote session." },
   REQUEST_FAILED: { title: "Connection broke off",
     whatToDo: "The tool is retrying. If it persists, check the cable." },
   // --- Credentials ---
