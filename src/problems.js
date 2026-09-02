@@ -39,15 +39,15 @@ const CATALOG = {
     check: "The modem's web server accepts one connection at a time. Wait for"
       + " the running read to finish, then try again.",
   }),
-  // --- npm start network setup (scripts/network-setup.js, scripts/prepare-modem-network.ps1) ---
+  // --- npm start network setup (scripts/network-setup.js, scripts/network-prep.js) ---
   // Bu ucu cekirdek DEGIL (src/ disinda, PC'nin kendi ag ayarini hazirliyor),
   // ama operatore giden metin yine de TEK katalogdan gelsin diye buradalar.
   NOT_ELEVATED: () => ({
     message: "Administrator privileges are required to change network adapter"
       + " settings, and the current process was not elevated.",
     check: "network-setup.js self-relaunches elevated automatically on"
-      + " npm start; this code only fires if prepare-modem-network.ps1 is run"
-      + " directly, bypassing the wrapper.",
+      + " npm start; this code only fires if prepareNetwork (network-prep.js)"
+      + " is called directly, bypassing the wrapper.",
   }),
   ADAPTER_NOT_FOUND: (adapter) => ({
     message: `No network adapter named "${adapter}" was found on this PC.`,
