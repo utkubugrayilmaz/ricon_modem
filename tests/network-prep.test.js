@@ -9,6 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeDesiredAddresses, findFreeSecondaryIp, maskFromPrefix, prepareNetwork,
+  detectAdapter,
 } from "../scripts/network-prep.js";
 
 // ----------------------------------------------------------------------
@@ -88,14 +89,15 @@ test("computeDesiredAddresses: modemin kendi IP'si alt ag ikincili SAYILMAZ", ()
 // Kayit tutan taklit ilkeller. `addresses` canli adres listesini taklit eder;
 // setStatic/addIp onu gunceller ki idempotency gercekci sinansin.
 function fakeOps({ addresses = [], gateway = null, elevated = true,
-  adapterOk = true, failOnAdd = null } = {}) {
+  adapterOk = true, failOnAdd = null, adapters = ["Ethernet"] } = {}) {
   let current = addresses.map((a) => ({ ...a }));
   const calls = [];
   return {
     calls,
     current: () => current,
     isElevated: () => elevated,
-    adapterExists: () => adapterOk,
+    adapterExists: (name) => adapterOk && adapters.includes(name),
+    listAdapters: () => adapters,
     listIpv4: () => current.map((a) => ({ ...a })),
     switchToDhcp: (adapter) => { calls.push(["dhcp", adapter]); return ""; },
     readGateway: () => gateway,
@@ -121,6 +123,29 @@ test("prepareNetwork: yukselme yoksa NOT_ELEVATED, adaptor yoksa ADAPTER_NOT_FOU
   const r2 = await prepareNetwork({ adapter: "yok", ops: fakeOps({ adapterOk: false }) });
   assert.equal(r2.ok, false);
   assert.equal(r2.reason, "ADAPTER_NOT_FOUND");
+});
+
+test("ADAPTER_NOT_FOUND mesaji MEVCUT adaptorleri sayar (tahmin biter, secim baslar)", async () => {
+  const ops = fakeOps({ adapters: ["enp3s0", "wlan0"] });
+  const r = await prepareNetwork({ adapter: "eth0", ops });
+  assert.equal(r.reason, "ADAPTER_NOT_FOUND");
+  assert.match(r.message, /enp3s0, wlan0/);
+});
+
+test("detectAdapter: kablolu gorunumlu ad (en*/eth*) oncelikli, yoksa ilk arayuz", () => {
+  assert.equal(detectAdapter(fakeOps({ adapters: ["wlan0", "enp3s0"] })), "enp3s0");
+  assert.equal(detectAdapter(fakeOps({ adapters: ["Ethernet", "Wi-Fi"] })), "Ethernet");
+  assert.equal(detectAdapter(fakeOps({ adapters: ["wlan0"] })), "wlan0");
+  assert.equal(detectAdapter(fakeOps({ adapters: [] })), null);
+});
+
+test("prepareNetwork: adaptor VERILMEDIYSE otomatik secilir ve akis calisir", async () => {
+  // Linux ilk canli denemesinin senaryosu: makinede eth0 YOK, enp3s0 var.
+  const ops = fakeOps({ adapters: ["enp3s0"], gateway: "192.168.3.1" });
+  const r = await prepareNetwork({ dhcpTimeoutSec: 5, ops });
+  assert.equal(r.ok, true);
+  assert.equal(r.adapter, "enp3s0");
+  assert.equal(r.discoveredHost, "192.168.3.1");
 });
 
 test("prepareNetwork hizli yol: knownHost verilince DHCP'ye HIC gecilmez", async () => {

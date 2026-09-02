@@ -91,6 +91,7 @@ export function computeDesiredAddresses({ backup = [], discoveredIp = null,
 // Ortak arayuz (ops):
 //   isElevated()                       -> boolean
 //   adapterExists(adapter)             -> boolean
+//   listAdapters()                     -> [string] (fiziksel/agdaki arayuz adlari)
 //   listIpv4(adapter)                  -> [{ ip, prefixLength, origin }]
 //                                         origin: "manual" | "dhcp" | diger
 //   switchToDhcp(adapter)              -> string (komut ciktisi; hata: throw)
@@ -123,6 +124,13 @@ function windowsOps() {
         ps(`Get-NetAdapter -Name '${psq(adapter)}' -ErrorAction Stop | Out-Null`);
         return true;
       } catch { return false; }
+    },
+    listAdapters() {
+      // -Physical: sanal adaptorler (Hyper-V, VPN) otomatik secime girmesin.
+      try {
+        return ps("Get-NetAdapter -Physical | Select-Object -ExpandProperty Name")
+          .split("\n").map((s) => s.trim()).filter(Boolean);
+      } catch { return []; }
     },
     listIpv4(adapter) {
       const out = ps(`Get-NetIPAddress -InterfaceAlias '${psq(adapter)}'`
@@ -214,6 +222,12 @@ function linuxOps() {
       try { run("ip", ["link", "show", "dev", adapter]); return true; }
       catch { return false; }
     },
+    listAdapters() {
+      try {
+        const raw = JSON.parse(run("ip", ["-j", "link", "show"]));
+        return raw.map((l) => l.ifname).filter((n) => n && n !== "lo");
+      } catch { return []; }
+    },
     listIpv4(adapter) {
       const raw = JSON.parse(run("ip", ["-j", "addr", "show", "dev", adapter]));
       const out = [];
@@ -288,6 +302,17 @@ export function isElevated(ops = defaultOps()) {
   return ops ? ops.isElevated() : false;
 }
 
+// Adaptor VERILMEDIYSE makinedekilerden birini sec. Sabit varsayilan
+// ("eth0") Linux'ta neredeyse hicbir makinede tutmuyor — modern dagitimlar
+// enp3s0/eno1 gibi adlar uretiyor ve ilk canli denemede tam bu yasandi
+// (2026-09-02). Kablolu gorunumlu adlar (en*/eth*/Ethernet) once; hicbiri
+// yoksa lo-disi ilk arayuz. Bulamazsa null: cagiran acik hata versin.
+export function detectAdapter(ops = defaultOps()) {
+  if (!ops) return null;
+  const names = ops.listAdapters();
+  return names.find((n) => /^(en|eth)/i.test(n)) ?? names[0] ?? null;
+}
+
 // ======================================================================
 // Orkestrasyon — ps1'in akisiyla birebir
 // ======================================================================
@@ -298,10 +323,11 @@ export function isElevated(ops = defaultOps()) {
 // makineye dokunmadan kosuyor (tests/network-prep.test.js).
 export async function prepareNetwork(options = {}) {
   const {
-    adapter, dhcpTimeoutSec = 15, knownHost = "",
+    dhcpTimeoutSec = 15, knownHost = "",
     fieldSecondaryIp = "5.5.5.100", prefixLength = 24,
     log = () => {}, ops = defaultOps(),
   } = options;
+  let { adapter } = options;
 
   if (!ops) {
     return { ok: false, reason: "NETWORK_PREP_FAILED", adapter,
@@ -313,9 +339,23 @@ export async function prepareNetwork(options = {}) {
     return { ok: false, reason: "NOT_ELEVATED", adapter,
       message: "Administrator/root privileges are required to modify network adapter settings." };
   }
+  // Adaptor verilmediyse OTOMATIK sec (bkz. detectAdapter). Verildiyse
+  // dokunma: kullanicinin acik tercihi tahminle EZILMEZ.
+  if (!adapter) {
+    adapter = detectAdapter(ops);
+    if (!adapter) {
+      return { ok: false, reason: "ADAPTER_NOT_FOUND", adapter: null,
+        message: "No network adapter was found on this machine at all." };
+    }
+    log(`no adapter name given — auto-detected '${adapter}'`
+      + " (override with MODEM_ADAPTER_NAME if wrong)");
+  }
   if (!ops.adapterExists(adapter)) {
+    const names = ops.listAdapters();
     return { ok: false, reason: "ADAPTER_NOT_FOUND", adapter,
-      message: `No adapter named '${adapter}' was found. Set MODEM_ADAPTER_NAME.` };
+      message: `No adapter named '${adapter}' was found.`
+        + (names.length ? ` Available: ${names.join(", ")}.` : "")
+        + " Set MODEM_ADAPTER_NAME." };
   }
 
   const warnings = [];

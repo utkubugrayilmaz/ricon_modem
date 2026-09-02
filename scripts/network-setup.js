@@ -127,13 +127,10 @@ function reportFailure(reason, detail, adapter) {
   log(`${t.title} — ${t.whatToDo}`);
 }
 
-// Platform basina varsayilan adaptor adi. Tablo ayni zamanda desteklenen
-// platformlarin listesi: burada olmayan platformda acikca durulur.
-const PLATFORM_DEFAULT_ADAPTER = Object.freeze({ win32: "Ethernet", linux: "eth0" });
+const SUPPORTED_PLATFORMS = new Set(["win32", "linux"]);
 
 async function main() {
-  const defaultAdapter = PLATFORM_DEFAULT_ADAPTER[process.platform];
-  if (!defaultAdapter) {
+  if (!SUPPORTED_PLATFORMS.has(process.platform)) {
     log(`unsupported platform: ${process.platform} (win32 and linux only)`);
     process.exit(1);
   }
@@ -154,7 +151,10 @@ async function main() {
     relaunchWithSudo(argv);   // cikis kodunu kendi tasir, buraya donmez
   }
 
-  const adapter = process.env.MODEM_ADAPTER_NAME || defaultAdapter;
+  // Ad verilmediyse prepareNetwork kendi bulur (detectAdapter) — sabit
+  // "eth0"/"Ethernet" varsayimi Linux'ta ilk denemede yanlis cikti
+  // (gercek ad enp3s0 gibiydi; 2026-09-02).
+  const adapter = process.env.MODEM_ADAPTER_NAME || undefined;
   const timeoutSec = Number(process.env.MODEM_DHCP_TIMEOUT_SEC) || 15;
 
   const directHost = await findDirectHost();
@@ -165,7 +165,9 @@ async function main() {
     log: (m) => log(`prep: ${m}`),
   });
   if (!result.ok) {
-    reportFailure(result.reason, result.message, adapter);
+    // Adaptor otomatik secildiyse asil ad result'ta; env'den gelen `adapter`
+    // bu durumda undefined olur.
+    reportFailure(result.reason, result.message, result.adapter ?? adapter);
     process.exit(1);
   }
   // OZET — operatorun tek bakista gormesi gereken uc sey: modem nerede,
