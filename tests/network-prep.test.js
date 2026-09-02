@@ -74,6 +74,14 @@ test("computeDesiredAddresses: yedekte zaten olan alanlar IKINCI kez eklenmez", 
   assert.ok(desired.every((d) => !d.isNew));
 });
 
+test("computeDesiredAddresses: modem TAM 5.5.5.100'deyse o adres makineye YAZILMAZ", () => {
+  // Kenar durum: saha ikincili sabit 5.5.5.100, ama modem tam orada
+  // kesfedildi. Ayni adresi eklemek IP cakismasi olurdu; coverSubnet o alt
+  // aga zaten .101'i uretiyor, saha eklemesi atlanmali.
+  const desired = computeDesiredAddresses({ backup: [], discoveredIp: "5.5.5.100" });
+  assert.deepEqual(desired.map((d) => d.ip), ["5.5.5.101"]);
+});
+
 test("computeDesiredAddresses: modemin kendi IP'si alt ag ikincili SAYILMAZ", () => {
   // Yedekte modemin adresi durabilir (onceki kosudan). O bir "bizim ikincil"
   // degil — alt aga yine de yeni bir ikincil uretilmeli.

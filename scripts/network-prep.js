@@ -229,7 +229,11 @@ export function computeDesiredAddresses({ backup = [], discoveredIp = null,
   if (discoveredIp || leasedIp) {
     coverSubnet(discoveredIp ?? leasedIp, leasedIp, leasedPrefixLength ?? prefixLength);
   }
-  if (!desired.some((d) => d.ip === fieldSecondaryIp)) {
+  // Saha ikincili MODEMIN KENDISI olamaz: modem (absurt bir dizilimle) tam
+  // 5.5.5.100'de kesfedilirse ayni adresi makineye de yazmak IP cakismasi
+  // demek. Atla — coverSubnet o alt aga zaten bos bir adres uretti.
+  if (fieldSecondaryIp !== discoveredIp
+      && !desired.some((d) => d.ip === fieldSecondaryIp)) {
     desired.push({ ip: fieldSecondaryIp, prefixLength, isNew: true });
   }
   if (!discoveredIp && !leasedIp && !desired.some((d) => d.ip === factoryFallbackIp)) {
