@@ -1,0 +1,31 @@
+{
+  "zaman": "2026-08-27T12:48:55.832Z",
+  "komut": "sim",
+  "modem_ip": "5.5.5.1",
+  "problems": [],
+  "sim1": {
+    "iccid": "8990011626160054386F",
+    "imei": "867191084820421",
+    "aktif_sim_yuvasi": "SIM1",
+    "sim_durumu": "Need verification PIN code (PIN: 3/3, PUK: 10/10)",
+    "sebeke_tipi": "FDD LTE",
+    "band": "LTE-FDD B7",
+    "modul_adi": "Q200AF",
+    "sinyal_dbm": "67",
+    "hucre_id": "70D02C",
+    "sinyal_gurultu": "17",
+    "bagli_sure": "Not available",
+    "wan_protokol": "m13g",
+    "iccid_temiz": "8990011626160054386"
+  },
+  "sim2": {
+    "aktif_sim_yuvasi": "SIM2",
+    "sim_durumu": "Invalid",
+    "bagli_sure": "Not available",
+    "wan_protokol": "disabled"
+  },
+  "msisdn": null,
+  "msisdn_kaynak": null,
+  "msisdn_not": "Telefon no cihazdan alinamaz; operator/UI girisi gerekir (--telefon 05xxxxxxxxx) ya da operatorden ICCID->numara listesi.",
+  "ok": true
+}

@@ -1,0 +1,1977 @@
+{
+  "zaman": "2026-08-27T11:30:43.333Z",
+  "komut": "izle",
+  "modem_ip": "5.5.5.1",
+  "sure_sn": 260,
+  "aralik_sn": 5,
+  "ornek_sayisi": 48,
+  "kesintiler": [
+    {
+      "tur": "internet",
+      "basla_sn": 0,
+      "bitis_sn": 88.9,
+      "sure_sn": 88.9,
+      "hala_suruyor": false
+    }
+  ],
+  "ornekler": [
+    {
+      "an_sn": 0,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": null,
+      "sebeke": null,
+      "sinyal_dbm": null,
+      "degisen_alan": 0
+    },
+    {
+      "an_sn": 8.1,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": null,
+      "sinyal_dbm": null,
+      "degisen_alan": 60,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:26:22"
+        },
+        "uptime_spe": {
+          "onceki": "14:26:22 up 21 Min.,  load average: 0.33, 0.18, 0.11"
+        },
+        "lan_mac": {
+          "onceki": "00:0C:43:43:5F:4E"
+        },
+        "wan_mac1": {
+          "onceki": ""
+        },
+        "wan_mac2": {
+          "onceki": ""
+        },
+        "wl_mac": {
+          "onceki": ""
+        },
+        "lan_ip": {
+          "onceki": "5.5.5.1"
+        },
+        "wl_channel": {
+          "onceki": "Unknown"
+        },
+        "wl_radio": {
+          "onceki": "Radio is Off"
+        },
+        "wl_mode_short": {
+          "onceki": "ap"
+        },
+        "lan_proto": {
+          "onceki": "static"
+        },
+        "active_wireless": {
+          "onceki": ""
+        },
+        "active_wds": {
+          "onceki": ""
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35320','Buffers:','2988','Cached:','10128','Active:','5944','Inactive:','9148"
+        },
+        "cpu_temp": {
+          "onceki": ""
+        },
+        "ip_conntrack": {
+          "onceki": "1"
+        },
+        "pptpcl_leases": {
+          "onceki": ""
+        },
+        "l2tpcl_leases": {
+          "onceki": ""
+        },
+        "wan_ttraffs": {
+          "onceki": ""
+        },
+        "w1ipinfo": {
+          "onceki": ""
+        },
+        "w2ipinfo": {
+          "onceki": ""
+        },
+        "wan_uptime": {
+          "onceki": "Not available"
+        },
+        "w1_wan_shortproto": {
+          "sonraki": "m13g"
+        },
+        "w2_wan_shortproto": {
+          "sonraki": "disabled"
+        },
+        "m13gname": {
+          "sonraki": "Q200AF"
+        },
+        "m1imei": {
+          "sonraki": "867191084820421"
+        },
+        "m1sim": {
+          "sonraki": "SIM1"
+        },
+        "m1simst": {
+          "sonraki": "Invalid"
+        },
+        "m1simimsi": {
+          "sonraki": ""
+        },
+        "m1simiccid": {
+          "sonraki": ""
+        },
+        "m1signal": {
+          "sonraki": ""
+        },
+        "m1dbm": {
+          "sonraki": ""
+        },
+        "m1network": {
+          "sonraki": ""
+        },
+        "m1bandinfo": {
+          "sonraki": ""
+        },
+        "m1cellid": {
+          "sonraki": ""
+        },
+        "m1noiseratio": {
+          "sonraki": ""
+        },
+        "m23gname": {
+          "sonraki": ""
+        },
+        "m2imei": {
+          "sonraki": ""
+        },
+        "m2sim": {
+          "sonraki": "SIM2"
+        },
+        "m2simst": {
+          "sonraki": "Invalid"
+        },
+        "m2simimsi": {
+          "sonraki": ""
+        },
+        "m2simiccid": {
+          "sonraki": ""
+        },
+        "m2signal": {
+          "sonraki": ""
+        },
+        "m2dbm": {
+          "sonraki": ""
+        },
+        "m2network": {
+          "sonraki": ""
+        },
+        "m2bandinfo": {
+          "sonraki": ""
+        },
+        "m2cellid": {
+          "sonraki": ""
+        },
+        "m2noiseratio": {
+          "sonraki": ""
+        },
+        "w1_wanup": {
+          "sonraki": "Not available"
+        },
+        "w1_wan_ip": {
+          "sonraki": ""
+        },
+        "w1_wan_nm": {
+          "sonraki": ""
+        },
+        "w1_wan_gw": {
+          "sonraki": ""
+        },
+        "w1_wan_dns": {
+          "sonraki": ""
+        },
+        "w1_dhcp_remaining": {
+          "sonraki": "0 days 00:00:00"
+        },
+        "w2_wanup": {
+          "sonraki": "Not available"
+        },
+        "w2_wan_ip": {
+          "sonraki": ""
+        },
+        "w2_wan_nm": {
+          "sonraki": ""
+        },
+        "w2_wan_gw": {
+          "sonraki": ""
+        },
+        "w2_wan_dns": {
+          "sonraki": ""
+        },
+        "w2_dhcp_remaining": {
+          "sonraki": "0 days 00:00:00"
+        }
+      }
+    },
+    {
+      "an_sn": 33.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "N-NONE",
+      "sinyal_dbm": "9999",
+      "degisen_alan": 30,
+      "degisen": {
+        "m1simst": {
+          "onceki": "Invalid",
+          "sonraki": "OK"
+        },
+        "m1simimsi": {
+          "onceki": "",
+          "sonraki": "286016661026495"
+        },
+        "m1simiccid": {
+          "onceki": "",
+          "sonraki": "8990011626160064930F"
+        },
+        "m1dbm": {
+          "onceki": "",
+          "sonraki": "9999"
+        },
+        "m1network": {
+          "onceki": "",
+          "sonraki": "N-NONE"
+        },
+        "m1bandinfo": {
+          "onceki": "",
+          "sonraki": "BAND NONE"
+        },
+        "m1cellid": {
+          "onceki": "",
+          "sonraki": "NA"
+        },
+        "m1noiseratio": {
+          "onceki": "",
+          "sonraki": "NA"
+        },
+        "uptime": {
+          "sonraki": "Thu, 27 Aug 2026 14:26:57"
+        },
+        "uptime_spe": {
+          "sonraki": "14:26:57 up 0 Min.,  load average: 0.58, 0.13, 0.04"
+        },
+        "lan_mac": {
+          "sonraki": "00:0C:43:43:5F:4E"
+        },
+        "wan_mac1": {
+          "sonraki": ""
+        },
+        "wan_mac2": {
+          "sonraki": ""
+        },
+        "wl_mac": {
+          "sonraki": ""
+        },
+        "lan_ip": {
+          "sonraki": "5.5.5.1"
+        },
+        "wl_channel": {
+          "sonraki": "448 (724 MHz)"
+        },
+        "wl_radio": {
+          "sonraki": "Radio is Off"
+        },
+        "wl_mode_short": {
+          "sonraki": "ap"
+        },
+        "lan_proto": {
+          "sonraki": "static"
+        },
+        "active_wireless": {
+          "sonraki": ""
+        },
+        "active_wds": {
+          "sonraki": ""
+        },
+        "mem_info": {
+          "sonraki": ",'MemTotal:','60408','MemFree:','36904','Buffers:','2848','Cached:','9244','Active:','4704','Inactive:','9224"
+        },
+        "cpu_temp": {
+          "sonraki": ""
+        },
+        "ip_conntrack": {
+          "sonraki": "5"
+        },
+        "pptpcl_leases": {
+          "sonraki": ""
+        },
+        "l2tpcl_leases": {
+          "sonraki": ""
+        },
+        "wan_ttraffs": {
+          "sonraki": ""
+        },
+        "w1ipinfo": {
+          "sonraki": ""
+        },
+        "w2ipinfo": {
+          "sonraki": ""
+        },
+        "wan_uptime": {
+          "sonraki": "Not available"
+        }
+      }
+    },
+    {
+      "an_sn": 38.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "N-NONE",
+      "sinyal_dbm": "9999",
+      "degisen_alan": 5,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:26:57",
+          "sonraki": "Thu, 27 Aug 2026 14:27:00"
+        },
+        "uptime_spe": {
+          "onceki": "14:26:57 up 0 Min.,  load average: 0.58, 0.13, 0.04",
+          "sonraki": "14:27:00 up 0 Min.,  load average: 0.58, 0.13, 0.04"
+        },
+        "wl_channel": {
+          "onceki": "448 (724 MHz)",
+          "sonraki": "Unknown"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36904','Buffers:','2848','Cached:','9244','Active:','4704','Inactive:','9224",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36664','Buffers:','2848','Cached:','9288','Active:','4948','Inactive:','9124"
+        },
+        "ip_conntrack": {
+          "onceki": "5",
+          "sonraki": "9"
+        }
+      }
+    },
+    {
+      "an_sn": 43.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "N-NONE",
+      "sinyal_dbm": "9999",
+      "degisen_alan": 4,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:00",
+          "sonraki": "Thu, 27 Aug 2026 14:27:05"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:00 up 0 Min.,  load average: 0.58, 0.13, 0.04",
+          "sonraki": "14:27:05 up 0 Min.,  load average: 0.54, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36664','Buffers:','2848','Cached:','9288','Active:','4948','Inactive:','9124",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36696','Buffers:','2848','Cached:','9292','Active:','5052','Inactive:','9024"
+        },
+        "ip_conntrack": {
+          "onceki": "9",
+          "sonraki": "11"
+        }
+      }
+    },
+    {
+      "an_sn": 48.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "9999",
+      "degisen_alan": 4,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:05",
+          "sonraki": "Thu, 27 Aug 2026 14:27:10"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:05 up 0 Min.,  load average: 0.54, 0.12, 0.04",
+          "sonraki": "14:27:10 up 0 Min.,  load average: 0.49, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36696','Buffers:','2848','Cached:','9292','Active:','5052','Inactive:','9024",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36540','Buffers:','2888','Cached:','9512','Active:','5048','Inactive:','9256"
+        },
+        "m1network": {
+          "onceki": "N-NONE",
+          "sonraki": "FDD LTE"
+        }
+      }
+    },
+    {
+      "an_sn": 53.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "9999",
+      "degisen_alan": 4,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:10",
+          "sonraki": "Thu, 27 Aug 2026 14:27:15"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:10 up 0 Min.,  load average: 0.49, 0.12, 0.04",
+          "sonraki": "14:27:15 up 0 Min.,  load average: 0.45, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36540','Buffers:','2888','Cached:','9512','Active:','5048','Inactive:','9256",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36652','Buffers:','2888','Cached:','9516','Active:','4956','Inactive:','9260"
+        },
+        "ip_conntrack": {
+          "onceki": "11",
+          "sonraki": "14"
+        }
+      }
+    },
+    {
+      "an_sn": 58.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "63",
+      "degisen_alan": 8,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:15",
+          "sonraki": "Thu, 27 Aug 2026 14:27:20"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:15 up 0 Min.,  load average: 0.45, 0.12, 0.04",
+          "sonraki": "14:27:20 up 0 Min.,  load average: 0.42, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36652','Buffers:','2888','Cached:','9516','Active:','4956','Inactive:','9260",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36652','Buffers:','2888','Cached:','9520','Active:','4964','Inactive:','9260"
+        },
+        "ip_conntrack": {
+          "onceki": "14",
+          "sonraki": "12"
+        },
+        "m1dbm": {
+          "onceki": "9999",
+          "sonraki": "63"
+        },
+        "m1bandinfo": {
+          "onceki": "BAND NONE",
+          "sonraki": "LTE-FDD B8"
+        },
+        "m1cellid": {
+          "onceki": "NA",
+          "sonraki": "920849"
+        },
+        "m1noiseratio": {
+          "onceki": "NA",
+          "sonraki": "13"
+        }
+      }
+    },
+    {
+      "an_sn": 63.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "63",
+      "degisen_alan": 4,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:20",
+          "sonraki": "Thu, 27 Aug 2026 14:27:25"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:20 up 0 Min.,  load average: 0.42, 0.12, 0.04",
+          "sonraki": "14:27:25 up 0 Min.,  load average: 0.38, 0.11, 0.03"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36652','Buffers:','2888','Cached:','9520','Active:','4964','Inactive:','9260",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36472','Buffers:','2888','Cached:','9520','Active:','5100','Inactive:','9260"
+        },
+        "ip_conntrack": {
+          "onceki": "12",
+          "sonraki": "11"
+        }
+      }
+    },
+    {
+      "an_sn": 68.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "63",
+      "degisen_alan": 4,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:25",
+          "sonraki": "Thu, 27 Aug 2026 14:27:30"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:25 up 0 Min.,  load average: 0.38, 0.11, 0.03",
+          "sonraki": "14:27:30 up 0 Min.,  load average: 0.35, 0.11, 0.03"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36472','Buffers:','2888','Cached:','9520','Active:','5100','Inactive:','9260",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36764','Buffers:','2888','Cached:','9520','Active:','4892','Inactive:','9256"
+        },
+        "ip_conntrack": {
+          "onceki": "11",
+          "sonraki": "13"
+        }
+      }
+    },
+    {
+      "an_sn": 73.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "9999",
+      "degisen_alan": 8,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:30",
+          "sonraki": "Thu, 27 Aug 2026 14:27:35"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:30 up 0 Min.,  load average: 0.35, 0.11, 0.03",
+          "sonraki": "14:27:35 up 0 Min.,  load average: 0.32, 0.11, 0.03"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36764','Buffers:','2888','Cached:','9520','Active:','4892','Inactive:','9256",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36648','Buffers:','2888','Cached:','9524','Active:','4968','Inactive:','9260"
+        },
+        "ip_conntrack": {
+          "onceki": "13",
+          "sonraki": "3"
+        },
+        "m1dbm": {
+          "onceki": "63",
+          "sonraki": "9999"
+        },
+        "m1bandinfo": {
+          "onceki": "LTE-FDD B8",
+          "sonraki": "BAND NONE"
+        },
+        "m1cellid": {
+          "onceki": "920849",
+          "sonraki": "NA"
+        },
+        "m1noiseratio": {
+          "onceki": "13",
+          "sonraki": "NA"
+        }
+      }
+    },
+    {
+      "an_sn": 78.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "9999",
+      "degisen_alan": 4,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:35",
+          "sonraki": "Thu, 27 Aug 2026 14:27:40"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:35 up 0 Min.,  load average: 0.32, 0.11, 0.03",
+          "sonraki": "14:27:40 up 1 Min.,  load average: 0.30, 0.11, 0.03"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36648','Buffers:','2888','Cached:','9524','Active:','4968','Inactive:','9260",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36624','Buffers:','2888','Cached:','9528','Active:','4972','Inactive:','9260"
+        },
+        "ip_conntrack": {
+          "onceki": "3",
+          "sonraki": "9"
+        }
+      }
+    },
+    {
+      "an_sn": 83.9,
+      "erisim": true,
+      "internet": false,
+      "wan_ip": null,
+      "bagli_sure": "Not available",
+      "sebeke": "HSDPA",
+      "sinyal_dbm": "71",
+      "degisen_alan": 8,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:40",
+          "sonraki": "Thu, 27 Aug 2026 14:27:45"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:40 up 1 Min.,  load average: 0.30, 0.11, 0.03",
+          "sonraki": "14:27:45 up 1 Min.,  load average: 0.35, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36624','Buffers:','2888','Cached:','9528','Active:','4972','Inactive:','9260",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36024','Buffers:','2988','Cached:','9856','Active:','5124','Inactive:','9584"
+        },
+        "ip_conntrack": {
+          "onceki": "9",
+          "sonraki": "13"
+        },
+        "m1dbm": {
+          "onceki": "9999",
+          "sonraki": "71"
+        },
+        "m1network": {
+          "onceki": "FDD LTE",
+          "sonraki": "HSDPA"
+        },
+        "m1bandinfo": {
+          "onceki": "BAND NONE",
+          "sonraki": "WCDMA B8"
+        },
+        "m1cellid": {
+          "onceki": "NA",
+          "sonraki": "1AE05E3"
+        }
+      }
+    },
+    {
+      "an_sn": 88.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:00",
+      "sebeke": "HSDPA",
+      "sinyal_dbm": "71",
+      "degisen_alan": 9,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:45",
+          "sonraki": "Thu, 27 Aug 2026 14:27:50"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:45 up 1 Min.,  load average: 0.35, 0.12, 0.04",
+          "sonraki": "14:27:50 up 1 Min.,  load average: 0.32, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36024','Buffers:','2988','Cached:','9856','Active:','5124','Inactive:','9584",
+          "sonraki": ",'MemTotal:','60408','MemFree:','36208','Buffers:','2988','Cached:','9828','Active:','4976','Inactive:','9556"
+        },
+        "ip_conntrack": {
+          "onceki": "13",
+          "sonraki": "1"
+        },
+        "w1_wanup": {
+          "onceki": "Not available",
+          "sonraki": "0:00:00"
+        },
+        "w1_wan_ip": {
+          "onceki": "",
+          "sonraki": "178.245.239.236"
+        },
+        "w1_wan_nm": {
+          "onceki": "",
+          "sonraki": "255.255.255.255"
+        },
+        "w1_wan_gw": {
+          "onceki": "",
+          "sonraki": "10.64.64.64"
+        },
+        "w1_wan_dns": {
+          "onceki": "",
+          "sonraki": "213.74.0.4 213.74.1.4"
+        }
+      }
+    },
+    {
+      "an_sn": 93.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:04",
+      "sebeke": "HSDPA",
+      "sinyal_dbm": "71",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:50",
+          "sonraki": "Thu, 27 Aug 2026 14:27:55"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:50 up 1 Min.,  load average: 0.32, 0.12, 0.04",
+          "sonraki": "14:27:55 up 1 Min.,  load average: 0.30, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','36208','Buffers:','2988','Cached:','9828','Active:','4976','Inactive:','9556",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35396','Buffers:','3052','Cached:','9932','Active:','5628','Inactive:','9544"
+        },
+        "ip_conntrack": {
+          "onceki": "1",
+          "sonraki": "2"
+        },
+        "w1ipinfo": {
+          "onceki": "",
+          "sonraki": "178.245.239.236"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:00",
+          "sonraki": "0:00:04"
+        }
+      }
+    },
+    {
+      "an_sn": 98.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:09",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 11,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:27:55",
+          "sonraki": "Thu, 27 Aug 2026 14:28:00"
+        },
+        "uptime_spe": {
+          "onceki": "14:27:55 up 1 Min.,  load average: 0.30, 0.12, 0.04",
+          "sonraki": "14:28:00 up 1 Min.,  load average: 0.27, 0.11, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35396','Buffers:','3052','Cached:','9932','Active:','5628','Inactive:','9544",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35064','Buffers:','3124','Cached:','10092','Active:','5684','Inactive:','9748"
+        },
+        "ip_conntrack": {
+          "onceki": "2",
+          "sonraki": "1"
+        },
+        "wan_uptime": {
+          "onceki": "Not available",
+          "sonraki": "0:00:00"
+        },
+        "m1dbm": {
+          "onceki": "71",
+          "sonraki": "69"
+        },
+        "m1network": {
+          "onceki": "HSDPA",
+          "sonraki": "FDD LTE"
+        },
+        "m1bandinfo": {
+          "onceki": "WCDMA B8",
+          "sonraki": "LTE-FDD B1"
+        },
+        "m1cellid": {
+          "onceki": "1AE05E3",
+          "sonraki": "70D02E"
+        },
+        "m1noiseratio": {
+          "onceki": "NA",
+          "sonraki": "15"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:04",
+          "sonraki": "0:00:09"
+        }
+      }
+    },
+    {
+      "an_sn": 103.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:14",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:00",
+          "sonraki": "Thu, 27 Aug 2026 14:28:05"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:00 up 1 Min.,  load average: 0.27, 0.11, 0.04",
+          "sonraki": "14:28:05 up 1 Min.,  load average: 0.33, 0.13, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35064','Buffers:','3124','Cached:','10092','Active:','5684','Inactive:','9748",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35116','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "1",
+          "sonraki": "14"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:00",
+          "sonraki": "0:00:05"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:09",
+          "sonraki": "0:00:14"
+        }
+      }
+    },
+    {
+      "an_sn": 108.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:19",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 7,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:05",
+          "sonraki": "Thu, 27 Aug 2026 14:28:10"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:05 up 1 Min.,  load average: 0.33, 0.13, 0.04",
+          "sonraki": "14:28:10 up 1 Min.,  load average: 0.30, 0.13, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35116','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35132','Buffers:','3200','Cached:','10324','Active:','5436','Inactive:','9936"
+        },
+        "ip_conntrack": {
+          "onceki": "14",
+          "sonraki": "23"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:05",
+          "sonraki": "0:00:10"
+        },
+        "m1noiseratio": {
+          "onceki": "15",
+          "sonraki": "14"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:14",
+          "sonraki": "0:00:19"
+        }
+      }
+    },
+    {
+      "an_sn": 113.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:24",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 5,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:10",
+          "sonraki": "Thu, 27 Aug 2026 14:28:15"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:10 up 1 Min.,  load average: 0.30, 0.13, 0.04",
+          "sonraki": "14:28:15 up 1 Min.,  load average: 0.28, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35132','Buffers:','3200','Cached:','10324','Active:','5436','Inactive:','9936",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35148','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:10",
+          "sonraki": "0:00:15"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:19",
+          "sonraki": "0:00:24"
+        }
+      }
+    },
+    {
+      "an_sn": 118.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:29",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:15",
+          "sonraki": "Thu, 27 Aug 2026 14:28:20"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:15 up 1 Min.,  load average: 0.28, 0.12, 0.04",
+          "sonraki": "14:28:20 up 1 Min.,  load average: 0.25, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35148','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "23",
+          "sonraki": "24"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:15",
+          "sonraki": "0:00:20"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:24",
+          "sonraki": "0:00:29"
+        }
+      }
+    },
+    {
+      "an_sn": 123.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:34",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 7,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:20",
+          "sonraki": "Thu, 27 Aug 2026 14:28:25"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:20 up 1 Min.,  load average: 0.25, 0.12, 0.04",
+          "sonraki": "14:28:25 up 1 Min.,  load average: 0.23, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35192','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "24",
+          "sonraki": "26"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:20",
+          "sonraki": "0:00:25"
+        },
+        "m1noiseratio": {
+          "onceki": "14",
+          "sonraki": "13"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:29",
+          "sonraki": "0:00:34"
+        }
+      }
+    },
+    {
+      "an_sn": 128.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:39",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:25",
+          "sonraki": "Thu, 27 Aug 2026 14:28:30"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:25 up 1 Min.,  load average: 0.23, 0.12, 0.04",
+          "sonraki": "14:28:30 up 1 Min.,  load average: 0.21, 0.12, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35192','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "26",
+          "sonraki": "24"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:25",
+          "sonraki": "0:00:30"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:34",
+          "sonraki": "0:00:39"
+        }
+      }
+    },
+    {
+      "an_sn": 133.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:44",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 7,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:30",
+          "sonraki": "Thu, 27 Aug 2026 14:28:35"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:30 up 1 Min.,  load average: 0.21, 0.12, 0.04",
+          "sonraki": "14:28:35 up 1 Min.,  load average: 0.20, 0.11, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9936"
+        },
+        "ip_conntrack": {
+          "onceki": "24",
+          "sonraki": "19"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:30",
+          "sonraki": "0:00:35"
+        },
+        "m1noiseratio": {
+          "onceki": "13",
+          "sonraki": "15"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:39",
+          "sonraki": "0:00:44"
+        }
+      }
+    },
+    {
+      "an_sn": 138.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:49",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:35",
+          "sonraki": "Thu, 27 Aug 2026 14:28:40"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:35 up 1 Min.,  load average: 0.20, 0.11, 0.04",
+          "sonraki": "14:28:40 up 2 Min.,  load average: 0.18, 0.11, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9936",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5456','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "19",
+          "sonraki": "18"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:35",
+          "sonraki": "0:00:40"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:44",
+          "sonraki": "0:00:49"
+        }
+      }
+    },
+    {
+      "an_sn": 143.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:54",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:40",
+          "sonraki": "Thu, 27 Aug 2026 14:28:45"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:40 up 2 Min.,  load average: 0.18, 0.11, 0.04",
+          "sonraki": "14:28:45 up 2 Min.,  load average: 0.16, 0.11, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5456','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "18",
+          "sonraki": "16"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:40",
+          "sonraki": "0:00:45"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:49",
+          "sonraki": "0:00:54"
+        }
+      }
+    },
+    {
+      "an_sn": 148.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:00:59",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:45",
+          "sonraki": "Thu, 27 Aug 2026 14:28:50"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:45 up 2 Min.,  load average: 0.16, 0.11, 0.04",
+          "sonraki": "14:28:50 up 2 Min.,  load average: 0.15, 0.11, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "16",
+          "sonraki": "18"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:45",
+          "sonraki": "0:00:50"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:54",
+          "sonraki": "0:00:59"
+        }
+      }
+    },
+    {
+      "an_sn": 153.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:04",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:50",
+          "sonraki": "Thu, 27 Aug 2026 14:28:55"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:50 up 2 Min.,  load average: 0.15, 0.11, 0.04",
+          "sonraki": "14:28:55 up 2 Min.,  load average: 0.14, 0.11, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "18",
+          "sonraki": "19"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:50",
+          "sonraki": "0:00:55"
+        },
+        "w1_wanup": {
+          "onceki": "0:00:59",
+          "sonraki": "0:01:04"
+        }
+      }
+    },
+    {
+      "an_sn": 158.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:09",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "67",
+      "degisen_alan": 8,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:28:55",
+          "sonraki": "Thu, 27 Aug 2026 14:29:00"
+        },
+        "uptime_spe": {
+          "onceki": "14:28:55 up 2 Min.,  load average: 0.14, 0.11, 0.04",
+          "sonraki": "14:29:00 up 2 Min.,  load average: 0.13, 0.10, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9936"
+        },
+        "ip_conntrack": {
+          "onceki": "19",
+          "sonraki": "16"
+        },
+        "wan_uptime": {
+          "onceki": "0:00:55",
+          "sonraki": "0:01:00"
+        },
+        "m1dbm": {
+          "onceki": "69",
+          "sonraki": "67"
+        },
+        "m1noiseratio": {
+          "onceki": "15",
+          "sonraki": "14"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:04",
+          "sonraki": "0:01:09"
+        }
+      }
+    },
+    {
+      "an_sn": 163.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:14",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "67",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:00",
+          "sonraki": "Thu, 27 Aug 2026 14:29:05"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:00 up 2 Min.,  load average: 0.13, 0.10, 0.04",
+          "sonraki": "14:29:05 up 2 Min.,  load average: 0.12, 0.10, 0.04"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9936",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "16",
+          "sonraki": "20"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:00",
+          "sonraki": "0:01:05"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:09",
+          "sonraki": "0:01:14"
+        }
+      }
+    },
+    {
+      "an_sn": 168.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:19",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "67",
+      "degisen_alan": 5,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:05",
+          "sonraki": "Thu, 27 Aug 2026 14:29:10"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:05 up 2 Min.,  load average: 0.12, 0.10, 0.04",
+          "sonraki": "14:29:10 up 2 Min.,  load average: 0.35, 0.15, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:05",
+          "sonraki": "0:01:10"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:14",
+          "sonraki": "0:01:19"
+        }
+      }
+    },
+    {
+      "an_sn": 173.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:24",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 8,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:10",
+          "sonraki": "Thu, 27 Aug 2026 14:29:15"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:10 up 2 Min.,  load average: 0.35, 0.15, 0.05",
+          "sonraki": "14:29:15 up 2 Min.,  load average: 0.32, 0.15, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "20",
+          "sonraki": "18"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:10",
+          "sonraki": "0:01:15"
+        },
+        "m1dbm": {
+          "onceki": "67",
+          "sonraki": "69"
+        },
+        "m1noiseratio": {
+          "onceki": "14",
+          "sonraki": "17"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:19",
+          "sonraki": "0:01:24"
+        }
+      }
+    },
+    {
+      "an_sn": 178.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:29",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:15",
+          "sonraki": "Thu, 27 Aug 2026 14:29:20"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:15 up 2 Min.,  load average: 0.32, 0.15, 0.05",
+          "sonraki": "14:29:20 up 2 Min.,  load average: 0.29, 0.14, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "18",
+          "sonraki": "20"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:15",
+          "sonraki": "0:01:20"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:24",
+          "sonraki": "0:01:29"
+        }
+      }
+    },
+    {
+      "an_sn": 183.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:34",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 7,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:20",
+          "sonraki": "Thu, 27 Aug 2026 14:29:25"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:20 up 2 Min.,  load average: 0.29, 0.14, 0.05",
+          "sonraki": "14:29:25 up 2 Min.,  load average: 0.27, 0.14, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5452','Inactive:','9936"
+        },
+        "ip_conntrack": {
+          "onceki": "20",
+          "sonraki": "19"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:20",
+          "sonraki": "0:01:25"
+        },
+        "m1noiseratio": {
+          "onceki": "17",
+          "sonraki": "16"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:29",
+          "sonraki": "0:01:34"
+        }
+      }
+    },
+    {
+      "an_sn": 188.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:39",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:25",
+          "sonraki": "Thu, 27 Aug 2026 14:29:30"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:25 up 2 Min.,  load average: 0.27, 0.14, 0.05",
+          "sonraki": "14:29:30 up 2 Min.,  load average: 0.25, 0.14, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5452','Inactive:','9936",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "19",
+          "sonraki": "17"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:25",
+          "sonraki": "0:01:30"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:34",
+          "sonraki": "0:01:39"
+        }
+      }
+    },
+    {
+      "an_sn": 193.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:44",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:30",
+          "sonraki": "Thu, 27 Aug 2026 14:29:35"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:30 up 2 Min.,  load average: 0.25, 0.14, 0.05",
+          "sonraki": "14:29:35 up 2 Min.,  load average: 0.23, 0.14, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "17",
+          "sonraki": "21"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:30",
+          "sonraki": "0:01:35"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:39",
+          "sonraki": "0:01:44"
+        }
+      }
+    },
+    {
+      "an_sn": 198.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:49",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 7,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:35",
+          "sonraki": "Thu, 27 Aug 2026 14:29:40"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:35 up 2 Min.,  load average: 0.23, 0.14, 0.05",
+          "sonraki": "14:29:40 up 3 Min.,  load average: 0.21, 0.13, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "21",
+          "sonraki": "19"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:35",
+          "sonraki": "0:01:40"
+        },
+        "m1noiseratio": {
+          "onceki": "16",
+          "sonraki": "15"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:44",
+          "sonraki": "0:01:49"
+        }
+      }
+    },
+    {
+      "an_sn": 203.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:54",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 4,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:40",
+          "sonraki": "Thu, 27 Aug 2026 14:29:45"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:40 up 3 Min.,  load average: 0.21, 0.13, 0.05",
+          "sonraki": "14:29:45 up 3 Min.,  load average: 0.19, 0.13, 0.05"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:40",
+          "sonraki": "0:01:45"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:49",
+          "sonraki": "0:01:54"
+        }
+      }
+    },
+    {
+      "an_sn": 208.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:01:59",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 7,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:45",
+          "sonraki": "Thu, 27 Aug 2026 14:29:50"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:45 up 3 Min.,  load average: 0.19, 0.13, 0.05",
+          "sonraki": "14:29:50 up 3 Min.,  load average: 0.17, 0.13, 0.05"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35188','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9936"
+        },
+        "ip_conntrack": {
+          "onceki": "19",
+          "sonraki": "21"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:45",
+          "sonraki": "0:01:50"
+        },
+        "m1noiseratio": {
+          "onceki": "15",
+          "sonraki": "16"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:54",
+          "sonraki": "0:01:59"
+        }
+      }
+    },
+    {
+      "an_sn": 213.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:04",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:50",
+          "sonraki": "Thu, 27 Aug 2026 14:29:55"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:50 up 3 Min.,  load average: 0.17, 0.13, 0.05",
+          "sonraki": "14:29:55 up 3 Min.,  load average: 0.48, 0.19, 0.07"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5440','Inactive:','9936",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "21",
+          "sonraki": "19"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:50",
+          "sonraki": "0:01:55"
+        },
+        "w1_wanup": {
+          "onceki": "0:01:59",
+          "sonraki": "0:02:04"
+        }
+      }
+    },
+    {
+      "an_sn": 218.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:09",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 5,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:29:55",
+          "sonraki": "Thu, 27 Aug 2026 14:30:00"
+        },
+        "uptime_spe": {
+          "onceki": "14:29:55 up 3 Min.,  load average: 0.48, 0.19, 0.07",
+          "sonraki": "14:30:00 up 3 Min.,  load average: 0.44, 0.19, 0.07"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5448','Inactive:','9928"
+        },
+        "wan_uptime": {
+          "onceki": "0:01:55",
+          "sonraki": "0:02:00"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:04",
+          "sonraki": "0:02:09"
+        }
+      }
+    },
+    {
+      "an_sn": 223.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:14",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 7,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:00",
+          "sonraki": "Thu, 27 Aug 2026 14:30:05"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:00 up 3 Min.,  load average: 0.44, 0.19, 0.07",
+          "sonraki": "14:30:05 up 3 Min.,  load average: 0.40, 0.19, 0.07"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5448','Inactive:','9928",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5456','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "19",
+          "sonraki": "21"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:00",
+          "sonraki": "0:02:05"
+        },
+        "m1noiseratio": {
+          "onceki": "16",
+          "sonraki": "15"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:09",
+          "sonraki": "0:02:14"
+        }
+      }
+    },
+    {
+      "an_sn": 228.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:19",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:05",
+          "sonraki": "Thu, 27 Aug 2026 14:30:10"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:05 up 3 Min.,  load average: 0.40, 0.19, 0.07",
+          "sonraki": "14:30:10 up 3 Min.,  load average: 0.37, 0.18, 0.07"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35152','Buffers:','3200','Cached:','10324','Active:','5456','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "21",
+          "sonraki": "19"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:05",
+          "sonraki": "0:02:10"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:14",
+          "sonraki": "0:02:19"
+        }
+      }
+    },
+    {
+      "an_sn": 233.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:24",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:10",
+          "sonraki": "Thu, 27 Aug 2026 14:30:15"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:10 up 3 Min.,  load average: 0.37, 0.18, 0.07",
+          "sonraki": "14:30:15 up 3 Min.,  load average: 0.34, 0.18, 0.07"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10328','Active:','5444','Inactive:','9936"
+        },
+        "ip_conntrack": {
+          "onceki": "19",
+          "sonraki": "21"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:10",
+          "sonraki": "0:02:15"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:19",
+          "sonraki": "0:02:24"
+        }
+      }
+    },
+    {
+      "an_sn": 238.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:29",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:15",
+          "sonraki": "Thu, 27 Aug 2026 14:30:20"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:15 up 3 Min.,  load average: 0.34, 0.18, 0.07",
+          "sonraki": "14:30:20 up 3 Min.,  load average: 0.31, 0.18, 0.07"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10328','Active:','5444','Inactive:','9936",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "21",
+          "sonraki": "22"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:15",
+          "sonraki": "0:02:20"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:24",
+          "sonraki": "0:02:29"
+        }
+      }
+    },
+    {
+      "an_sn": 243.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:34",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:20",
+          "sonraki": "Thu, 27 Aug 2026 14:30:25"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:20 up 3 Min.,  load average: 0.31, 0.18, 0.07",
+          "sonraki": "14:30:25 up 3 Min.,  load average: 0.29, 0.17, 0.07"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35164','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "22",
+          "sonraki": "24"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:20",
+          "sonraki": "0:02:25"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:29",
+          "sonraki": "0:02:34"
+        }
+      }
+    },
+    {
+      "an_sn": 248.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:39",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:25",
+          "sonraki": "Thu, 27 Aug 2026 14:30:30"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:25 up 3 Min.,  load average: 0.29, 0.17, 0.07",
+          "sonraki": "14:30:30 up 3 Min.,  load average: 0.26, 0.17, 0.06"
+        },
+        "ip_conntrack": {
+          "onceki": "24",
+          "sonraki": "25"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:25",
+          "sonraki": "0:02:30"
+        },
+        "m1noiseratio": {
+          "onceki": "15",
+          "sonraki": "14"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:34",
+          "sonraki": "0:02:39"
+        }
+      }
+    },
+    {
+      "an_sn": 253.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:44",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 6,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:30",
+          "sonraki": "Thu, 27 Aug 2026 14:30:35"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:30 up 3 Min.,  load average: 0.26, 0.17, 0.06",
+          "sonraki": "14:30:35 up 3 Min.,  load average: 0.24, 0.17, 0.06"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35140','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932"
+        },
+        "ip_conntrack": {
+          "onceki": "25",
+          "sonraki": "27"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:30",
+          "sonraki": "0:02:35"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:39",
+          "sonraki": "0:02:44"
+        }
+      }
+    },
+    {
+      "an_sn": 258.9,
+      "erisim": true,
+      "internet": true,
+      "wan_ip": "178.245.239.236",
+      "bagli_sure": "0:02:49",
+      "sebeke": "FDD LTE",
+      "sinyal_dbm": "69",
+      "degisen_alan": 5,
+      "degisen": {
+        "uptime": {
+          "onceki": "Thu, 27 Aug 2026 14:30:35",
+          "sonraki": "Thu, 27 Aug 2026 14:30:40"
+        },
+        "uptime_spe": {
+          "onceki": "14:30:35 up 3 Min.,  load average: 0.24, 0.17, 0.06",
+          "sonraki": "14:30:40 up 4 Min.,  load average: 0.22, 0.16, 0.06"
+        },
+        "mem_info": {
+          "onceki": ",'MemTotal:','60408','MemFree:','35140','Buffers:','3200','Cached:','10324','Active:','5468','Inactive:','9932",
+          "sonraki": ",'MemTotal:','60408','MemFree:','35176','Buffers:','3200','Cached:','10324','Active:','5444','Inactive:','9932"
+        },
+        "wan_uptime": {
+          "onceki": "0:02:35",
+          "sonraki": "0:02:40"
+        },
+        "w1_wanup": {
+          "onceki": "0:02:44",
+          "sonraki": "0:02:49"
+        }
+      }
+    }
+  ],
+  "ok": true,
+  "problems": []
+}

@@ -1,0 +1,36 @@
+{
+  "zaman": "2026-08-27T12:20:51.223Z",
+  "komut": "sim",
+  "modem_ip": "5.5.5.1",
+  "problems": [],
+  "sim1": {
+    "iccid": "8990011626160064930F",
+    "imsi": "286016661026495",
+    "imei": "867191084820421",
+    "aktif_sim_yuvasi": "SIM1",
+    "sim_durumu": "OK",
+    "sebeke_tipi": "FDD LTE",
+    "band": "LTE-FDD B3",
+    "modul_adi": "Q200AF",
+    "sinyal_dbm": "63",
+    "hucre_id": "70D02A",
+    "sinyal_gurultu": "14",
+    "wan_ip": "213.43.77.112",
+    "wan_ag_gecidi": "10.64.64.64",
+    "wan_dns": "213.74.0.4 213.74.1.4",
+    "bagli_sure": "0:20:03",
+    "wan_protokol": "m13g",
+    "iccid_temiz": "8990011626160064930",
+    "operator": "Turkcell"
+  },
+  "sim2": {
+    "aktif_sim_yuvasi": "SIM2",
+    "sim_durumu": "Invalid",
+    "bagli_sure": "Not available",
+    "wan_protokol": "disabled"
+  },
+  "msisdn": null,
+  "msisdn_kaynak": null,
+  "msisdn_not": "Telefon no cihazdan alinamaz; operator/UI girisi gerekir (--telefon 05xxxxxxxxx) ya da operatorden ICCID->numara listesi.",
+  "ok": true
+}

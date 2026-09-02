@@ -1,0 +1,16 @@
+{
+  "zaman": "2026-08-26T08:36:29.455Z",
+  "komut": "konsol",
+  "modem_ip": "192.168.1.1",
+  "problems": [
+    {
+      "kod": "WRITE_BLOCKED_READONLY",
+      "severity": "error",
+      "message": "A write to konsol: \"nvram show 2>/dev/null\" was blocked: this command is read-only.",
+      "check": "Writing is only allowed in the 'uygula' command with --uygula. Discovery and read commands never modify the device."
+    }
+  ],
+  "nvram": {},
+  "nvram_anahtar_sayisi": 0,
+  "ok": false
+}

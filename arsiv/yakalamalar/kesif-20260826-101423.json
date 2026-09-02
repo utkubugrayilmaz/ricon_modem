@@ -1,0 +1,91 @@
+{
+  "zaman": "2026-08-26T07:14:24.056Z",
+  "komut": "kesif",
+  "modem_ip": "192.168.1.1",
+  "problems": [],
+  "kapilar": [
+    {
+      "kapi": 22,
+      "acik": false,
+      "banner": null,
+      "ad": "SSH"
+    },
+    {
+      "kapi": 23,
+      "acik": false,
+      "banner": null,
+      "ad": "telnet"
+    },
+    {
+      "kapi": 53,
+      "acik": true,
+      "banner": null,
+      "ad": "DNS"
+    },
+    {
+      "kapi": 80,
+      "acik": true,
+      "banner": null,
+      "ad": "HTTP (web arayuzu)"
+    },
+    {
+      "kapi": 443,
+      "acik": false,
+      "banner": null,
+      "ad": "HTTPS"
+    },
+    {
+      "kapi": 502,
+      "acik": false,
+      "banner": null,
+      "ad": "Modbus TCP"
+    },
+    {
+      "kapi": 1723,
+      "acik": false,
+      "banner": null,
+      "ad": "PPTP VPN"
+    },
+    {
+      "kapi": 5000,
+      "acik": false,
+      "banner": null,
+      "ad": "HTTP (alternatif)"
+    },
+    {
+      "kapi": 8080,
+      "acik": false,
+      "banner": null,
+      "ad": "HTTP (alternatif)"
+    },
+    {
+      "kapi": 8443,
+      "acik": false,
+      "banner": null,
+      "ad": "HTTPS (alternatif)"
+    },
+    {
+      "kapi": 9999,
+      "acik": false,
+      "banner": null,
+      "ad": "DTU / ham TCP"
+    }
+  ],
+  "arp": {
+    "192.168.1.1": "00:0c:43:43:5f:4e",
+    "192.168.1.255": "ff:ff:ff:ff:ff:ff"
+  },
+  "mac": "00:0c:43:43:5f:4e",
+  "mac_uretici": "Ralink/MediaTek",
+  "http": {
+    "kod": 200,
+    "baslik": "Industrial Cellular Router",
+    "ddwrt_izi": true
+  },
+  "snmp": {
+    "cevapVerdi": false,
+    "degerler": {},
+    "community": "public"
+  },
+  "ok": true
+}
